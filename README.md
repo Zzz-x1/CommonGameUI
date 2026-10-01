@@ -12,7 +12,7 @@
 | `Demo/Godot` | Godot 4.7.2 .NET / net10.0 示例项目 |
 | `tests/UIFramework.Tests` | 核心行为与生成结果编译测试 |
 
-设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)。
+设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V2 主要补全生命周期，当前为计划，尚未实现。
 
 ## 运行
 
