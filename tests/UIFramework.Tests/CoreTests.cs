@@ -129,7 +129,7 @@ public class CoreTests
 
     [Fact] public async Task IndependentCloseTargetsExactInstance()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(); var panels = await Attach<PanelContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
         var first = await panels.OpenAsync<CounterView>(); var second = await panels.OpenAsync<CounterView>();
         await panels.CloseAsync(first); Assert.True(second.IsVisible); Assert.Equal(NodeState.Ready, second.State);
         Assert.Single(panels.Children); await ui.DisposeAsync();
@@ -258,7 +258,7 @@ public class CoreTests
 
     [Fact] public async Task AllChildrenAreCleanedEvenWhenSeveralDisposalsFail()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(); var panels = await Attach<PanelContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
         var a = await panels.OpenAsync<CounterView>(); var b = await panels.OpenAsync<CounterView>();
         var first = new IOException("B dispose"); var second = new InvalidOperationException("A dispose");
         a.DisposeFailure = second; b.DisposeFailure = first;

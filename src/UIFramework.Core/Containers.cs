@@ -46,30 +46,128 @@ public abstract class ContainerNode : UINode
 
 }
 
-/// <summary>Independent instances; no implicit history or single-instance lookup.</summary>
+/// <summary>Independent windows with registration-defined instance identity and retained hiding.</summary>
 public class PanelContainerNode : ContainerNode
 {
-    public Task<T> OpenAsync<T>(object? args = null, CancellationToken cancellationToken = default) where T : UINode =>
+    private sealed class WindowRecord
+    {
+        public WindowRecord(Type type) { Type = type; }
+        public Type Type { get; }
+        public bool Shown { get; set; } = true;
+    }
+    private readonly Dictionary<UINode, WindowRecord> _windows = new();
+    private readonly Dictionary<Type, UINode> _single = new();
+
+    public Task<T> OpenAsync<T>(CancellationToken cancellationToken = default) where T : UINode =>
+        OpenCoreAsync<T>(null, false, cancellationToken);
+
+    public Task<T> OpenAsync<T>(object args, CancellationToken cancellationToken = default) where T : UINode =>
+        OpenCoreAsync<T>(args, true, cancellationToken);
+
+    private Task<T> OpenCoreAsync<T>(object? args, bool supplied, CancellationToken cancellationToken) where T : UINode =>
         OperateAsync("Open", async ct =>
         {
+            ct.ThrowIfCancellationRequested();
+            if (supplied && args == null) throw new ArgumentNullException(nameof(args));
+            var mode = Context.GetWindowMode<T>();
+            if (mode == WindowInstanceMode.Single && _single.TryGetValue(typeof(T), out var existing))
+            {
+                var record = RequireWindow(existing);
+                if (supplied) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
+                if (!record.Shown) await ShowCoreAsync(existing, record, ct);
+                return (T)existing;
+            }
             var node = await Context.CreateAsync<T>(this, args, ct);
             var enter = Describe(node, LifecycleReason.Open, null, node);
             try { await node.PrepareEnterAsync(enter, ct); }
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
+            _windows.Add(node, new WindowRecord(typeof(T)));
+            if (mode == WindowInstanceMode.Single) _single.Add(typeof(T), node);
             CompleteChange(enter, null, null, node, enter);
             return node;
         }, cancellationToken);
 
+    public bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? node) where T : UINode
+    {
+        try
+        {
+            Context.Host.VerifyAccess();
+            if (State != NodeState.Ready) throw new InvalidOperationException($"Window container is {State}.");
+            var matches = _windows.Where(p => p.Value.Type == typeof(T) && p.Key.State == NodeState.Ready).Select(p => p.Key).ToArray();
+            if (matches.Length > 1) throw new InvalidOperationException($"Several windows of registered type {typeof(T).Name} exist; use their instance references.");
+            node = matches.Length == 0 ? null : (T)matches[0];
+            return node != null;
+        }
+        catch (Exception ex) { ReportFailure(ex, $"TryGet<{typeof(T).Name}> {Name}"); throw; }
+    }
+
+    private WindowRecord RequireWindow(UINode node)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        if (node.Parent != this || node.State != NodeState.Ready || !_windows.TryGetValue(node, out var record))
+            throw new InvalidOperationException("The instance is not an available window of this container.");
+        return record;
+    }
+
+    public Task HideAsync(UINode node, CancellationToken cancellationToken = default) =>
+        OperateAsync("Hide", async ct =>
+        {
+            var record = RequireWindow(node);
+            if (!record.Shown) throw new InvalidOperationException("Window is already hidden.");
+            var exit = Describe(node, LifecycleReason.Hide, node, null);
+            try { await node.PrepareExitAsync(exit, ct); }
+            catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
+            record.Shown = false;
+            CompleteChange(exit, node, exit, null, null);
+            return true;
+        }, cancellationToken);
+
+    public Task ShowAsync(UINode node, CancellationToken cancellationToken = default) =>
+        OperateAsync("Show", async ct =>
+        {
+            var record = RequireWindow(node);
+            if (record.Shown) throw new InvalidOperationException("Window is already shown.");
+            await ShowCoreAsync(node, record, ct);
+            return true;
+        }, cancellationToken);
+
+    private async Task ShowCoreAsync(UINode node, WindowRecord record, CancellationToken ct)
+    {
+        var enter = Describe(node, LifecycleReason.Show, null, node);
+        try { await node.PrepareEnterAsync(enter, ct); }
+        catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(false, false); return Task.CompletedTask; }); throw; }
+        record.Shown = true;
+        CompleteChange(enter, null, null, node, enter);
+    }
+
     public Task CloseAsync(UINode node, CancellationToken cancellationToken = default) =>
         OperateAsync("Close", async ct =>
         {
-            if (node.Parent != this) throw new InvalidOperationException("The instance does not belong to this container.");
+            var record = RequireWindow(node);
+            if (!record.Shown)
+            {
+                ct.ThrowIfCancellationRequested();
+                RemoveWindow(node);
+                await node.DisposeAsync();
+                return true;
+            }
             var exit = Describe(node, LifecycleReason.Close, node, null);
             try { await node.PrepareExitAsync(exit, ct); }
             catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
+            RemoveWindow(node);
             await FinishCloseAsync(node, () => CompleteChange(exit, node, exit, null, null));
             return true;
         }, cancellationToken);
+
+    private void RemoveWindow(UINode node)
+    {
+        if (_windows.TryGetValue(node, out var record))
+        {
+            _windows.Remove(node);
+            if (_single.TryGetValue(record.Type, out var single) && ReferenceEquals(single, node)) _single.Remove(record.Type);
+        }
+    }
+    protected override void OnChildRemoved(UINode child) => RemoveWindow(child);
 }
 
 public class StackContainerNode : ContainerNode
@@ -104,8 +202,27 @@ public class StackContainerNode : ContainerNode
 
     public Task PopAsync(CancellationToken cancellationToken = default) => OperateAsync("Pop", async ct =>
     {
-        var current = Current ?? throw new InvalidOperationException("Cannot pop an empty stack.");
-        var previous = _history.Count > 1 ? _history[_history.Count - 2] : null;
+        if (Current == null) throw new InvalidOperationException("Cannot pop an empty stack.");
+        await ReturnCoreAsync(_history.Count - 2, ct);
+        return true;
+    }, cancellationToken);
+
+    public Task PopToAsync(UINode target, CancellationToken cancellationToken = default) => OperateAsync("PopTo", async ct =>
+    {
+        if (target == null) throw new ArgumentNullException(nameof(target));
+        var index = _history.IndexOf(target);
+        if (target.Parent != this || target.State != NodeState.Ready || index < 0 || index == _history.Count - 1)
+            throw new InvalidOperationException("Target must be an earlier available instance in this stack's history.");
+        await ReturnCoreAsync(index, ct);
+        return true;
+    }, cancellationToken);
+
+    private async Task ReturnCoreAsync(int targetIndex, CancellationToken ct)
+    {
+        var snapshot = _history.ToArray();
+        var current = snapshot[snapshot.Length - 1];
+        var previous = targetIndex < 0 ? null : snapshot[targetIndex];
+        var removed = snapshot.Skip(targetIndex + 1).Reverse().ToArray();
         var exit = Describe(current, LifecycleReason.Close, current, previous);
         var enter = previous == null ? null : Describe(previous, LifecycleReason.Return, current, previous);
         try
@@ -113,6 +230,7 @@ public class StackContainerNode : ContainerNode
             await current.PrepareExitAsync(exit, ct);
             if (previous != null) await previous.PrepareEnterAsync(enter!, ct);
             ct.ThrowIfCancellationRequested();
+            if (!_history.SequenceEqual(snapshot)) throw new InvalidOperationException("History changed while preparing the return.");
         }
         catch (Exception ex)
         {
@@ -120,10 +238,21 @@ public class StackContainerNode : ContainerNode
             await Context.CleanupAsync(ex, () => { current.RestoreLocalState(true, true); return Task.CompletedTask; });
             throw;
         }
-        _history.RemoveAt(_history.Count - 1);
-        await FinishCloseAsync(current, () => CompleteChange(exit, current, exit, previous, enter));
-        return true;
-    }, cancellationToken);
+        _history.RemoveRange(targetIndex + 1, _history.Count - targetIndex - 1);
+        Exception? first = null;
+        try { CompleteChange(exit, current, exit, previous, enter); }
+        catch (Exception ex) { Context.Report(ex, "Return completion"); first = ex; }
+        foreach (var node in removed)
+        {
+            try { await node.DisposeAsync(); }
+            catch (Exception ex)
+            {
+                Context.Report(ex, "Return cleanup");
+                if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+            }
+        }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
 
     protected override void OnChildRemoved(UINode child) => _history.Remove(child);
 }

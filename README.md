@@ -1,6 +1,6 @@
 # UIFramework
 
-纯 C#、渲染无关的层级 UI 管理框架 V2，附持续维护的 Godot C# Demo。
+纯 C#、渲染无关的层级 UI 管理框架 V3，附持续维护的 Godot C# Demo。
 
 ## 工程结构
 
@@ -12,7 +12,7 @@
 | `Demo/Godot` | Godot 4.7.2 .NET / net10.0 示例项目 |
 | `tests/UIFramework.Tests` | 核心行为与生成结果编译测试 |
 
-设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V2 已补全生命周期、状态通知与处理器组合；Demo 使用虚构冒险游戏的纯 UI 场景。
+设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V3 在 V2 生命周期上加入单实例窗口、隐藏恢复和返回指定历史实例；Demo 使用虚构冒险游戏的纯 UI 场景。V3 实际契约与验收集中于设计文档第 8.9、8.10 节。
 
 ## 运行
 
@@ -60,9 +60,30 @@ await tabs.SwitchAsync("Audio");
 
 示例中的 `mount` / `embeddedMount` 是后端显示句柄，不是框架默认节点。内嵌 Tab 不加载或克隆场景，不要求业务 View 类。未知名称、重复项、重复切换当前项均明确抛错；UI 可以将当前标签按钮禁用。
 
-`PanelContainerNode.OpenAsync<T>` 支持独立实例，`CloseAsync(node)` 关闭具体对象；`ModalContainerNode.OpenAsync<T>` / `CloseAsync(node)` 处理模态窗口。`ShowDialogAsync<T, TResult>` 等待 `DialogNode<TResult>.Complete(result)`，关闭成功后返回结果。
+`PanelContainerNode.OpenAsync<T>` 默认取得或创建容器内单实例，隐藏项自动恢复，显示项返回原对象而不重播生命周期。多实例在注册时明确指定 `WindowInstanceMode.Multiple`；该设置只影响 Panel，不影响 Stack/Modal。`HideAsync` 保留实例，`ShowAsync` 恢复，`CloseAsync` 最终销毁。`TryGet<T>(out node)` 同步查询包含隐藏项的已提交窗口；多个匹配实例直接报歧义错误。
 
-业务类可以使用 View 命名。声明 `[UIResource("res://...")]` 后，引用生成器并 `using UIFramework.Generated`，可调用 `ui.RegisterGeneratedUI()` 和生成的 `PushInventoryViewAsync` 等方法。`UINode<TArgs>` 的生成调用接受对应参数类型；生成代码仍调用同一核心 API。自定义构造通过 `ui.Register(() => new MyNode(service), resource)` 手写接入。
+```csharp
+ui.Register<CardView>("card-resource", windowMode: WindowInstanceMode.Multiple);
+var windows = new PanelContainerNode();
+await windows.AttachAsync(ui.Root, "ProjectWindows", windowMount);
+var inventory = await windows.OpenAsync<InventoryView>();
+await windows.HideAsync(inventory);
+await windows.OpenAsync<InventoryView>(); // 显示同一个实例。
+await windows.HideAsync(inventory);
+await windows.ShowAsync(inventory);
+await windows.CloseAsync(inventory); // 下次打开创建新实例。
+
+var first = await stack.PushAsync<InventoryView>();
+await stack.PushAsync<ItemDetailsView>();
+await stack.PushAsync<ItemNotesView>();
+await stack.PopToAsync(first); // 跳过中间页，恢复 first，等待移除项清理。
+```
+
+窗口参数是创建参数：新建使用 `OpenAsync<T>(args)`，已有参数化单实例重开使用无参重载，更新数据调用业务方法。已有单实例再次带参 Open、Hide 已隐藏对象、Show 已显示对象均报错；不是自动刷新或静默跳过。`PopToAsync` 仅接收当前栈中更早的实例，不能返回当前项；中间隐藏项不重播显示生命周期。
+
+`ModalContainerNode.OpenAsync<T>` / `CloseAsync(node)` 处理模态窗口。`ShowDialogAsync<T, TResult>` 等待 `DialogNode<TResult>.Complete(result)`，关闭成功后返回结果。
+
+业务类可以使用 View 命名。声明 `[UIResource("res://...")]` 后，引用生成器并 `using UIFramework.Generated`，可调用 `ui.RegisterGeneratedUI()` 和生成的 `PushInventoryViewAsync` 等方法。属性可设置 `WindowMode = WindowInstanceMode.Multiple`。`UINode<TArgs>` 的窗口调用同时生成带参创建、无参重开重载；生成代码仍调用同一核心 API。自定义构造通过 `ui.Register(() => new MyNode(service), resource)` 手写接入。
 
 ## Godot 初始化
 

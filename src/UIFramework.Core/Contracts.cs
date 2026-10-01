@@ -55,7 +55,10 @@ public sealed class UIResourceAttribute : Attribute
 {
     public UIResourceAttribute(string resource) => Resource = resource;
     public string Resource { get; }
+    public WindowInstanceMode WindowMode { get; set; } = WindowInstanceMode.Single;
 }
+
+public enum WindowInstanceMode { Single, Multiple }
 
 public enum NodeState { Detached, Initializing, Ready, Disposing, Disposed }
 

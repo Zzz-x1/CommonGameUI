@@ -95,9 +95,9 @@ public class UINode : IAsyncDisposable
         if (parent == null) throw new ArgumentNullException(nameof(parent));
         if (State != NodeState.Detached)
         {
-            var ex = new InvalidOperationException("Node is already attached or disposed.");
-            ReportFailure(ex, "Attach existing node");
-            throw ex;
+            var failure = new InvalidOperationException("Node is already attached or disposed.");
+            ReportFailure(failure, "Attach existing node");
+            throw failure;
         }
         try
         {
@@ -306,7 +306,7 @@ public class UINode : IAsyncDisposable
         if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
     }
 
-    private void ReportFailure(Exception failure, string context)
+    internal void ReportFailure(Exception failure, string context)
     {
         if (_context != null) _context.Report(failure, context);
         else new ConsoleUILog().Error(failure, context);

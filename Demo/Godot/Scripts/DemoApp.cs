@@ -46,19 +46,25 @@ public partial class DemoApp : Control
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", OpenHomeAsync);
         if (OS.GetCmdlineUserArgs().Contains("--self-test")) await RunSelfTestAsync();
-        else if (OS.GetCmdlineUserArgs().Contains("--capture") || OS.GetCmdlineUserArgs().Contains("--capture-settings") || OS.GetCmdlineUserArgs().Contains("--capture-preferences"))
+        else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--capture", "--capture-settings", "--capture-preferences", "--capture-notes" }.Contains(a)))
         {
             var preferencesCapture = OS.GetCmdlineUserArgs().Contains("--capture-preferences");
             if (preferencesCapture) await OpenPreferencesAsync(); else await OpenInventoryAsync();
             var settingsCapture = OS.GetCmdlineUserArgs().Contains("--capture-settings");
+            var notesCapture = OS.GetCmdlineUserArgs().Contains("--capture-notes");
             if (settingsCapture)
             {
                 var window = await Modals.OpenSettingsWindowViewAsync();
                 await window.Body.PushGraphicsViewAsync();
             }
+            if (notesCapture)
+            {
+                await ((InventoryWindowView)_scenario!).Inventory.InspectAsync("Oakheart Bow");
+                await _inventoryStack!.PushProvenanceViewAsync();
+            }
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await CaptureAsync(settingsCapture ? "demo-settings.png" : preferencesCapture ? "demo-preferences.png" : "demo.png");
+            await CaptureAsync(settingsCapture ? "demo-settings.png" : preferencesCapture ? "demo-preferences.png" : notesCapture ? "demo-notes.png" : "demo.png");
             await _ui.DisposeAsync();
             GetTree().Quit();
         }
@@ -77,6 +83,30 @@ public partial class DemoApp : Control
         {
             _ui.Register<FailureView>("res://Scenes/DoesNotExist.tscn");
             await _stage.OpenAsync<FailureView>();
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-window-parameters"))
+        {
+            await OpenInventoryAsync();
+            await _stage.OpenAsync<InventoryWindowView>(new object());
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-window-state"))
+        {
+            await OpenInventoryAsync();
+            await _stage.ShowAsync(_scenario!);
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-stack-target"))
+        {
+            await OpenInventoryAsync();
+            await _inventoryStack!.PopToAsync(_inventoryStack.Current!);
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-return-cleanup"))
+        {
+            await OpenInventoryAsync();
+            var inventory = _inventoryStack!.Current!;
+            _ui.Register(() => new FailureView("cleanup"), "res://Scenes/Settings/Graphics.tscn");
+            await _inventoryStack.PushAsync<FailureView>();
+            await _inventoryStack.PushProvenanceViewAsync();
+            await _inventoryStack.PopToAsync(inventory);
         }
         else
         {
@@ -136,14 +166,18 @@ public partial class DemoApp : Control
 
     public void Status(string text) => GetNode<Label>("Frame/Layout/Status").Text = text;
 
-    private async Task ChangeScenarioAsync(Func<Task> action)
+    private async Task ChangeScenarioAsync(Func<Task> action, UINode? target = null)
     {
         if (_switching) throw new InvalidOperationException("A scenario change is already running.");
         _switching = true;
         try
         {
-            if (_scenario != null) { await _stage.CloseAsync(_scenario); _scenario = null; }
-            if (_inventoryStack != null) { await _inventoryStack.DisposeAsync(); _inventoryStack = null; }
+            if (_scenario != null && !ReferenceEquals(_scenario, target))
+            {
+                if (_scenario is InventoryWindowView) await _stage.HideAsync(_scenario);
+                else await _stage.CloseAsync(_scenario);
+                _scenario = null;
+            }
             _content.GetNode<Control>("Welcome").Hide();
             await action();
         }
@@ -154,12 +188,11 @@ public partial class DemoApp : Control
 
     public Task OpenInventoryAsync() => ChangeScenarioAsync(async () =>
     {
-        var mount = new Control { Name = "InventoryMount", MouseFilter = MouseFilterEnum.Ignore };
-        _content.AddChild(mount); mount.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _inventoryStack = new StackContainerNode();
-        await _inventoryStack.AttachAsync(_ui.Root, "DemoInventory", new GodotUIElement(mount, owned: true));
-        await _inventoryStack.PushInventoryViewAsync();
-    });
+        var window = await _stage.OpenInventoryWindowViewAsync();
+        _scenario = window;
+        _inventoryStack = window.Body;
+        Status($"Backpack / {window.Inventory.Tabs.CurrentName} / Pick up where you left off.");
+    }, _stage.TryGet<InventoryWindowView>(out var existing) ? existing : null);
 
     public async Task OpenCardsAsync()
     {
@@ -246,6 +279,38 @@ public partial class DemoApp : Control
         Check(ReferenceEquals(inventory, _inventoryStack.Current) && inventory.Tabs.CurrentName == "Materials", "Stack/Tab restoration.");
         GD.Print("PASS stack + embedded tabs: original inventory restored");
 
+        var inventoryWindow = (InventoryWindowView)_scenario!;
+        var originalDisplay = inventoryWindow.GetControl();
+        var windowEnters = inventoryWindow.EnterCount;
+        await OpenInventoryAsync();
+        Check(ReferenceEquals(inventoryWindow, _scenario) && inventoryWindow.EnterCount == windowEnters,
+            "Repeated backpack opening replayed entry or created another window.");
+        await OpenHomeAsync(); inspection = inventory.PreviewSeconds; inventory.Tick(1);
+        Check(!inventoryWindow.IsVisible && inventory.PreviewSeconds == inspection, "Stowed backpack kept updating.");
+        Check(_stage.TryGet<InventoryWindowView>(out var hidden) && ReferenceEquals(hidden, inventoryWindow), "Hidden single window was lost.");
+        await OpenInventoryAsync();
+        Check(ReferenceEquals(originalDisplay, inventoryWindow.GetControl()) && inventoryWindow.InitializeCount == 1,
+            "Restoring backpack loaded another scene or initialized again.");
+        Check(ReferenceEquals(inventory, _inventoryStack.Current) && inventory.Tabs.CurrentName == "Materials",
+            "Window restoration lost inner stack or tab.");
+        await _stage.HideAsync(inventoryWindow); await _stage.ShowAsync(inventoryWindow);
+        Check(inventory.IsActive, "Explicit Show did not reactivate backpack subtree.");
+        GD.Print("PASS V3 single window: repeated open, retained hide/show, subtree pause/resume");
+
+        await inventory.InspectAsync("Moonstone");
+        var skippedDetails = (DetailsView)_inventoryStack.Current!;
+        var notes = await _inventoryStack.PushProvenanceViewAsync();
+        var detailsEnters = skippedDetails.EnterCount;
+        await OpenHomeAsync(); await OpenInventoryAsync();
+        Check(ReferenceEquals(notes, _inventoryStack.Current), "Stowing a nested page lost its history.");
+        await _inventoryStack.PopToAsync(inventory);
+        Check(ReferenceEquals(inventory, _inventoryStack.Current) && _inventoryStack.History.Count == 1,
+            "Target return did not commit the original backpack.");
+        Check(skippedDetails.EnterCount == detailsEnters && skippedDetails.State == NodeState.Disposed && notes.State == NodeState.Disposed,
+            "Target return resumed an intermediate page or left it owned.");
+        Check(inventory.SelectedItem == "Moonstone" && inventory.Tabs.CurrentName == "Materials", "Target return lost game UI state.");
+        GD.Print("PASS V3 target return: field notes -> original backpack, intermediate pages released");
+
         var settingsButton = GetNode<Button>("Frame/Layout/Workspace/Sidebar/Settings");
         settingsButton.GrabFocus();
         var settings = await Modals.OpenSettingsWindowViewAsync();
@@ -291,10 +356,19 @@ public partial class DemoApp : Control
         outer.Complete(true); Check(await outerResult, "Outer result.");
         GD.Print("PASS nested modal results");
 
+        await OpenHomeAsync(); await _stage.CloseAsync(inventoryWindow);
+        Check(inventoryWindow.State == NodeState.Disposed && inventory.State == NodeState.Disposed,
+            "Closing hidden backpack did not release its subtree.");
+        Check(!_stage.TryGet<InventoryWindowView>(out _), "Closed backpack remained in the instance index.");
+        await OpenInventoryAsync();
+        Check(!ReferenceEquals(inventoryWindow, _scenario) && ((InventoryWindowView)_scenario!).InitializeCount == 1,
+            "Reopening a closed backpack reused a disposed instance.");
+        GD.Print("PASS V3 hidden close: subtree released, next open creates fresh window");
+
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (6 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (9 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
     }

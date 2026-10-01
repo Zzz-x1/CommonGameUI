@@ -131,6 +131,22 @@ public class GraphicsView : DemoView
     }
 }
 
+[UIResource("res://Scenes/Inventory/InventoryWindow.tscn")]
+public class InventoryWindowView : DemoView
+{
+    public int InitializeCount { get; private set; }
+    public StackContainerNode Body { get; private set; } = null!;
+    public InventoryView Inventory { get; private set; } = null!;
+    protected override async Task OnInitializeAsync(CancellationToken token)
+    {
+        InitializeCount++;
+        Transition = new GodotFadeTransition();
+        Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
+        Inventory = await Body.PushInventoryViewAsync(token);
+        Wire("Actions/Stow", () => DemoApp.Instance.OpenHomeAsync());
+    }
+}
+
 [UIResource("res://Scenes/Inventory/Inventory.tscn")]
 public class InventoryView : DemoView
 {
@@ -210,6 +226,7 @@ public class DetailsView : DemoView
     protected override Task OnInitializeAsync(CancellationToken token)
     {
         Transition = new GodotFadeTransition();
+        Wire("Notes", () => ((StackContainerNode)Parent!).PushProvenanceViewAsync());
         Wire("Back", () => ((StackContainerNode)Parent!).PopAsync());
         WireToggle("Enabled", favorite =>
         {
@@ -221,9 +238,26 @@ public class DetailsView : DemoView
     }
 }
 
+[UIResource("res://Scenes/Inventory/Provenance.tscn")]
+public class ProvenanceView : DemoView
+{
+    protected override Task OnInitializeAsync(CancellationToken token)
+    {
+        Transition = new GodotFadeTransition();
+        var stack = (StackContainerNode)Parent!;
+        var inventory = (InventoryView)stack.History[0];
+        this.GetControl<Label>("Description").Text = $"{inventory.SelectedItem.ToUpperInvariant()}\n\n" +
+            "Recovered along the northern trail.\nLyra recorded this find before returning to camp.\n\n" +
+            "Keep this entry with your collection; your selection and favorites remain in the backpack.";
+        Wire("Back", () => stack.PopAsync());
+        Wire("Backpack", () => stack.PopToAsync(inventory));
+        return Task.CompletedTask;
+    }
+}
+
 public sealed record CardArgs(string Title, Vector2 Position);
 
-[UIResource("res://Scenes/Inventory/Card.tscn")]
+[UIResource("res://Scenes/Inventory/Card.tscn", WindowMode = WindowInstanceMode.Multiple)]
 public class CardView : UINode<CardArgs>
 {
     private Button? _close;

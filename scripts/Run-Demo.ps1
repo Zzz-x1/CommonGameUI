@@ -3,8 +3,8 @@ param(
     [switch]$Headless,
     [switch]$SelfTest,
     [switch]$Capture,
-    [ValidateSet('Inventory', 'Preferences', 'Settings')][string]$CaptureScene = 'Inventory',
-    [ValidateSet('tab', 'duplicate', 'load', 'lifecycle', 'transition', 'entered', 'state', 'cleanup')][string]$Failure
+    [ValidateSet('Inventory', 'Preferences', 'Settings', 'Notes')][string]$CaptureScene = 'Inventory',
+    [ValidateSet('tab', 'duplicate', 'load', 'lifecycle', 'transition', 'entered', 'state', 'cleanup', 'window-parameters', 'window-state', 'stack-target', 'return-cleanup')][string]$Failure
 )
 $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot
@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Godot import failed.' }
 $taskArguments = @('--path', $taskProject)
 if ($Headless) { $taskArguments += '--headless' }
 if ($SelfTest) { $taskArguments += @('--', '--self-test') }
-elseif ($Capture) { $taskArguments += @('--', $(if ($CaptureScene -eq 'Settings') { '--capture-settings' } elseif ($CaptureScene -eq 'Preferences') { '--capture-preferences' } else { '--capture' })) }
+elseif ($Capture) { $taskArguments += @('--', $(if ($CaptureScene -eq 'Settings') { '--capture-settings' } elseif ($CaptureScene -eq 'Preferences') { '--capture-preferences' } elseif ($CaptureScene -eq 'Notes') { '--capture-notes' } else { '--capture' })) }
 elseif ($Failure) { $taskArguments += @('--', "--failure-$Failure") }
 & $GodotPath @taskArguments
 exit $LASTEXITCODE

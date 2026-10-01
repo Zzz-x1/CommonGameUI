@@ -1,0 +1,23 @@
+[gd_scene format=3]
+[node name="InventoryWindow" type="VBoxContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+[node name="Actions" type="HBoxContainer" parent="."]
+layout_mode = 2
+[node name="Hint" type="Label" parent="Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Your equipment stays just as you left it."
+theme_override_font_sizes/font_size = 14
+[node name="Stow" type="Button" parent="Actions"]
+layout_mode = 2
+text = "Stow backpack"
+[node name="BodyMount" type="Control" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2

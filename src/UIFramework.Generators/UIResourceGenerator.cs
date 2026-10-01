@@ -14,7 +14,9 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
         var declarations = context.SyntaxProvider.ForAttributeWithMetadataName("UIFramework.UIResourceAttribute",
             (node, _) => node is Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax,
             (ctx, _) => (Symbol: (INamedTypeSymbol)ctx.TargetSymbol,
-                Resource: (string)ctx.Attributes[0].ConstructorArguments[0].Value!)).Collect();
+                Resource: (string)ctx.Attributes[0].ConstructorArguments[0].Value!,
+                WindowMode: ctx.Attributes[0].NamedArguments.Where(p => p.Key == "WindowMode")
+                    .Select(p => (int)p.Value.Value!).DefaultIfEmpty(0).Single())).Collect();
 
         context.RegisterSourceOutput(declarations, (output, nodes) =>
         {
@@ -24,7 +26,8 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
             {
                 var type = node.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 source.Append("ui.Register<").Append(type).Append(">(")
-                    .Append(SymbolDisplay.FormatLiteral(node.Resource, true)).Append(");\n");
+                    .Append(SymbolDisplay.FormatLiteral(node.Resource, true))
+                    .Append(", windowMode: (global::UIFramework.WindowInstanceMode)").Append(node.WindowMode).Append(");\n");
             }
             source.Append("}\n}\npublic static class GeneratedUICalls {\n");
             foreach (var node in nodes)
@@ -38,10 +41,18 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                 var argumentDeclaration = argumentType == null ? "" : argumentType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + " args, ";
                 var argumentCall = argumentType == null ? "null" : "args";
                 foreach (var pair in new[] { (Container: "StackContainerNode", Method: "Push"), (Container: "PanelContainerNode", Method: "Open"), (Container: "ModalContainerNode", Method: "Open") })
+                {
                     source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> ")
                         .Append(pair.Method).Append(suffix).Append("Async(this global::UIFramework.").Append(pair.Container)
                         .Append(" container, ").Append(argumentDeclaration).Append("global::System.Threading.CancellationToken cancellationToken = default) => container.")
-                        .Append(pair.Method).Append("Async<").Append(type).Append(">(").Append(argumentCall).Append(", cancellationToken);\n");
+                        .Append(pair.Method).Append("Async<").Append(type).Append(">(")
+                        .Append(pair.Container == "PanelContainerNode" && argumentType == null ? "" : argumentCall + ", ")
+                        .Append("cancellationToken);\n");
+                    if (pair.Container == "PanelContainerNode" && argumentType != null)
+                        source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> Open")
+                            .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
+                            .Append(type).Append(">(cancellationToken);\n");
+                }
                 for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
                     if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.DialogNode<TResult>")
                     {

@@ -1,6 +1,6 @@
 namespace UIFramework;
 
-public enum LifecycleReason { Initialization, Open, Push, Covered, Switch, Return, Close, Modal, Ancestor, Disposal }
+public enum LifecycleReason { Initialization, Open, Show, Hide, Push, Covered, Switch, Return, Close, Modal, Ancestor, Disposal }
 
 /// <summary>Immutable description of a lifecycle operation. Source/Target may be absent.</summary>
 public sealed class LifecycleContext

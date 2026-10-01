@@ -23,6 +23,9 @@ button_pressed = true
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
+[node name="Notes" type="Button" parent="."]
+layout_mode = 2
+text = "Read field notes"
 [node name="Back" type="Button" parent="."]
 layout_mode = 2
 text = "Return to inventory"

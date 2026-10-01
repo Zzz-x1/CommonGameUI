@@ -6,7 +6,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="."]
 layout_mode = 2
 text = "BACKPACK"
@@ -28,7 +28,7 @@ text = "Materials"
 size_flags_horizontal = 3
 [node name="TabContent" type="Control" parent="."]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 320)
+custom_minimum_size = Vector2(0, 300)
 size_flags_vertical = 3
 mouse_filter = 2
 [node name="Equipment" type="VBoxContainer" parent="TabContent"]
@@ -39,7 +39,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 visible = false
-theme_override_constants/separation = 18
+theme_override_constants/separation = 12
 [node name="Heading" type="Label" parent="TabContent/Equipment"]
 layout_mode = 2
 text = "EQUIPMENT / 6 ITEMS"
@@ -55,27 +55,27 @@ theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
 [node name="Item0" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Oakheart Bow"
 [node name="Item1" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Trail Cloak"
 [node name="Item2" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Ranger Boots"
 [node name="Item3" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Silver Ring"
 [node name="Item4" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Scout Compass"
 [node name="Item5" type="Button" parent="TabContent/Equipment/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Traveler Belt"
 [node name="Enabled" type="CheckButton" parent="TabContent/Equipment"]
 layout_mode = 2
@@ -92,7 +92,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 visible = true
-theme_override_constants/separation = 18
+theme_override_constants/separation = 12
 [node name="Heading" type="Label" parent="TabContent/Materials"]
 layout_mode = 2
 text = "MATERIALS / 6 STACKS"
@@ -108,27 +108,27 @@ theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
 [node name="Item0" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Moonstone x18"
 [node name="Item1" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Iron Ore x24"
 [node name="Item2" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Wild Herb x12"
 [node name="Item3" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Ancient Wood x8"
 [node name="Item4" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Silk Thread x16"
 [node name="Item5" type="Button" parent="TabContent/Materials/Items"]
 layout_mode = 2
-custom_minimum_size = Vector2(210, 76)
+custom_minimum_size = Vector2(210, 54)
 text = "Amber x3"
 [node name="Enabled" type="CheckButton" parent="TabContent/Materials"]
 layout_mode = 2

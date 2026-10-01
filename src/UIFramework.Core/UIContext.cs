@@ -4,9 +4,11 @@ public sealed class UIContext : IAsyncDisposable
 {
     private sealed class Registration
     {
-        public Registration(Func<UINode> factory, string? resource) { Factory = factory; Resource = resource; }
+        public Registration(Func<UINode> factory, string? resource, WindowInstanceMode windowMode)
+        { Factory = factory; Resource = resource; WindowMode = windowMode; }
         public Func<UINode> Factory { get; }
         public string? Resource { get; }
+        public WindowInstanceMode WindowMode { get; }
     }
     private readonly Dictionary<Type, Registration> _registrations = new();
 
@@ -89,9 +91,10 @@ public sealed class UIContext : IAsyncDisposable
 
     internal void SetInputOwner(UINode? node) { InputOwner = node; Root.ApplyState(); }
 
-    public void Register<T>(string? resource = null) where T : UINode, new() => Register(() => new T(), resource);
+    public void Register<T>(string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode, new() =>
+        Register(() => new T(), resource, windowMode);
 
-    public void Register<T>(Func<T> factory, string? resource = null) where T : UINode
+    public void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode
     {
         try
         {
@@ -100,10 +103,16 @@ public sealed class UIContext : IAsyncDisposable
             if (Root.State != NodeState.Ready) throw new ObjectDisposedException(nameof(UIContext));
             if (_registrations.ContainsKey(typeof(T))) throw new InvalidOperationException($"Node {typeof(T).FullName} is already registered.");
             if (factory == null) throw new ArgumentNullException(nameof(factory));
-            _registrations.Add(typeof(T), new Registration(() => factory(), resource));
+            if (windowMode != WindowInstanceMode.Single && windowMode != WindowInstanceMode.Multiple)
+                throw new ArgumentOutOfRangeException(nameof(windowMode));
+            _registrations.Add(typeof(T), new Registration(() => factory(), resource, windowMode));
         }
         catch (Exception ex) { Report(ex, $"Register {typeof(T).FullName}"); throw; }
     }
+
+    internal WindowInstanceMode GetWindowMode<T>() where T : UINode =>
+        _registrations.TryGetValue(typeof(T), out var registration) ? registration.WindowMode :
+            throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
 
     internal async Task<T> CreateAsync<T>(UINode parent, object? args, CancellationToken token) where T : UINode
     {

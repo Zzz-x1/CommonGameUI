@@ -60,7 +60,7 @@ public class LifecycleTests
     {
         await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui);
         var b = new RecordingLifecycle(); var a = new CounterView(); a.AddLifecycle(b);
-        var count = 0; ui.Register(() => count++ == 0 ? a : new CounterView());
+        var count = 0; ui.Register(() => count++ == 0 ? a : new CounterView(), windowMode: WindowInstanceMode.Multiple);
         await panels.OpenAsync<CounterView>(); b.Events.Clear(); var second = await panels.OpenAsync<CounterView>();
         await panels.CloseAsync(second); Assert.Empty(b.Events); Assert.True(a.IsActive);
     }
@@ -138,7 +138,7 @@ public class LifecycleTests
     {
         var ui = Create(); var panels = await Attach<PanelContainerNode>(ui);
         var a = new CounterView(); var b = new CounterView(); var first = new RecordingLifecycle(); var second = new RecordingLifecycle();
-        a.AddLifecycle(first); b.AddLifecycle(second); var i = 0; ui.Register(() => i++ == 0 ? a : b);
+        a.AddLifecycle(first); b.AddLifecycle(second); var i = 0; ui.Register(() => i++ == 0 ? a : b, windowMode: WindowInstanceMode.Multiple);
         await panels.OpenAsync<CounterView>(); await panels.OpenAsync<CounterView>();
         var original = new IOException("deactivate"); second.OnInactive = _ => throw original;
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(async () => await ui.DisposeAsync()));

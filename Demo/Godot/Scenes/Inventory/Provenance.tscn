@@ -1,0 +1,28 @@
+[gd_scene format=3]
+[node name="Provenance" type="VBoxContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 24
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+text = "FIELD NOTES"
+theme_override_font_sizes/font_size = 28
+[node name="Description" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+autowrap_mode = 3
+text = "A record from Lyra's travel journal."
+[node name="Spacer" type="Control" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+[node name="Back" type="Button" parent="."]
+layout_mode = 2
+text = "Return to item details"
+[node name="Backpack" type="Button" parent="."]
+layout_mode = 2
+text = "Return to backpack"
