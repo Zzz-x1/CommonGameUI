@@ -603,3 +603,14 @@ await windows.CloseAsync(left);                           // 操作具体实例�
 #### 本轮建议验证场景
 
 窗口：背包隐藏后重开保留当前内嵌 Tab 与选中物品；重复打开不增加单实例；同类型两个详情窗口分别关闭；批量关闭包含隐藏窗口。栈：主菜单→存档→角色创建→确认，演示返回指定存档实例、替换确认页、重置回主菜单和清空后再次推入。对新页准备失败、返回目标缺失、多实例歧义和批量清理失败补核心测试。Demo 展示业务流程，不能以 API 按钮面板替代。
+
+### 8.6 其他方案如何实现 Replace（调研补充，非已确认设计）
+
+这里的 Replace 严格指 `[A,B,C] → [A,B,D]`：B 不暂时恢复，C 不留在返回历史中；新页准备失败时尽量保持 C。以下区分公开 API 可组合的流程与需要扩展框架的方案；没有运行验证这些组合。
+
+- **UnityScreenNavigator**：核对的 PageContainer 没有直接 Replace 入口。顺序等待 `Pop(false)` 再 `Push("D", true)` 可以得到目标历史，但 Pop 仍会恢复 B 并调用其生命周期，关动画不能取消这些回调；Push 失败时 C 已移除。这是两个操作，不是一次替换。若 C 当初以 `stack: false` 推入，下一次推 D 会移除 C，可达成相同历史结果；已正常入栈的 C 不能通过给 D 设置 `stack: false` 追溯改变。任意栈顶的完整替换需要扩展源码，在一次操作中加载 D、转场 C→D、替换历史并清理 C，不能从外部修改只读历史或直接 Destroy C 绕过管理器。
+- **CommonUI**：核对的容器公开 GetActiveWidget、AddWidget、RemoveWidget，没有独立 Replace 契约。基于这些 API 的组合建议是保存旧顶 C，添加 D，待 D 成为显示项且转场结束后移除已隐藏 C；结果可为 `[A,B,D]`。这是 API 层面的推导，具体版本的转场完成、重入和释放时序需集成验证，不能宣称自带事务替换。先让 C Deactivate 会自动出栈并恢复 B，不满足“不激活中间页”的要求；不可移除的 RootContent 也不能套用该组合。
+- **QFramework UIKit**：其 UIPanelStack 保存已关闭页面的 PanelInfo，而不是当前显示项组成的完整实例栈。若当前页 C 尚未压入该历史，关闭 C 后直接打开 D、不要保存 C，便可保持此前返回记录。若已把 C 保存为历史，需扩展历史管理移除该记录。关闭再打开并非原子操作，D 创建失败无法自动保留 C；实例状态恢复也不是该栈的保证。
+- **FairyGUI**：Window 是窗口显示能力，不是内置页面历史。项目可自行准备 D、隐藏/销毁 C 并显示 D；如果还需要 `[A,B,D]` 的返回关系，历史、转场协调和失败恢复均由项目的页面管理器负责，不能仅把窗口切换称为栈 Replace。
+
+来源沿用 8.4 的官方源码，并核对 [CommonUI ContainerBase](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Plugins/CommonUI/UCommonActivatableWidgetContaine-) 的公开操作。建议本工程把 Replace 实现为 StackContainerNode 内部的一次操作，共享准备、提交与清理机制；不在公共 API 层包装 PopAsync + PushAsync，避免额外恢复 B 及新页失败后丢失 C。该建议尚未实现。
