@@ -26,6 +26,59 @@ public sealed class UIContext : IAsyncDisposable
     public IUILog Log { get; }
     public UINode? InputOwner { get; private set; }
 
+    private int _notificationDepth;
+    internal void VerifyMutation()
+    {
+        if (_notificationDepth != 0) throw new InvalidOperationException("Lifecycle notifications allow queries, not hierarchy mutations.");
+    }
+    internal void Notify(Action action, string stage)
+    {
+        _notificationDepth++;
+        try { action(); }
+        catch (Exception ex) { Report(ex, stage + "; remaining notification chain aborted"); throw; }
+        finally { _notificationDepth--; }
+    }
+    internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false)
+    {
+        var nodes = new List<UINode>();
+        void Visit(UINode node) { nodes.Add(node); foreach (var child in node.Children) Visit(child); }
+        Visit(Root);
+        var changes = nodes.Select(n => (Node: n, Visible: n.CommittedVisible, Active: n.IsActive,
+            OldVisible: n.PublishedVisible, OldActive: n.PublishedActive)).ToArray();
+        // Commit all effective state before delivering any notification. Failures are never replayed.
+        foreach (var c in changes) { c.Node.PublishedVisible = c.Visible; c.Node.PublishedActive = c.Active; }
+        Exception? first = null;
+        void Deliver(Action callback)
+        {
+            try { callback(); }
+            catch (Exception ex)
+            {
+                Report(ex, $"State notification {operation.Node.Name} ({operation.Node.Id})");
+                if (!continueOnFailure) throw;
+                if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+            }
+        }
+        LifecycleContext Describe(UINode node)
+        {
+            for (var n = node; n != null; n = n.Parent)
+                if (source != null && n == source.Node) return source.For(node);
+            return operation.For(node);
+        }
+        foreach (var c in Enumerable.Reverse(changes))
+        {
+            var context = Describe(c.Node);
+            if (c.OldActive && !c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, true, false)));
+            if (c.OldVisible && !c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, true, false)));
+        }
+        foreach (var c in changes)
+        {
+            var context = Describe(c.Node);
+            if (!c.OldVisible && c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, false, true)));
+            if (!c.OldActive && c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, false, true)));
+        }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
+
     internal bool AllowsInput(UINode node)
     {
         if (InputOwner == null) return true;
@@ -43,6 +96,7 @@ public sealed class UIContext : IAsyncDisposable
         try
         {
             Host.VerifyAccess();
+            VerifyMutation();
             if (Root.State != NodeState.Ready) throw new ObjectDisposedException(nameof(UIContext));
             if (_registrations.ContainsKey(typeof(T))) throw new InvalidOperationException($"Node {typeof(T).FullName} is already registered.");
             if (factory == null) throw new ArgumentNullException(nameof(factory));

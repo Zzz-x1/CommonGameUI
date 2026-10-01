@@ -1,42 +1,44 @@
-# Godot Demo
+# WAYFARER · Godot UI Demo
 
-本项目持续随框架能力更新。使用 Godot 4.7.2 .NET、.NET 10 SDK；框架核心仍为 netstandard2.1。
+这是虚构冒险游戏的纯 UI 原型，长期随框架迭代。使用 Godot 4.7.2 .NET 和 .NET 10；核心仍为 netstandard2.1。没有角色移动、战斗等 Gameplay。
 
 ## 启动
 
-在仓库根目录运行 `./scripts/Run-Demo.ps1`，或用 Godot .NET 编辑器导入此目录的 `project.godot`，构建 C# 后运行。
+仓库根目录运行 `./scripts/Run-Demo.ps1`，或导入本目录的 `project.godot`，构建 C# 后运行 Main 场景。
 
 ## 操作与预期
 
-| 左侧入口 | 操作 | 预期 |
+| 游戏入口 | 操作 | 展示的框架行为 |
 | --- | --- | --- |
-| Embedded tabs | 修改滑块，切换 Audio 后返回 Graphics | 基础 Node 按字符串切换，状态保留，不新增场景实例 |
-| Inventory stack | 切换 Materials，点击 Inspect，再返回 | 原背包实例及所选 Tab 保留 |
-| Settings window | 打开设置，进入 Graphics，Return，Close | 一层模态外壳和遮罩；内部栈返回，关闭恢复输入/焦点 |
-| Independent cards | 打开两张卡片，关闭其中一张 | 另一实例保持显示；可再次打开更多实例 |
-| Nested dialogs | Open nested，确认/取消内层，再结束外层 | 仅栈顶参与交互；结果返回后恢复下层输入 |
-| Cancel loading | 启动一个刻意延迟的加载并销毁其测试作用域 | 等待操作明确取消，无迟到实例；保留取消日志 |
+| Camp overview | 查看营地主菜单，返回主界面 | 项目自行定义菜单与容器，不依赖默认 HUD/Overlay |
+| Preferences | 调整画质、音量或灵敏度，按名称切换三个标签 | 内嵌基础 Node + PageActivity；不加载/克隆；控件与会话偏好保留 |
+| Backpack | Equipment/Materials 切换，点物品格或 Inspect，收藏后返回 | 栈保留原背包与选中 Tab；收藏筛选生效；详情显示所选物品 |
+| Settings | 打开设置，进入画质页，返回，再关闭 | 一个模态外壳/遮罩，内部栈；首次进入与返回提示不同；恢复输入/焦点 |
+| Compare relics | 打开两张藏品窗口，分别关闭 | 独立多实例，只关闭目标对象 |
+| Return to camp | 可再开一层确认；取消或确认内层，再结束外层 | 嵌套模态结果，只有顶部交互；焦点逐层恢复；外层确认返回营地 |
 
-资源在 `Scenes` 中可直接编辑。EmbeddedTabsDemo 场景故意让 Audio 在编辑器可见，运行时显式选择 Graphics，验证预览状态与运行时状态分离。页面无需定义专门 View 类。
+背包的 Inspection time 只在选中页面有效激活时更新：详情覆盖或模态阻挡时暂停，返回后继续。阶段、原因、实例 ID 输出普通 Godot 日志，不设专门诊断面板。偏好和收藏由项目 `GameUiState` 保存，跨页面重建保留；只是本地 UI 会话数据，未接入真实渲染设置、磁盘存档或 Gameplay。
 
-Demo 初始化已使用 Godot 便利 API：`GodotUI.Create(this)` 构造上下文，`Root.CreateContainerAsync<T>` 一次创建并挂载项目容器，`AttachToAsync` 接入已有业务节点。内嵌 Tab 使用 `BindAsync(name, Control)`，业务引用通过 `GetControl<T>(path)` 获取；无需逐项编写显示句柄包装。显式 owned 动态挂载仍保留底层示例。
+`Scenes/Preferences/Preferences.tscn` 和背包场景直接包含 Tab 页面，可在 Godot 编辑器开关节点预览，运行时显式选择初始项。页面无需定义空 View 类。`Scripts/Views.cs` 演示业务覆写与处理器组合；原始 Enter/Exit 钩子已迁移为 V2 前置和完成阶段。
 
-同步操作直接执行；`TrackAction` 成功时不创建空任务，信号处理器的异常以原异常进入帧观察入口。`AttachToAsync` 与 Control 版 Tab 绑定直接返回核心初始化任务，调用方仍需等待生命周期完成。
+初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页挂处理器时先构造 `UINode`、同步 `AddLifecycle`，再绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
 
 ## 自动验证
 
 ```powershell
-# 仓库根目录执行。
+./scripts/Test.ps1
 ./scripts/Run-Demo.ps1 -Headless -SelfTest
 ./scripts/Run-Demo.ps1 -SelfTest
-./scripts/Run-Demo.ps1 -Capture
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Inventory
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Settings
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Preferences
 ```
 
-自测包含 6 个场景：内嵌 Tab、栈和 Tab 组合、设置窗口、独立实例、嵌套结果、取消与根清理。所有通过时输出 `GODOT DEMO SELF-TEST PASSED (6 scenarios)` 并退出 0。取消用例预期保留 TaskCanceledException 日志，测试明确断言取消结果，不能当成技术故障被吞掉。
+自测覆盖内嵌 Tab、背包/详情/收藏/激活暂停与恢复、设置返回与偏好保存、独立实例、嵌套结果/焦点、取消与根清理，成功输出 `GODOT DEMO SELF-TEST PASSED (6 scenarios)`，退出 0。
 
-运行这 6 个场景前，还验证适配器便利 API：Root 不含默认项目节点、自定义加载器/日志保留、Control-only Tab 的基础节点和实例复用、类型化控件获取、借用挂载销毁时不释放 Control、已有节点身份不变、取消无残留、初始化失败原异常传播及清理。通过时输出 `GODOT ADAPTER SELF-TEST PASSED`。这组验证有意触发取消和初始化失败，原始日志必须保留。
+适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
-故意失败独立运行，必须退出 1，打印原始异常及堆栈：
+故障夹具分别运行，必须打印原始异常并退出 1：
 
 ```powershell
 ./scripts/Run-Demo.ps1 -Headless -Failure tab
@@ -44,22 +46,20 @@ Demo 初始化已使用 Godot 便利 API：`GodotUI.Create(this)` 构造上下�
 ./scripts/Run-Demo.ps1 -Headless -Failure load
 ./scripts/Run-Demo.ps1 -Headless -Failure lifecycle
 ./scripts/Run-Demo.ps1 -Headless -Failure transition
+./scripts/Run-Demo.ps1 -Headless -Failure entered
+./scripts/Run-Demo.ps1 -Headless -Failure state
+./scripts/Run-Demo.ps1 -Headless -Failure cleanup
 ```
 
-Godot 信号入口把任务保存在 Demo 的任务列表中，主帧观察完成/失败；失败打印并重新抛出原异常，结束当前运行。没有 async void 丢失任务异常的业务处理器。
+同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
 
-## 验证记录：2026-10-02
+## 验证记录：2026-10-02 / V2
 
-- Windows 11，.NET SDK 10.0.400，Godot 4.7.2 .NET。
-- 完整解决方案编译：0 警告、0 错误。
-- 核心/生成器：23 项测试通过。
-- Godot headless：6 个场景通过。
-- 5 个故意失败用例均退出 1，保留原始异常。
-- 原生 OpenGL 渲染：已生成并目视检查 Tab 页面、设置画质弹窗截图；没有用浏览器模拟 Demo。
-- 自测是程序化场景验证；尚未完成所有窗口尺寸、手柄设备、导出平台的人工兼容性测试。
+- Windows 11、.NET SDK 10.0.400、Godot 4.7.2 .NET。
+- 解决方案构建：0 警告、0 错误；核心与生成器 41 项测试通过。
+- Godot headless 和原生 OpenGL 自测均通过；嵌套模态捕获/恢复焦点由真实引擎断言。
+- 8 个独立故障用例均退出 1，保留原异常及堆栈。
+- 原生背包、画质弹窗、偏好界面截图已生成并目视检查；截图输出在被忽略的 artifacts。
+- 未验证全部分辨率、手柄设备与导出平台；未验证其他引擎。
 
-2026-10-02 根据用户选择④，将 Demo 改为 Kenney UI Pack - Adventure 卡通冒险风格，配以 Nunito 字体。使用米色纸张、木色边框、青绿色背景与红色标题旗帜；按钮、滑块、选项控件和模态窗口采用统一样式。
-
-编辑 `Themes/Adventure.tres` 可调整样式，`project.godot` 已将其设为项目 Theme，可在编辑器预览。素材来源、CC0 与字体 OFL 原始许可在 `Assets` 中。不存在运行时在线素材依赖。
-
-此次换肤验证：Demo 构建 0 警告、0 错误；Godot headless 的 6 场景自测通过（退出 0，预期取消日志保留）；原生 OpenGL 的 Tab 与画质弹窗截图已重新生成并目视检查。截图运行无资源缺失或渲染报错。此次未修改框架核心。
+继续使用用户选择的 Kenney UI Pack - Adventure 和 Nunito 字体。样式在 `Themes/Adventure.tres`，素材来源、作者和原许可在 `Assets/SOURCES.md`。本版复用本地已许可素材，没有运行时在线资源依赖。

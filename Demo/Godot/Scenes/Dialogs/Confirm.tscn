@@ -38,14 +38,14 @@ theme_override_constants/separation = 18
 [node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 25
-text = "CONFIRM ACTION"
+text = "RETURN TO CAMP?"
 [node name="Hint" type="Label" parent="Center/Panel/Margin/Content"]
 layout_mode = 2
-text = "Try a nested dialog. Input belongs to the topmost modal."
+text = "Your UI session will stay open. Choose whether to return."
 theme_override_font_sizes/font_size = 16
 [node name="Nested" type="Button" parent="Center/Panel/Margin/Content"]
 layout_mode = 2
-text = "Open nested confirmation"
+text = "Review confirmation once more"
 [node name="Yes" type="Button" parent="Center/Panel/Margin/Content"]
 layout_mode = 2
 text = "Confirm"

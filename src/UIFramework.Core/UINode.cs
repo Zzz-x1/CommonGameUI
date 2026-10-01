@@ -18,8 +18,14 @@ public class UINode : IAsyncDisposable
     private Task? _disposeTask;
     private bool _visible;
     private bool _interactive;
+    private bool _committedVisible;
+    private bool _inputLocked;
+    internal bool PublishedVisible, PublishedActive;
+    private readonly List<INodeLifecycle> _handlers = new();
+    private readonly List<INodeLifecycle> _initializedHandlers = new();
     private UIContext? _context;
 
+    public bool HasEntered { get; internal set; }
     public Guid Id { get; } = Guid.NewGuid();
     public string Name { get; private set; } = "";
     public UINode? Parent { get; private set; }
@@ -28,14 +34,48 @@ public class UINode : IAsyncDisposable
     public IUIElement? Element { get; private set; }
     public NodeState State { get; private set; }
     public bool IsVisible => _visible && (Parent?.IsVisible ?? true);
-    public bool IsInteractive => IsVisible && _interactive && Context.AllowsInput(this) && (Parent?.IsInteractive ?? true);
+    internal bool CommittedVisible => _committedVisible && (Parent?.CommittedVisible ?? true);
+    public bool IsActive => CommittedVisible && _interactive && Context.AllowsInput(this) && (Parent?.IsActive ?? true);
+    public bool IsInteractive => IsVisible && IsActive && !_inputLocked && (Parent?.IsInteractive ?? true);
     public CancellationToken Lifetime => _lifetime.Token;
     public IUITransition Transition { get; set; } = new InstantTransition();
 
     protected virtual bool InitiallyVisible => false;
     protected virtual Task OnInitializeAsync(CancellationToken token) => Task.CompletedTask;
-    protected virtual Task OnEnterAsync(CancellationToken token) => Task.CompletedTask;
-    protected virtual Task OnExitAsync(CancellationToken token) => Task.CompletedTask;
+    protected virtual Task OnEnteringAsync(LifecycleContext context, CancellationToken token) => Task.CompletedTask;
+    protected virtual void OnEntered(LifecycleContext context) { }
+    protected virtual Task OnExitingAsync(LifecycleContext context, CancellationToken token) => Task.CompletedTask;
+    protected virtual void OnExited(LifecycleContext context) { }
+    protected virtual void OnActivated(StateChangeContext context) { }
+    protected virtual void OnDeactivated(StateChangeContext context) { }
+    protected virtual void OnVisibilityChanged(StateChangeContext context) { }
+
+    public void AddLifecycle(INodeLifecycle handler)
+    {
+        try
+        {
+            if (State != NodeState.Detached) throw new InvalidOperationException("Register lifecycle behaviors before attachment.");
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (_handlers.Any(h => ReferenceEquals(h, handler))) throw new InvalidOperationException("Lifecycle behavior already registered.");
+            _handlers.Add(handler);
+        }
+        catch (Exception ex) { ReportFailure(ex, "AddLifecycle"); throw; }
+    }
+    public void RemoveLifecycle(INodeLifecycle handler)
+    {
+        try
+        {
+            _context?.Host.VerifyAccess();
+            _context?.VerifyMutation();
+            if (_busy != 0 || State == NodeState.Initializing || State == NodeState.Disposing || State == NodeState.Disposed)
+                throw new InvalidOperationException("Cannot change lifecycle behaviors during an operation or after disposal.");
+            var index = _handlers.FindIndex(h => ReferenceEquals(h, handler));
+            if (index < 0) throw new InvalidOperationException("Lifecycle behavior is not registered.");
+            _handlers.RemoveAt(index);
+            // Initialized behaviors remain owned until disposal, including removed subscribers.
+        }
+        catch (Exception ex) { ReportFailure(ex, "RemoveLifecycle"); throw; }
+    }
     protected virtual Task OnDisposeAsync() => Task.CompletedTask;
     protected virtual void OnChildRemoved(UINode child) { }
     internal virtual void SetParameters(object? args)
@@ -46,7 +86,7 @@ public class UINode : IAsyncDisposable
     internal void InitializeRoot(UIContext context)
     {
         _context = context; Name = "Root"; State = NodeState.Ready;
-        _visible = _interactive = true;
+        _visible = _committedVisible = _interactive = PublishedVisible = PublishedActive = true;
     }
 
     /// <summary>Bind an existing display or attach a logical node. Does not load or clone a resource.</summary>
@@ -65,6 +105,7 @@ public class UINode : IAsyncDisposable
                 throw new InvalidOperationException("Parent is not attached to an available UI context.");
             _context = parent.Context;
             Context.Host.VerifyAccess();
+            Context.VerifyMutation();
             cancellationToken.ThrowIfCancellationRequested();
             if (State != NodeState.Detached) throw new InvalidOperationException("Node is already attached or disposed.");
             if (parent.State != NodeState.Ready && parent.State != NodeState.Initializing)
@@ -79,16 +120,22 @@ public class UINode : IAsyncDisposable
             await RunAsync("Initialize", async token =>
             {
                 await OnInitializeAsync(token);
+                foreach (var handler in _handlers)
+                {
+                    _initializedHandlers.Add(handler);
+                    await handler.InitializeAsync(this, token);
+                }
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
                 SetLocalState(InitiallyVisible, InitiallyVisible);
+                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization));
             }, cancellationToken, allowInitializing: true);
         }
         catch (Exception ex)
         {
             ReportFailure(ex, $"Attach {GetType().Name}/{name} ({Id})");
             // Only clean an attachment established by this call, never an existing node on an invalid reattach.
-            if (State == NodeState.Initializing) await Context.CleanupAsync(ex, async () => await DisposeAsync());
+            if (Parent == parent && State != NodeState.Disposed) await Context.CleanupAsync(ex, async () => await DisposeAsync());
             throw;
         }
     }
@@ -105,28 +152,55 @@ public class UINode : IAsyncDisposable
         catch (Exception ex) { ReportFailure(ex, $"GetChild {Name}/{name}"); throw; }
     }
 
-    internal Task EnterAsync(CancellationToken token) => RunAsync("Enter", async ct =>
+    internal Task PrepareEnterAsync(LifecycleContext context, CancellationToken token) => RunAsync("Entering", async ct =>
     {
-        await OnEnterAsync(ct);
+        await OnEnteringAsync(context, ct);
+        foreach (var handler in _handlers) await handler.EnteringAsync(context, ct);
         ct.ThrowIfCancellationRequested();
-        SetLocalState(true, false);
+        StageVisibility(true);
         await Transition.PlayAsync(Element, true, ct);
         ct.ThrowIfCancellationRequested();
-        SetLocalState(true, true);
     }, token);
 
-    internal Task ExitAsync(CancellationToken token) => RunAsync("Exit", async ct =>
+    internal Task PrepareExitAsync(LifecycleContext context, CancellationToken token) => RunAsync("Exiting", async ct =>
     {
-        SetLocalState(_visible, false);
-        await OnExitAsync(ct);
+        await OnExitingAsync(context, ct);
+        foreach (var handler in _handlers) await handler.ExitingAsync(context, ct);
         await Transition.PlayAsync(Element, false, ct);
         ct.ThrowIfCancellationRequested();
-        SetLocalState(false, false);
+        StageVisibility(false);
     }, token);
+
+    internal void NotifyEntered(LifecycleContext context) => Context.Notify(() =>
+    { OnEntered(context); foreach (var handler in _handlers) handler.Entered(context); }, $"Entered {GetType().Name}/{Name} ({Id})");
+    internal void NotifyExited(LifecycleContext context) => Context.Notify(() =>
+    { OnExited(context); foreach (var handler in _handlers) handler.Exited(context); }, $"Exited {GetType().Name}/{Name} ({Id})");
+    internal void NotifyActive(StateChangeContext context) => Context.Notify(() =>
+    {
+        if (context.Current) { OnActivated(context); foreach (var h in _handlers) h.Activated(context); }
+        else { OnDeactivated(context); foreach (var h in _handlers) h.Deactivated(context); }
+    }, $"{(context.Current ? "Activated" : "Deactivated")} {GetType().Name}/{Name} ({Id})");
+    internal void NotifyVisible(StateChangeContext context) => Context.Notify(() =>
+    { OnVisibilityChanged(context); foreach (var h in _handlers) h.VisibilityChanged(context); }, $"VisibilityChanged {GetType().Name}/{Name} ({Id})");
+    internal void SetInputLocked(bool locked) { _inputLocked = locked; ApplyState(); }
 
     internal void SetLocalState(bool visible, bool interactive)
     {
-        _visible = visible; _interactive = interactive; ApplyState();
+        _visible = _committedVisible = visible; _interactive = interactive; ApplyState();
+    }
+    private void StageVisibility(bool visible) { _visible = visible; ApplyState(); }
+    internal void RestoreLocalState(bool visible, bool active)
+    {
+        Exception? first = null;
+        try { SetLocalState(visible, active); }
+        catch (Exception ex) { Context.Report(ex, $"Restore state {Name} ({Id})"); first = ex; }
+        try { Transition.Restore(Element, visible); }
+        catch (Exception ex)
+        {
+            Context.Report(ex, $"Restore transition {Name} ({Id})");
+            if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+        }
+        if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal void ApplyState()
     {
@@ -143,6 +217,7 @@ public class UINode : IAsyncDisposable
         try
         {
             Context.Host.VerifyAccess();
+            Context.VerifyMutation();
             if (State != NodeState.Ready && !(allowInitializing && State == NodeState.Initializing))
                 throw new InvalidOperationException($"Node {Name} is {State}.");
             cancellationToken.ThrowIfCancellationRequested();
@@ -153,7 +228,6 @@ public class UINode : IAsyncDisposable
             _idle = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Lifetime);
             await action(linked.Token);
-            linked.Token.ThrowIfCancellationRequested();
         }
         catch (Exception ex) { ReportFailure(ex, $"{operation} {GetType().Name}/{Name} ({Id})"); throw; }
         finally
@@ -170,6 +244,7 @@ public class UINode : IAsyncDisposable
             ReportFailure(failure, "Dispose detached node"); throw failure;
         }
         Context.Host.VerifyAccess();
+        Context.VerifyMutation();
         for (var frame = Executing.Value; frame != null; frame = frame.Previous)
             for (var node = frame.Node; node != null; node = node.Parent)
                 if (ReferenceEquals(node, this))
@@ -199,7 +274,7 @@ public class UINode : IAsyncDisposable
         }
         await Attempt(() => { _lifetime.Cancel(); return Task.CompletedTask; });
         if (_busy != 0 && _idle != null) await _idle.Task;
-        await Attempt(() => { SetLocalState(false, false); return Task.CompletedTask; });
+        await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
         foreach (var child in Enumerable.Reverse(_children.ToArray()))
             await Attempt(async () => await child.DisposeAsync());
         await Attempt(async () =>
@@ -209,6 +284,14 @@ public class UINode : IAsyncDisposable
             try { await OnDisposeAsync(); }
             finally { Executing.Value = previous; }
         });
+        foreach (var handler in _initializedHandlers.AsEnumerable().Reverse())
+            await Attempt(async () =>
+            {
+                var previous = Executing.Value;
+                Executing.Value = new OperationFrame(this, previous);
+                try { await handler.DisposeAsync(this); }
+                finally { Executing.Value = previous; }
+            });
         if (Element != null) await Attempt(async () => await Element.DisposeAsync());
         await Attempt(() =>
         {

@@ -8,6 +8,16 @@ namespace HierarchyDemo;
 public abstract class DemoView : UINode
 {
     private readonly List<Action> _disconnect = new();
+    public int EnterCount { get; private set; }
+    public int ActivationCount { get; private set; }
+    public int DeactivationCount { get; private set; }
+    protected override void OnEntered(LifecycleContext context)
+    {
+        EnterCount++;
+        GD.Print($"UI {GetType().Name}/{Id} entered {context.Reason}, first={context.IsFirstEnter}");
+    }
+    protected override void OnActivated(StateChangeContext context) { ActivationCount++; }
+    protected override void OnDeactivated(StateChangeContext context) { DeactivationCount++; }
     public GodotUIElement Display => (GodotUIElement)Element!;
     protected void Wire(string path, Func<Task> action)
     {
@@ -16,6 +26,20 @@ public abstract class DemoView : UINode
         button.Pressed += Handler;
         _disconnect.Add(() => button.Pressed -= Handler);
     }
+    protected void WireSlider(string path, Action<double> action)
+    {
+        var slider = this.GetControl<HSlider>(path);
+        void Handler(double value) => DemoApp.Instance.TrackAction(() => action(value));
+        slider.ValueChanged += Handler;
+        _disconnect.Add(() => slider.ValueChanged -= Handler);
+    }
+    protected void WireToggle(string path, Action<bool> action)
+    {
+        var button = this.GetControl<CheckButton>(path);
+        void Handler(bool value) => DemoApp.Instance.TrackAction(() => action(value));
+        button.Toggled += Handler;
+        _disconnect.Add(() => button.Toggled -= Handler);
+    }
     protected override Task OnDisposeAsync()
     {
         foreach (var disconnect in _disconnect) disconnect();
@@ -23,8 +47,8 @@ public abstract class DemoView : UINode
     }
 }
 
-[UIResource("res://Scenes/Tabs/EmbeddedTabsDemo.tscn")]
-public class EmbeddedTabsDemoView : DemoView
+[UIResource("res://Scenes/Preferences/Preferences.tscn")]
+public class PreferencesView : DemoView
 {
     public TabContainerNode Tabs { get; private set; } = null!;
     protected override async Task OnInitializeAsync(CancellationToken token)
@@ -32,9 +56,24 @@ public class EmbeddedTabsDemoView : DemoView
         Tabs = await this.CreateContainerAsync<TabContainerNode>("Tabs", this.GetControl<Control>("TabContent"), token);
         foreach (var name in new[] { "Graphics", "Audio", "Controls" })
         {
-            await Tabs.BindAsync(name, this.GetControl<Control>($"TabContent/{name}"), token);
+            var page = new UINode();
+            page.AddLifecycle(new PageActivity());
+            await Tabs.BindAsync(name, page, this.GetControl<Control>($"TabContent/{name}"), token);
             Wire($"TabButtons/{name}", () => SelectAsync(name));
         }
+        var model = DemoApp.Instance.GameState;
+        this.GetControl<HSlider>("TabContent/Graphics/Value").SetValueNoSignal(model.RenderScale);
+        this.GetControl<CheckButton>("TabContent/Graphics/Enabled").SetPressedNoSignal(model.Shadows);
+        this.GetControl<HSlider>("TabContent/Audio/Value").SetValueNoSignal(model.MasterVolume);
+        this.GetControl<CheckButton>("TabContent/Audio/Enabled").SetPressedNoSignal(model.Music);
+        this.GetControl<HSlider>("TabContent/Controls/Value").SetValueNoSignal(model.CameraSensitivity);
+        this.GetControl<CheckButton>("TabContent/Controls/Enabled").SetPressedNoSignal(model.InvertCamera);
+        WireSlider("TabContent/Graphics/Value", value => model.RenderScale = value);
+        WireToggle("TabContent/Graphics/Enabled", value => model.Shadows = value);
+        WireSlider("TabContent/Audio/Value", value => model.MasterVolume = value);
+        WireToggle("TabContent/Audio/Enabled", value => model.Music = value);
+        WireSlider("TabContent/Controls/Value", value => model.CameraSensitivity = value);
+        WireToggle("TabContent/Controls/Enabled", value => model.InvertCamera = value);
         await SelectAsync("Graphics", token);
     }
     public async Task SelectAsync(string name, CancellationToken token = default)
@@ -42,7 +81,7 @@ public class EmbeddedTabsDemoView : DemoView
         await Tabs.SwitchAsync(name, token);
         foreach (var key in Tabs.Items.Keys)
             this.GetControl<Button>($"TabButtons/{key}").Disabled = key == name;
-        DemoApp.Instance.Status($"TAB / {name} selected. Existing basic Node; scene instances reused.");
+        DemoApp.Instance.Status($"Preferences / {name}");
     }
 }
 
@@ -61,6 +100,13 @@ public class SettingsWindowView : DemoView
 [UIResource("res://Scenes/Settings/Settings.tscn")]
 public class SettingsView : DemoView
 {
+    protected override void OnEntered(LifecycleContext context)
+    {
+        base.OnEntered(context);
+        this.GetControl<Label>("Description").Text = context.IsFirstEnter
+            ? "Tune your adventure. Changes stay with this window."
+            : "Welcome back. Your graphics preferences have been kept.";
+    }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
         Wire("Graphics", () => ((StackContainerNode)Parent!).PushGraphicsViewAsync());
@@ -75,6 +121,11 @@ public class GraphicsView : DemoView
     protected override Task OnInitializeAsync(CancellationToken token)
     {
         Transition = new GodotFadeTransition();
+        var model = DemoApp.Instance.GameState;
+        this.GetControl<HSlider>("Value").SetValueNoSignal(model.RenderScale);
+        this.GetControl<CheckButton>("Enabled").SetPressedNoSignal(model.Shadows);
+        WireSlider("Value", value => model.RenderScale = value);
+        WireToggle("Enabled", value => model.Shadows = value);
         Wire("Back", () => ((StackContainerNode)Parent!).PopAsync());
         return Task.CompletedTask;
     }
@@ -83,33 +134,89 @@ public class GraphicsView : DemoView
 [UIResource("res://Scenes/Inventory/Inventory.tscn")]
 public class InventoryView : DemoView
 {
+    public HashSet<string> Favorites => DemoApp.Instance.GameState.Favorites;
+    public string SelectedItem { get; private set; } = "Oakheart Bow";
+    public double PreviewSeconds { get; private set; }
+    public void Tick(double delta)
+    {
+        if (Tabs.Current?.IsActive != true) return;
+        PreviewSeconds += delta;
+        this.GetControl<Label>("Description").Text = $"LYRA / Ranger     |     1,240 gold     |     Inspection time {PreviewSeconds:0.0}s";
+    }
     public TabContainerNode Tabs { get; private set; } = null!;
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
         Tabs = await this.CreateContainerAsync<TabContainerNode>("Tabs", this.GetControl<Control>("TabContent"), token);
         foreach (var name in new[] { "Equipment", "Materials" })
         {
-            await Tabs.BindAsync(name, this.GetControl<Control>($"TabContent/{name}"), token);
+            var page = new UINode();
+            page.AddLifecycle(new PageActivity());
+            await Tabs.BindAsync(name, page, this.GetControl<Control>($"TabContent/{name}"), token);
             Wire($"TabButtons/{name}", () => SelectAsync(name));
-            Wire($"TabContent/{name}/Details", () => ((StackContainerNode)Parent!).PushDetailsViewAsync());
+            WireToggle($"TabContent/{name}/Enabled", _ => RefreshFavorites());
+            Wire($"TabContent/{name}/Details", () => InspectAsync(name == "Equipment" ? "Oakheart Bow" : "Moonstone"));
+            for (var i = 0; i < 6; i++)
+            {
+                var button = this.GetControl<Button>($"TabContent/{name}/Items/Item{i}");
+                Wire($"TabContent/{name}/Items/Item{i}", () => InspectAsync(button.Text.Split(" x")[0]));
+            }
         }
         await SelectAsync("Equipment", token);
+    }
+    protected override void OnEntered(LifecycleContext context)
+    {
+        base.OnEntered(context);
+        RefreshFavorites();
+    }
+    private void RefreshFavorites()
+    {
+        foreach (var name in Tabs.Items.Keys)
+        {
+            var only = this.GetControl<CheckButton>($"TabContent/{name}/Enabled").ButtonPressed;
+            for (var i = 0; i < 6; i++)
+            {
+                var button = this.GetControl<Button>($"TabContent/{name}/Items/Item{i}");
+                button.Visible = !only || Favorites.Contains(button.Text.Split(" x")[0]);
+            }
+        }
+    }
+    public Task InspectAsync(string item)
+    {
+        SelectedItem = item;
+        return ((StackContainerNode)Parent!).PushDetailsViewAsync();
     }
     public async Task SelectAsync(string name, CancellationToken token = default)
     {
         await Tabs.SwitchAsync(name, token);
         foreach (var key in Tabs.Items.Keys) this.GetControl<Button>($"TabButtons/{key}").Disabled = key == name;
-        DemoApp.Instance.Status($"INVENTORY / {name}. Inspect an item, then return to this same tab.");
+        DemoApp.Instance.Status($"Backpack / {name} / Select an item to inspect.");
     }
 }
 
 [UIResource("res://Scenes/Inventory/Details.tscn")]
 public class DetailsView : DemoView
 {
+    protected override void OnEntered(LifecycleContext context)
+    {
+        base.OnEntered(context);
+        var inventory = (InventoryView)((StackContainerNode)Parent!).History[0];
+        var equipment = inventory.Tabs.CurrentName == "Equipment";
+        this.GetControl<CheckButton>("Enabled").SetPressedNoSignal(inventory.Favorites.Contains(inventory.SelectedItem));
+        this.GetControl<Label>("Title").Text = inventory.SelectedItem.ToUpperInvariant();
+        this.GetControl<Label>("Description").Text = equipment
+            ? $"RARE / Equipment\n{inventory.SelectedItem} / Ranger collection\n\nCarved from the ancient forest.\nBound to Lyra; a keepsake from her first expedition."
+            : $"UNCOMMON / Crafting material\n{inventory.SelectedItem} / Upgrade supplies\n\nA pale crystal found in the northern ruins.\nReserved for the next equipment upgrade.";
+    }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
         Transition = new GodotFadeTransition();
         Wire("Back", () => ((StackContainerNode)Parent!).PopAsync());
+        WireToggle("Enabled", favorite =>
+        {
+            var inventory = (InventoryView)((StackContainerNode)Parent!).History[0];
+            if (favorite) inventory.Favorites.Add(inventory.SelectedItem);
+            else inventory.Favorites.Remove(inventory.SelectedItem);
+        });
         return Task.CompletedTask;
     }
 }
@@ -160,4 +267,14 @@ public class ConfirmView : DialogNode<bool>
     {
         foreach (var disconnect in _disconnect) disconnect(); return Task.CompletedTask;
     }
+}
+
+// Reusable lifecycle behavior on basic embedded Nodes, without empty View subclasses.
+public sealed class PageActivity : NodeLifecycle
+{
+    public int Activations { get; private set; }
+    public bool Running { get; private set; }
+    public override void Activated(StateChangeContext context) { Running = true; Activations++; GD.Print($"Page {context.Node.Name} resume ({context.Operation.Reason})"); }
+    public override void Deactivated(StateChangeContext context) { Running = false; GD.Print($"Page {context.Node.Name} pause ({context.Operation.Reason})"); }
+    public override Task DisposeAsync(UINode node) { Running = false; return Task.CompletedTask; }
 }

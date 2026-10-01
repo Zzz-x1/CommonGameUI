@@ -19,8 +19,19 @@ public class FailureView : UINode
         if (_mode == "transition") Transition = new BrokenTransition();
         return Task.CompletedTask;
     }
+    protected override void OnEntered(LifecycleContext context)
+    {
+        if (_mode == "entered") throw new InvalidOperationException("Intentional original entered exception after commit.");
+    }
+    protected override void OnActivated(StateChangeContext context)
+    {
+        if (_mode == "state") throw new InvalidOperationException("Intentional original activation notification exception after commit.");
+    }
+    protected override Task OnDisposeAsync() => _mode == "cleanup"
+        ? Task.FromException(new InvalidOperationException("Intentional original cleanup exception.")) : Task.CompletedTask;
     private sealed class BrokenTransition : IUITransition
     {
+        public void Restore(IUIElement? element, bool visible) { }
         public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) =>
             throw new InvalidOperationException("Intentional original transition exception.");
     }

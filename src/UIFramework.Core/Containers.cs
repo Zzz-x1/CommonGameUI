@@ -4,26 +4,46 @@ public abstract class ContainerNode : UINode
 {
     protected override bool InitiallyVisible => true;
 
-    protected async Task<T> OperateAsync<T>(string operation, Func<CancellationToken, Task<T>> action, CancellationToken token)
+    protected async Task<T> OperateAsync<T>(string operation, Func<CancellationToken, Task<T>> action, CancellationToken token, Action? beforeLock = null)
     {
         T result = default!;
         await RunAsync(operation, async ct =>
         {
-            SetLocalState(true, false);
             Exception? primary = null;
-            try { result = await action(ct); }
+            try { beforeLock?.Invoke(); SetInputLocked(true); result = await action(ct); }
             catch (Exception ex) { primary = ex; throw; }
             finally
             {
                 if (State == NodeState.Ready)
                 {
-                    if (primary == null) SetLocalState(true, true);
-                    else await Context.CleanupAsync(primary, () => { SetLocalState(true, true); return Task.CompletedTask; });
+                    if (primary == null) SetInputLocked(false);
+                    else await Context.CleanupAsync(primary, () => { SetInputLocked(false); return Task.CompletedTask; });
                 }
             }
         }, token);
         return result;
     }
+    protected LifecycleContext Describe(UINode node, LifecycleReason reason, UINode? source, UINode? target) =>
+        new(node, this, reason, source, target);
+    protected void CompleteChange(LifecycleContext operation, UINode? exiting, LifecycleContext? exit,
+        UINode? entering, LifecycleContext? enter, Action? focus = null)
+    {
+        exiting?.SetLocalState(false, false);
+        entering?.SetLocalState(true, true);
+        if (entering != null) entering.HasEntered = true;
+        SetInputLocked(false);
+        focus?.Invoke();
+        Context.PublishChanges(operation, exit);
+        if (exiting != null) exiting.NotifyExited(exit!);
+        if (entering != null) entering.NotifyEntered(enter!);
+    }
+    protected async Task FinishCloseAsync(UINode node, Action notify)
+    {
+        try { notify(); }
+        catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
+        await node.DisposeAsync();
+    }
+
 }
 
 /// <summary>Independent instances; no implicit history or single-instance lookup.</summary>
@@ -33,16 +53,21 @@ public class PanelContainerNode : ContainerNode
         OperateAsync("Open", async ct =>
         {
             var node = await Context.CreateAsync<T>(this, args, ct);
-            try { await node.EnterAsync(ct); return node; }
+            var enter = Describe(node, LifecycleReason.Open, null, node);
+            try { await node.PrepareEnterAsync(enter, ct); }
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
+            CompleteChange(enter, null, null, node, enter);
+            return node;
         }, cancellationToken);
 
     public Task CloseAsync(UINode node, CancellationToken cancellationToken = default) =>
         OperateAsync("Close", async ct =>
         {
             if (node.Parent != this) throw new InvalidOperationException("The instance does not belong to this container.");
-            await node.ExitAsync(ct);
-            await node.DisposeAsync();
+            var exit = Describe(node, LifecycleReason.Close, node, null);
+            try { await node.PrepareExitAsync(exit, ct); }
+            catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
+            await FinishCloseAsync(node, () => CompleteChange(exit, node, exit, null, null));
             return true;
         }, cancellationToken);
 }
@@ -58,44 +83,45 @@ public class StackContainerNode : ContainerNode
         {
             var previous = Current;
             var node = await Context.CreateAsync<T>(this, args, ct);
+            var enter = Describe(node, LifecycleReason.Push, previous, node);
+            var exit = previous == null ? null : Describe(previous, LifecycleReason.Covered, previous, node);
             try
             {
-                if (previous != null) await previous.ExitAsync(ct);
-                await node.EnterAsync(ct);
+                if (previous != null) await previous.PrepareExitAsync(exit!, ct);
+                await node.PrepareEnterAsync(enter, ct);
                 ct.ThrowIfCancellationRequested();
-                _history.Add(node);
-                return node;
             }
             catch (Exception ex)
             {
+                if (previous != null) await Context.CleanupAsync(ex, () => { previous.RestoreLocalState(true, true); return Task.CompletedTask; });
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                if (previous != null) await Context.CleanupAsync(ex, () => { previous.SetLocalState(true, true); return Task.CompletedTask; });
                 throw;
             }
+            _history.Add(node);
+            CompleteChange(enter, previous, exit, node, enter);
+            return node;
         }, cancellationToken);
 
     public Task PopAsync(CancellationToken cancellationToken = default) => OperateAsync("Pop", async ct =>
     {
         var current = Current ?? throw new InvalidOperationException("Cannot pop an empty stack.");
         var previous = _history.Count > 1 ? _history[_history.Count - 2] : null;
+        var exit = Describe(current, LifecycleReason.Close, current, previous);
+        var enter = previous == null ? null : Describe(previous, LifecycleReason.Return, current, previous);
         try
         {
-            await current.ExitAsync(ct);
-            if (previous != null) await previous.EnterAsync(ct);
+            await current.PrepareExitAsync(exit, ct);
+            if (previous != null) await previous.PrepareEnterAsync(enter!, ct);
             ct.ThrowIfCancellationRequested();
         }
         catch (Exception ex)
         {
-            await Context.CleanupAsync(ex, () =>
-            {
-                previous?.SetLocalState(false, false);
-                current.SetLocalState(true, true);
-                return Task.CompletedTask;
-            });
+            if (previous != null) await Context.CleanupAsync(ex, () => { previous.RestoreLocalState(false, false); return Task.CompletedTask; });
+            await Context.CleanupAsync(ex, () => { current.RestoreLocalState(true, true); return Task.CompletedTask; });
             throw;
         }
         _history.RemoveAt(_history.Count - 1);
-        await current.DisposeAsync();
+        await FinishCloseAsync(current, () => CompleteChange(exit, current, exit, previous, enter));
         return true;
     }, cancellationToken);
 
@@ -128,23 +154,22 @@ public class TabContainerNode : ContainerNode
             if (!_items.TryGetValue(name, out var next)) throw new KeyNotFoundException($"Tab '{name}' does not exist in '{Name}'.");
             if (ReferenceEquals(Current, next)) throw new InvalidOperationException($"Tab '{name}' is already current.");
             var previous = Current;
+            var enter = Describe(next, LifecycleReason.Switch, previous, next);
+            var exit = previous == null ? null : Describe(previous, LifecycleReason.Switch, previous, next);
             try
             {
-                if (previous != null) await previous.ExitAsync(ct);
-                await next.EnterAsync(ct);
+                if (previous != null) await previous.PrepareExitAsync(exit!, ct);
+                await next.PrepareEnterAsync(enter, ct);
                 ct.ThrowIfCancellationRequested();
-                CurrentName = name;
             }
             catch (Exception ex)
             {
-                await Context.CleanupAsync(ex, () =>
-                {
-                    next.SetLocalState(false, false);
-                    previous?.SetLocalState(true, true);
-                    return Task.CompletedTask;
-                });
+                await Context.CleanupAsync(ex, () => { next.RestoreLocalState(false, false); return Task.CompletedTask; });
+                if (previous != null) await Context.CleanupAsync(ex, () => { previous.RestoreLocalState(true, true); return Task.CompletedTask; });
                 throw;
             }
+            CurrentName = name;
+            CompleteChange(enter, previous, exit, next, enter);
             return true;
         }, cancellationToken);
 
@@ -173,57 +198,46 @@ public class ModalContainerNode : ContainerNode
     private readonly Dictionary<UINode, object?> _focus = new();
     public UINode? Current => _modals.LastOrDefault();
 
-    public Task<T> OpenAsync<T>(object? args = null, CancellationToken cancellationToken = default) where T : UINode =>
-        OperateAsync("OpenModal", async ct =>
+    public Task<T> OpenAsync<T>(object? args = null, CancellationToken cancellationToken = default) where T : UINode
+    {
+        object? focus = null;
+        return OperateAsync("OpenModal", async ct =>
         {
             var previous = Current;
-            var focus = Context.Host.CaptureFocus();
             var node = await Context.CreateAsync<T>(this, args, ct);
+            var enter = Describe(node, LifecycleReason.Open, previous, node);
             try
             {
-                previous?.SetLocalState(true, false);
-                await node.EnterAsync(ct);
+                await node.PrepareEnterAsync(enter, ct);
                 node.Element?.BringToFront();
                 ct.ThrowIfCancellationRequested();
-                _modals.Add(node); _focus.Add(node, focus);
-                Context.SetInputOwner(node);
-                Context.Host.Focus(node.Element);
-                return node;
             }
             catch (Exception ex)
             {
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                await Context.CleanupAsync(ex, () =>
-                {
-                    previous?.SetLocalState(true, true);
-                    Context.Host.RestoreFocus(focus); return Task.CompletedTask;
-                });
                 throw;
             }
-        }, cancellationToken);
+            _modals.Add(node); _focus.Add(node, focus);
+            Context.SetInputOwner(node);
+            CompleteChange(enter, null, null, node, enter, () => Context.Host.Focus(node.Element));
+            return node;
+        }, cancellationToken, () => focus = Context.Host.CaptureFocus());
+    }
 
     public Task CloseAsync(UINode node, CancellationToken cancellationToken = default) =>
         OperateAsync("CloseModal", async ct =>
         {
             if (!ReferenceEquals(node, Current)) throw new InvalidOperationException("Only the current modal can be closed.");
             var focus = _focus[node];
-            await node.ExitAsync(ct);
+            var exit = Describe(node, LifecycleReason.Close, node, _modals.Count > 1 ? _modals[_modals.Count - 2] : null);
+            try { await node.PrepareExitAsync(exit, ct); }
+            catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
             _modals.Remove(node); _focus.Remove(node);
-            Context.SetInputOwner(Current);
-            Exception? disposalFailure = null;
-            try { await node.DisposeAsync(); }
-            catch (Exception ex) { disposalFailure = ex; throw; }
-            finally
+            await FinishCloseAsync(node, () =>
             {
-                if (disposalFailure == null)
-                {
-                    Current?.SetLocalState(true, true); Context.Host.RestoreFocus(focus);
-                }
-                else await Context.CleanupAsync(disposalFailure, () =>
-                {
-                    Current?.SetLocalState(true, true); Context.Host.RestoreFocus(focus); return Task.CompletedTask;
-                });
-            }
+                Context.SetInputOwner(Current);
+                CompleteChange(exit, node, exit, null, null, () => Context.Host.RestoreFocus(focus));
+            });
             return true;
         }, cancellationToken);
 
@@ -248,8 +262,15 @@ public class ModalContainerNode : ContainerNode
 
     protected override void OnChildRemoved(UINode child)
     {
+        var ownsInput = ReferenceEquals(Context.InputOwner, child);
+        _focus.TryGetValue(child, out var focus);
         _modals.Remove(child); _focus.Remove(child);
-        if (ReferenceEquals(Context.InputOwner, child)) Context.SetInputOwner(Current);
+        if (ownsInput)
+        {
+            Context.SetInputOwner(Current);
+            Context.Host.RestoreFocus(focus);
+            Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, Current), continueOnFailure: true);
+        }
     }
 }
 

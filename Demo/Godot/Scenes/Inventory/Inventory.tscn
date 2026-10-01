@@ -9,11 +9,11 @@ grow_vertical = 2
 theme_override_constants/separation = 20
 [node name="Title" type="Label" parent="."]
 layout_mode = 2
-text = "INVENTORY / STACK + TABS"
+text = "BACKPACK"
 theme_override_font_sizes/font_size = 27
 [node name="Description" type="Label" parent="."]
 layout_mode = 2
-text = "Pages are embedded in this scene. Switch by name; keep state."
+text = "LYRA / Ranger     |     1,240 gold"
 theme_override_font_sizes/font_size = 16
 [node name="TabButtons" type="HBoxContainer" parent="."]
 layout_mode = 2
@@ -42,25 +42,48 @@ visible = false
 theme_override_constants/separation = 18
 [node name="Heading" type="Label" parent="TabContent/Equipment"]
 layout_mode = 2
-text = "EQUIPMENT SETTINGS"
+text = "EQUIPMENT / 6 ITEMS"
 theme_override_font_sizes/font_size = 24
 [node name="Hint" type="Label" parent="TabContent/Equipment"]
 layout_mode = 2
-text = "Change the value, switch away, then return. The same instance stays."
+text = "Select an item below to read its story and attributes."
 theme_override_font_sizes/font_size = 16
-[node name="Value" type="HSlider" parent="TabContent/Equipment"]
+[node name="Items" type="GridContainer" parent="TabContent/Equipment"]
 layout_mode = 2
-min_value = 0.0
-max_value = 100.0
-value = 40.0
-custom_minimum_size = Vector2(0, 36)
+columns = 3
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+[node name="Item0" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Oakheart Bow"
+[node name="Item1" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Trail Cloak"
+[node name="Item2" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Ranger Boots"
+[node name="Item3" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Silver Ring"
+[node name="Item4" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Scout Compass"
+[node name="Item5" type="Button" parent="TabContent/Equipment/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Traveler Belt"
 [node name="Enabled" type="CheckButton" parent="TabContent/Equipment"]
 layout_mode = 2
-text = "Enable this option"
-button_pressed = true
+text = "Show favorites only"
+button_pressed = false
 [node name="Details" type="Button" parent="TabContent/Equipment"]
 layout_mode = 2
-text = "Inspect equipment item"
+text = "Inspect Oakheart Bow"
 [node name="Materials" type="VBoxContainer" parent="TabContent"]
 layout_mode = 1
 anchors_preset = 15
@@ -72,22 +95,45 @@ visible = true
 theme_override_constants/separation = 18
 [node name="Heading" type="Label" parent="TabContent/Materials"]
 layout_mode = 2
-text = "MATERIALS SETTINGS"
+text = "MATERIALS / 6 STACKS"
 theme_override_font_sizes/font_size = 24
 [node name="Hint" type="Label" parent="TabContent/Materials"]
 layout_mode = 2
-text = "Change the value, switch away, then return. The same instance stays."
+text = "Select an item below to read its story and attributes."
 theme_override_font_sizes/font_size = 16
-[node name="Value" type="HSlider" parent="TabContent/Materials"]
+[node name="Items" type="GridContainer" parent="TabContent/Materials"]
 layout_mode = 2
-min_value = 0.0
-max_value = 100.0
-value = 55.0
-custom_minimum_size = Vector2(0, 36)
+columns = 3
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+[node name="Item0" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Moonstone x18"
+[node name="Item1" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Iron Ore x24"
+[node name="Item2" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Wild Herb x12"
+[node name="Item3" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Ancient Wood x8"
+[node name="Item4" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Silk Thread x16"
+[node name="Item5" type="Button" parent="TabContent/Materials/Items"]
+layout_mode = 2
+custom_minimum_size = Vector2(210, 76)
+text = "Amber x3"
 [node name="Enabled" type="CheckButton" parent="TabContent/Materials"]
 layout_mode = 2
-text = "Enable this option"
-button_pressed = true
+text = "Show favorites only"
+button_pressed = false
 [node name="Details" type="Button" parent="TabContent/Materials"]
 layout_mode = 2
-text = "Inspect materials item"
+text = "Inspect Moonstone Shard"

@@ -28,13 +28,13 @@ layout_mode = 2
 layout_mode = 2
 theme_override_font_sizes/font_size = 30
 theme_type_variation = &"BannerLabel"
-text = "Hierarchy"
+text = "WAYFARER"
 [node name="Version" type="Label" parent="Frame/Layout/Header"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
 size_flags_horizontal = 3
 horizontal_alignment = 2
-text = "C# UI FRAMEWORK   /   ADVENTURE EDITION"
+text = "LYRA / LEVEL 12     |     UI PROTOTYPE"
 [node name="Divider" type="HSeparator" parent="Frame/Layout"]
 layout_mode = 2
 [node name="Workspace" type="HBoxContainer" parent="Frame/Layout"]
@@ -48,25 +48,25 @@ theme_override_constants/separation = 14
 [node name="Caption" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
-text = "EXPLORE THE FRAMEWORK"
+text = "CAMP MENU"
 [node name="Tabs" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "01   Embedded tabs"
+text = "Preferences"
 [node name="Inventory" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "02   Inventory stack"
+text = "Backpack"
 [node name="Settings" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "03   Settings window"
+text = "Settings"
 [node name="Instances" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "04   Independent cards"
+text = "Compare relics"
 [node name="Confirm" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "05   Nested dialogs"
+text = "Return to camp"
 [node name="Cancel" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
-text = "06   Cancel loading"
+text = "Camp overview"
 [node name="Spacer" type="Control" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -74,9 +74,9 @@ mouse_filter = 2
 [node name="Note" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
-text = "One root.
-Composable nodes.
-Explicit failures."
+text = "Northern frontier
+Chapter II / Quiet camp
+No gameplay simulation"
 [node name="Credit" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
@@ -105,24 +105,26 @@ grow_vertical = 2
 theme_override_constants/separation = 22
 [node name="Overline" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
 layout_mode = 2
-text = "RENDERER-INDEPENDENT CORE"
+text = "CHAPTER II / THE NORTHERN FRONTIER"
 [node name="Heading" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 34
-text = "Build with nodes.
-Navigate with intent."
+text = "A moment of rest.
+A new journey awaits."
 [node name="Description" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
 layout_mode = 2
-text = "Choose a scenario on the left.
+text = "Your camp is ready, Ranger.
 
-Embedded tabs reuse existing scene controls.
-Stacks preserve pages for return navigation.
-Modal windows own input until closed."
+Inspect your equipment and gathered materials.
+Compare relics before the next expedition.
+Adjust your preferences at any time.
+
+This prototype presents the game UI only."
 [node name="Status" type="Label" parent="Frame/Layout"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
-text = "READY   /   Root created. No project nodes supplied by the framework."
+text = "Camp / Choose your next destination."
 [node name="FloatingMount" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15

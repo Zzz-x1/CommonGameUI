@@ -13,7 +13,7 @@ text = "GRAPHICS SETTINGS"
 theme_override_font_sizes/font_size = 28
 [node name="Description" type="Label" parent="."]
 layout_mode = 2
-text = "Return to the same settings page. No second backdrop."
+text = "Render scale / Choose a comfortable image quality."
 theme_override_font_sizes/font_size = 16
 [node name="Value" type="HSlider" parent="."]
 layout_mode = 2

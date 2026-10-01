@@ -17,12 +17,12 @@ text = "ITEM"
 theme_override_font_sizes/font_size = 22
 [node name="Description" type="Label" parent="Margin/Content"]
 layout_mode = 2
-text = "Independent node instance.
-Close only this card."
+text = "COLLECTION / Ancient artifact
+A souvenir from the northern expedition."
 theme_override_font_sizes/font_size = 16
 [node name="Value" type="HSlider" parent="Margin/Content"]
 layout_mode = 2
 value = 50.0
 [node name="Close" type="Button" parent="Margin/Content"]
 layout_mode = 2
-text = "Close this instance"
+text = "Put away"

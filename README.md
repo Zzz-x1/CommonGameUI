@@ -1,6 +1,6 @@
 # UIFramework
 
-纯 C#、渲染无关的层级 UI 管理框架初版，附持续维护的 Godot C# Demo。
+纯 C#、渲染无关的层级 UI 管理框架 V2，附持续维护的 Godot C# Demo。
 
 ## 工程结构
 
@@ -12,7 +12,7 @@
 | `Demo/Godot` | Godot 4.7.2 .NET / net10.0 示例项目 |
 | `tests/UIFramework.Tests` | 核心行为与生成结果编译测试 |
 
-设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V2 主要补全生命周期，当前为计划，尚未实现。
+设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V2 已补全生命周期、状态通知与处理器组合；Demo 使用虚构冒险游戏的纯 UI 场景。
 
 ## 运行
 
@@ -89,6 +89,10 @@ await ui.DisposeAsync(); // 场景退出时显式销毁上下文。
 
 ## 生命周期与失败规则
 
+V2 的 `OnEnteringAsync/OnExitingAsync` 承担可等待准备，`OnEntered/OnExited` 是提交后的同步通知。`OnActivated/OnDeactivated/OnVisibilityChanged` 表达有效状态变化；`IsActive` 不含临时输入锁，`IsInteractive` 包含。上下文提供原因、源/目标和首次进入标志。独立行为可通过 `AddLifecycle(new MyBehavior())` 在挂载前注册，继承 `NodeLifecycle` 只覆写需要的阶段。完整契约集中于设计文档第 7 节。
+
+旧 `OnEnterAsync/OnExitAsync` 已删除，工程内调用已迁移；没有兼容入口。完成通知失败保持已提交状态并传播原异常，关闭仍执行必要清理。自定义转场实现同步 `IUITransition.Restore` 恢复取消/失败时修改的表现状态，恢复失败也会暴露。
+
 - 初始化一次；进入/退出可重复；隐藏保留实例，销毁结束子树。
 - 栈保留覆盖项，出栈销毁；Tab 保留所有绑定项；独立面板按实例关闭。
 - 同容器并发或重入直接抛错，未引入操作队列。
@@ -99,7 +103,7 @@ await ui.DisposeAsync(); // 场景退出时显式销毁上下文。
 
 Godot 显示句柄分 owned（动态资源根）与 borrowed（内嵌控件）。借用句柄销毁仅结束逻辑管理，不单独释放父场景资源。
 
-## 初版边界
+## 当前边界
 
 当前实际验证了 Godot 桌面端。其他引擎需要适配器，尚未验证。Godot 场景加载采用同步 `ResourceLoader.Load`，包装在可等待接口中；大资源后台加载、编辑器节点配置、运行时重挂载、通用缓存/池化、绑定框架及诊断分析均未实现。
 

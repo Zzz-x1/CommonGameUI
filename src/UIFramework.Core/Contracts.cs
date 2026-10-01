@@ -35,11 +35,14 @@ public sealed class ConsoleUILog : IUILog
 public interface IUITransition
 {
     Task PlayAsync(IUIElement? element, bool entering, CancellationToken cancellationToken);
+    /// <summary>Restore animation-owned presentation after an aborted operation, without replaying an animation.</summary>
+    void Restore(IUIElement? element, bool visible);
 }
 
 /// <summary>Explicit default, never a fallback after a failed animation.</summary>
 public sealed class InstantTransition : IUITransition
 {
+    public void Restore(IUIElement? element, bool visible) { }
     public Task PlayAsync(IUIElement? element, bool entering, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

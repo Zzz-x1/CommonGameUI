@@ -1,6 +1,6 @@
 # UI 管理框架设计文档
 
-更新日期：2026-10-02（Asia/Shanghai）。当前已实现初版框架与 Godot Demo；实际契约和边界见第 6 节。
+更新日期：2026-10-02（Asia/Shanghai）。当前已实现并验证 V2 生命周期和游戏 UI Demo；实际契约见第 6、7 节。
 
 ## 目录
 
@@ -9,8 +9,8 @@
 3. [API 场景与归属](#3-api-场景与归属)
 4. [待定设计与调研](#4-待定设计与调研)
 5. [版本开发文档入口](#5-版本开发文档入口)
-6. [初版实际契约](#6-初版实际契约)
-7. [V2 生命周期方案建议](#7-v2-生命周期方案建议)
+6. [当前实际契约](#6-当前实际契约)
+7. [V2 生命周期契约](#7-v2-生命周期契约)
 
 ## 阅读约定
 
@@ -77,7 +77,7 @@ Demo 美术方向（已确认，2026-10-02）：用户选择候选④ Kenney UI 
 
 用户取消可以是业务结果，技术失败不能转换为用户取消。调用取消应明确传播取消状态。
 
-主操作与清理同时失败的协议待定，不允许用 finally 中的新异常覆盖原异常，也不能吞掉任一失败。
+主操作与清理同时失败使用 UIFailure.GetSecondaryExceptions 暴露附加原异常，详见第 7 节。
 
 ### 5. 范围建议
 
@@ -373,9 +373,9 @@ UnityScreenNavigator 对照：所核对的 SheetContainer 源码公开 Register 
 
 V1 范围建议、默认规则、开发阶段及验收标准统一维护在 [V1 开发文档](v1-development.md)。本设计文档维护通用概念与已确认约束，不重复保存版本开发清单。
 
-用户已指定 V2 主要补全生命周期相关能力，开发范围、阶段、迁移与验收集中维护在 [V2 开发文档](v2-development.md)。具体契约建议见本文第 7 节；尚未实现的 V2 方案不替代第 6 节的实际契约。
+用户已指定 V2 主要补全生命周期相关能力，开发范围、阶段、迁移与验收集中维护在 [V2 开发文档](v2-development.md)。V2 已完成，具体生命周期契约见第 7 节，容器与适配器公共入口见第 6 节。
 
-## 6. 初版实际契约
+## 6. 当前实际契约
 
 本节记录实现采用的契约，不表示把所有历史草案改为用户已确认要求。前文尚未定稿的示例用于解释概念；使用代码以本节和工程 README 为准。
 
@@ -392,13 +392,15 @@ V1 范围建议、默认规则、开发阶段及验收标准统一维护在 [V1 
 | GodotUIElement | owned 动态场景与 borrowed 内嵌 Control 句柄；显隐、输入、排序及按所有权销毁 |
 | Source Generator | UIResource 特性生成模块注册、容器直接调用、类型化参数及弹窗结果便利 API |
 
-NodeState 为 Detached、Initializing、Ready、Disposing、Disposed；可见和交互是独立的局部状态，经祖先状态及输入拥有者计算有效状态。生命周期扩展点为 OnInitializeAsync、OnEnterAsync、OnExitAsync、OnDisposeAsync。容器内部执行进入/退出，业务使用相应容器 API，不公开万能节点导航入口。
+NodeState 为 Detached、Initializing、Ready、Disposing、Disposed；可见和交互是独立的局部状态，经祖先状态及输入拥有者计算有效状态。生命周期已重构为第 7 节中的前置/完成、状态通知及处理器契约，旧 OnEnterAsync/OnExitAsync 已删除。容器内部执行进入/退出，业务使用相应容器 API，不公开万能节点导航入口。
 
 名称采用 StringComparer.Ordinal；Tab 项容器内唯一，未知名、重复名、重复切换当前项、泛型匹配多项直接抛错。Node 子节点允许同类型多实例，GetChild(name) 必须唯一，否则抛错，关闭使用具体实例。
 
 同容器不排队，并发或重入直接抛错。销毁取消进行中的操作，等待其协作结束，然后按逆序销毁子树。生命周期内销毁当前操作所属节点或祖先直接报错以避免等待自身。回调和自定义资源加载器必须配合 CancellationToken。
 
 故障后执行一致性清理并重新抛出原异常，不把清理当成业务成功或降级。额外清理异常保留在主异常 Data 的 UIFramework.SecondaryExceptions 中，提供 UIFailure.GetSecondaryExceptions 获取，单独记录日志；主异常不包装，使用 throw 或 ExceptionDispatchInfo 保留原堆栈。
+
+Godot owned 场景通过 QueueFree 延迟到引擎帧末物理释放；逻辑清理任务完成表示已结束管理并请求释放。立即重新绑定同一借用挂载时须先等待引擎处理已排队释放的子场景，不能把仍在树中的待释放控件当作新的内嵌资源。
 
 Godot 调用必须在场景线程；GodotUIHost.VerifyAccess 校验，初版不自动跨线程调度。场景加载采用同步 ResourceLoader.Load；异步接口表达可等待生命周期和取消协议，不宣称已经实现后台资源加载。隐藏页面不会自动停掉业务任务，业务订阅和任务由生命周期回调及 Lifetime 管理。
 
@@ -421,57 +423,79 @@ AttachToAsync / BindAsync / CreateContainerAsync 保留可等待契约，是因�
 
 ### 生命周期完整性审查（2026-10-02）
 
-现状：初版只有受保护的 OnInitializeAsync、OnEnterAsync、OnExitAsync、OnDisposeAsync 覆写点，尚没有独立的公开生命周期处理器接口。OnEnterAsync 在显示和进入转场之前执行；OnExitAsync 在退出转场和隐藏之前执行。没有进入/退出完成通知，也不能从回调参数分辨 Push 新进入、被覆盖、Pop 返回或最终关闭。模态下层仅调整可交互状态，父节点状态传播只应用后端显隐/输入，都不会通知业务激活/失活；直接 Dispose 子树不走 OnExitAsync。
+V1 审查发现前后阶段、原因、稳定激活和处理器组合缺失，且完成时序先于容器提交。V2 已重构这些职责，以下保留调研来源。
 
 官方源码对照：[IPageLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/IPageLifecycleEvent.cs)、[IModalLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Modal/IModalLifecycleEvent.cs) 区分 Will/Did 与 Push/Pop；[ISheetLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Sheet/ISheetLifecycleEvent.cs) 提供 WillEnter/DidEnter、WillExit/DidExit。Will、Initialize、Cleanup 使用协程或可选 Task，Did 为同步 void。[Page](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs) 还支持 AddLifecycleEvent/RemoveLifecycleEvent 和处理器优先级。此调研核对源码，未集成运行 UnityScreenNavigator。
 
-补齐方向（建议，尚未实现/定稿）：统一 Node 的初始化、进入前/进入完成、退出前/退出完成及清理契约；完成通知默认同步，不机械增加 Async。通过回调上下文表达进入/退出原因，而非强制业务区分 Page/Sheet/Modal 或堆叠大量特定容器方法。显示进入/退出与交互激活/失活分别定义；明确父状态传播、模态覆盖、强制销毁以及失败/取消时哪些通知会发生。完成回调的提交时机必须明确，尤其节点进入转场完成与整个容器历史、焦点和输入提交完成不是同一时刻；失败/取消不得伪造完成通知。继承覆写与独立生命周期处理器可组合，处理器订阅和执行顺序需另定契约。
 
-初版“生命周期已实现”仅表示基础创建、进出和销毁闭环已运行，不能视为与 UnityScreenNavigator 等价的完整生命周期 API。
+## 7. V2 生命周期契约
 
-## 7. V2 生命周期方案建议
-
-用户已确认 V2 的生命周期补全方向；本节是候选契约，尚未实现，具体签名和时序需在 V2 第一阶段确定。通用概念只在本文维护，开发范围见 V2 文档。
+本节记录 V2 实现选择，属于实际契约；用户已确认的约束优先。删除 V1 覆写点，不提供兼容层。未增加 OnInitialized/OnDisposed：初始化任务和销毁任务本身表达完成，暂时没有独立通知场景。
 
 ### 7.1 阶段与职责
 
-| 候选钩子 | 职责 | 同步/异步 |
+| Node 覆写 | 处理器方法 | 职责 |
 | --- | --- | --- |
-| OnInitializeAsync(token) | 实例一次性准备，绑定引用/订阅，必要时等待资源或子节点初始化 | 可等待 |
-| OnEnteringAsync(context, token) | 每次显示前的准备，可根据原因更新数据 | 可等待 |
-| OnEntered(context) | 进入操作提交后的通知，读取已提交 Current/History 等状态 | 同步 |
-| OnExitingAsync(context, token) | 每次正常退出显示前的准备 | 可等待 |
-| OnExited(context) | 退出显示已提交的通知，实例可能仍被保留 | 同步 |
-| OnActivated(context) / OnDeactivated(context) | 稳定业务交互资格变化，用于暂停/恢复业务订阅和更新 | 同步 |
-| OnVisibilityChanged(context) | 有效可见状态变化，包含祖先造成的隐藏/恢复 | 同步 |
-| OnDisposeAsync() | 最终清理，包括部分初始化失败；不是正常退出动画 | 可等待 |
+| OnInitializeAsync(token) | InitializeAsync(node, token) | 每实例一次；取得引用、订阅和初始化子节点 |
+| OnEnteringAsync(context, token) | EnteringAsync(context, token) | 每次显示前准备，之后执行进入转场 |
+| OnEntered(context) | Entered(context) | 容器提交后的同步通知 |
+| OnExitingAsync(context, token) | ExitingAsync(context, token) | 正常退出显示前准备，之后执行退出转场 |
+| OnExited(context) | Exited(context) | 显示退出提交后的同步通知，不代表已销毁 |
+| OnActivated(context) | Activated(context) | 有效业务激活恢复 |
+| OnDeactivated(context) | Deactivated(context) | 有效业务激活失去 |
+| OnVisibilityChanged(context) | VisibilityChanged(context) | 有效显隐改变 |
+| OnDisposeAsync() | DisposeAsync(node) | 最终清理；包括部分初始化失败，不模拟正常退出 |
 
-完成与状态通知不提供镜像 Async 版本。初始化/进入前/退出前/清理可等待是为了真实准备与释放流程；纯同步覆写直接返回完成任务即可，不使用空 await。是否增加 OnInitialized/OnDisposed 须有独立场景再决定，不机械扩充钩子。
+仅准备、转场、初始化与清理可等待。同步阶段没有 Async 镜像，普通同步处理器返回 Task.CompletedTask 即可。
 
 ### 7.2 上下文与状态
 
-上下文建议不可变，包含操作原因、当前逻辑节点、所属容器、相关源/目标节点；可见/激活通知提供变化前后值。初始化或强制销毁没有对应页面时应明确不适用，不能伪造目标节点。不得包含 Godot/Unity 类型，不按项目 HUD/Overlay 名称建立框架枚举。
+`LifecycleContext` 不可变，含 Node、Container（可空）、Reason、Source/Target（可空）和 IsFirstEnter。原因枚举为 Initialization、Open、Push、Covered、Switch、Return、Close、Modal、Ancestor、Disposal，不包含项目层级名称。IsFirstEnter 在本次上下文创建时取值；节点提交显示后 HasEntered 为 true，完成通知失败也不重置。首次 Tab 显示与再次显示均为 Switch，用 IsFirstEnter 区分。
 
-原因表达首次显示、再次切换显示、栈覆盖、返回、正常关闭、祖先状态变化、模态阻挡/恢复和销毁等事实；最终类型与粒度待定。保持统一进入/退出契约，不复制所有 WillPush/DidPop 方法；调用 API 仍只属于对应派生容器。
+`StateChangeContext` 含 Operation、Node、Previous/Current。直接参与操作的源/目标保留各自原因；后代因祖先变化使用 Ancestor；模态造成其他节点激活变化使用 Modal。初始化和销毁可无 Source/Target。
 
-建议区分：节点本地显示意图、祖先合成后的有效可见、稳定业务激活、临时输入锁。IsInteractive 保留后端实际输入资格含义；OnActivated/OnDeactivated 不因每次容器操作的临时锁反复触发。若业务激活需要公开 IsActive，应明确它与 IsInteractive 的差异再实现。
+- IsVisible 是本地显示意图与祖先可见的合成结果，转场可有临时显示。
+- IsActive 是已提交可见、本地激活意图、祖先激活和模态输入范围的合成结果，尚未提交的转场不改变业务激活。
+- IsInteractive 进一步包含本节点和祖先的临时输入锁，表示后端实际输入资格。
+- 临时输入锁不会发 Activated/Deactivated；稳定状态变化在提交点发布。转场期间显隐查询可能反映临时显示状态，Current/History 仍是此前提交状态。
 
-父隐藏不销毁子节点、不重跑初始化；对子树只传播真实有效变化，不重新播放每个子节点的入场动画。未选中的 Tab 本来已隐藏/失活，不收到重复通知。建议失活/隐藏传播由后代到祖先，恢复传播由祖先到后代；确切可见与激活通知顺序、兄弟顺序在 V2 阶段 0 定稿。
+状态通知先提交整棵树的有效状态快照，然后发通知：失去按后序（兄弟按挂载逆序），每节点先 Deactivated 后 VisibilityChanged(false)；获得按前序（兄弟按挂载顺序），每节点先 VisibilityChanged(true) 后 Activated。只通知实际变化。父隐藏不会重跑子节点初始化、Entering/Entered 或动画；未选中 Tab 不重复失活。结构性容器初始化完成可激活，Root 从构造时就可见/激活。
 
-### 7.3 提交与失败边界
+父 View 初始化中可以选中内嵌 Tab，其局部进入已提交，但有效可见/激活仍受尚未显示的父 View 限制；父 View 显示时才传播有效状态通知。
 
-候选操作流程：获取操作守卫并锁定输入 → 前置回调 → 转场 → 检查取消 → 提交容器历史/当前项、显隐、输入所有者与焦点 → 发有效状态变化及完成通知 → 解除守卫并完成任务。通知发生时应可查询最终状态，但仍禁止回调重入同一容器。输入锁在通知前还是通知后解除，需与激活语义一并定稿。
+### 7.3 容器提交与失败边界
 
-前置失败或提交前取消：不发本次成功完成通知；执行一致性清理，原始异常/取消向上传播。恢复中发生的真实状态变化通知不等于补发成功事件。状态恢复只是状态与资源整理，不自动重执行业务回调或假定能撤销回调的外部副作用。
+统一顺序：操作守卫 → 捕获模态原焦点（如适用） → 临时输入锁 → 前置回调与转场 → 检查取消 → 提交 Current/History/显隐与模态输入所有者/焦点 → 解除临时锁 → 状态变化通知 → 源 Exited → 目标 Entered → 解除守卫。通知中能查询提交状态和可交互性，但不能修改层级或重入操作。
 
-提交后的同步通知失败：操作任务仍失败，容器保留可查询的已提交状态，不倒退为旧历史或宣称成功；不重播已执行通知、不自动重试。需区分转场失败与通知失败。常规通知链遇到失败停止，清理路径仍尝试必要资源释放；额外原异常按现有 UIFailure 协议记录。若后续通知未执行，必须在失败记录与测试中体现，不静默跳过。
+Panel 独立打开/关闭；Stack Push 将旧项退出并保留，新项入历史，Pop 移除栈顶并以 Return 恢复旧实例；Tab 切换既有项；Modal 覆盖旧项只导致失活，不重放旧项退出/进入。正常 Close/Pop 先发 Exited，再销毁目标，外层任务等清理完成。
 
-正常 Close/Pop 的退出完成不表示整个资源清理已完成；外层操作任务要等必要清理完成才成功。强制 Dispose 取消未完成操作、失活、清理子树和资源，不模拟正常退出动画或补发 OnExited。处理器清理和节点清理都应有至多一次保证；部分初始化失败仍清理已经取得的订阅/资源。
+提交前失败或取消恢复框架状态并清理新实例，不发本次成功完成或临时显隐通知，不重执行业务准备；业务前置回调的外部副作用由业务负责。源实例先恢复，再清理失败新实例，避免清理发布临时隐藏。转场必须实现同步 IUITransition.Restore(element, visible)，恢复其修改的透明度等表现状态；不重播动画、不转成成功或换用默认转场。GodotFadeTransition 恢复透明度，恢复异常作为附加原异常暴露。
 
-### 7.4 独立生命周期处理器
+提交后同步通知失败保持已提交状态，操作任务以原异常失败；不回滚、重试或重播。常规通知链停止，后续完成阶段不执行；异常日志与测试明确阶段。关闭流程仍清理已关闭节点。后端提交/恢复失败同样可观察，不能保证故障后端实际显示成功。
 
-建议提供纯核心的 INodeLifecycle 之类独立契约，方法与上述阶段一致；Node 仍保留虚方法覆写，不要求业务一定使用接口。基础 Node 可以挂处理器，适合内嵌 Tab。注册/移除采用同步 API，不引入异步配置入口。
+强制 Dispose：取消本节点操作并等待协作结束 → 隐藏/失活通知 → 逆序销毁子节点 → Node 清理 → 已开始初始化的处理器逆序清理 → 显示资源释放 → 从父移除 → Disposed。不调用 Exiting/Exited，不播放退出动画。直接销毁当前模态会归还输入所有者和焦点并通知恢复；销毁 Root 不会恢复已隐藏子树的激活。
 
-建议先使用“Node 覆写优先、处理器按注册顺序执行”的稳定顺序，不提供复杂优先级或依赖图。每次派发使用确定的订阅集合；当前节点派发期间增删直接报错。初始化处理器应在节点初始化前显式注册；初始化后添加是否只接受后续通知、或直接禁止，需要定稿，不能隐式补播过去的阶段。重复注册同一处理器报错；取消订阅不自动等于清理其业务资源，必须明确订阅所有权和清理责任。
+强制清理中状态通知或清理失败继续必要步骤；首个原异常向上传播，其他原异常写入 UIFailure.GetSecondaryExceptions 并记录日志。每节点/处理器清理至多一次。根/父销毁仍需调用方观察之前启动的操作任务，不能遗失取消或原始失败。
 
-处理器异常遵守与 Node 覆写相同的日志、取消、重入和清理协议；没有吞异常的观察者通道。具体注册方法、订阅句柄及处理器是否执行清理由阶段 0 确定。
+### 7.4 独立处理器、顺序与重入
+
+`INodeLifecycle` 是纯核心接口，`NodeLifecycle` 提供空默认实现。Node 继续可继承覆写。每阶段 Node 覆写优先，处理器按注册顺序；清理为 Node 优先、已开始初始化的处理器逆序。
+
+```csharp
+var page = new UINode();
+page.AddLifecycle(new InventoryPreviewBehavior()); // 必须在 Attach/Bind 前
+await tabs.BindAsync("Equipment", page, equipmentDisplay);
+await tabs.SwitchAsync("Equipment");
+```
+
+AddLifecycle 同步，仅 Detached 可调用；重复实例注册、空处理器报错。初始化前已注册的处理器在 Node 初始化成功后依次初始化，开始执行就加入清理所有权，部分失败仍清理。Node 自身初始化失败时不启动尚未执行的处理器。
+
+RemoveLifecycle 同步，禁止节点操作、初始化、派发和销毁中修改；缺失处理器报错。移除只停止后续通知，已初始化处理器的资源仍由节点最终清理，移除不异步释放、不补播过去阶段。处理器不应跨节点共享拥有资源的实例。
+
+同步通知允许读取状态，禁止上下文内操作、注册、挂载、销毁或修改处理器；同容器前置阶段重入也直接失败。异步准备/清理中禁止销毁当前操作节点或祖先，避免等待自身。业务在生命周期结束后由外部事件显式发起下一操作，无自动队列。
+
+### 7.5 Demo 的项目职责
+
+Demo 是虚构冒险游戏 WAYFARER 的纯 UI 原型：营地主菜单、偏好、背包/材料、物品详情与收藏、独立藏品比较、设置/画质和嵌套确认。不含角色移动、战斗或其他 Gameplay。页面文本使用游戏业务语言；生命周期日志输出到宿主，计时表示本地物品预览更新，不作为专门诊断面板。GameUiState 保存项目 UI 会话偏好和收藏，独立于页面实例；本版不接入真实渲染设置或磁盘存档。
+
+内嵌页面仍使用基础 Node + PageActivity 处理器；背包更新仅在选中页面有效激活时执行，详情覆盖、父隐藏及模态阻挡均暂停，恢复后继续。素材继续使用已本地化的 Adventure/Nunito 及原许可；本版没有新增外部素材。

@@ -19,6 +19,7 @@ public partial class DemoApp : Control
     private Control _content = null!;
     private bool _switching;
     private bool _exiting;
+    public GameUiState GameState { get; } = new();
     public ModalContainerNode Modals { get; private set; } = null!;
 
     public override void _Ready()
@@ -38,16 +39,17 @@ public partial class DemoApp : Control
         _stage = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoStage", _content);
         _cards = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoCards", GetNode<Control>("FloatingMount"));
         Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("DemoDialogs", GetNode<Control>("ModalMount"));
-        Wire("Tabs", OpenTabsAsync);
+        Wire("Tabs", OpenPreferencesAsync);
         Wire("Inventory", OpenInventoryAsync);
         Wire("Settings", () => Modals.OpenSettingsWindowViewAsync());
         Wire("Instances", OpenCardsAsync);
         Wire("Confirm", ConfirmAsync);
-        Wire("Cancel", CancelLoadingAsync);
+        Wire("Cancel", OpenHomeAsync);
         if (OS.GetCmdlineUserArgs().Contains("--self-test")) await RunSelfTestAsync();
-        else if (OS.GetCmdlineUserArgs().Contains("--capture") || OS.GetCmdlineUserArgs().Contains("--capture-settings"))
+        else if (OS.GetCmdlineUserArgs().Contains("--capture") || OS.GetCmdlineUserArgs().Contains("--capture-settings") || OS.GetCmdlineUserArgs().Contains("--capture-preferences"))
         {
-            await OpenTabsAsync();
+            var preferencesCapture = OS.GetCmdlineUserArgs().Contains("--capture-preferences");
+            if (preferencesCapture) await OpenPreferencesAsync(); else await OpenInventoryAsync();
             var settingsCapture = OS.GetCmdlineUserArgs().Contains("--capture-settings");
             if (settingsCapture)
             {
@@ -56,19 +58,19 @@ public partial class DemoApp : Control
             }
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await CaptureAsync(settingsCapture ? "demo-settings.png" : "demo.png");
+            await CaptureAsync(settingsCapture ? "demo-settings.png" : preferencesCapture ? "demo-preferences.png" : "demo.png");
             await _ui.DisposeAsync();
             GetTree().Quit();
         }
         else if (OS.GetCmdlineUserArgs().Contains("--failure-tab"))
         {
-            await OpenTabsAsync();
-            await ((EmbeddedTabsDemoView)_scenario!).Tabs.SwitchAsync("MissingTab");
+            await OpenPreferencesAsync();
+            await ((PreferencesView)_scenario!).Tabs.SwitchAsync("MissingTab");
         }
         else if (OS.GetCmdlineUserArgs().Contains("--failure-duplicate"))
         {
-            await OpenTabsAsync();
-            var tabs = ((EmbeddedTabsDemoView)_scenario!).Tabs;
+            await OpenPreferencesAsync();
+            var tabs = ((PreferencesView)_scenario!).Tabs;
             await tabs.BindAsync("Graphics", tabs.GetControl<Control>("Graphics"));
         }
         else if (OS.GetCmdlineUserArgs().Contains("--failure-load"))
@@ -76,13 +78,28 @@ public partial class DemoApp : Control
             _ui.Register<FailureView>("res://Scenes/DoesNotExist.tscn");
             await _stage.OpenAsync<FailureView>();
         }
-        else if (OS.GetCmdlineUserArgs().Contains("--failure-lifecycle") || OS.GetCmdlineUserArgs().Contains("--failure-transition"))
+        else
         {
-            var mode = OS.GetCmdlineUserArgs().Contains("--failure-lifecycle") ? "lifecycle" : "transition";
-            _ui.Register(() => new FailureView(mode), "res://Scenes/Settings/Graphics.tscn");
-            await _stage.OpenAsync<FailureView>();
+            var failures = OS.GetCmdlineUserArgs().Where(a => a.StartsWith("--failure-")).ToArray();
+            if (failures.Length != 0)
+            {
+                var mode = failures.Single().Substring("--failure-".Length);
+                if (!new[] { "lifecycle", "transition", "entered", "state", "cleanup" }.Contains(mode))
+                    throw new ArgumentException($"Unknown failure fixture {mode}.");
+                _ui.Register(() => new FailureView(mode), "res://Scenes/Settings/Graphics.tscn");
+                var node = await _stage.OpenAsync<FailureView>();
+                if (mode == "cleanup") await _stage.CloseAsync(node);
+                throw new InvalidOperationException($"Failure fixture {mode} unexpectedly succeeded.");
+            }
         }
     }
+
+    public Task OpenHomeAsync() => ChangeScenarioAsync(() =>
+    {
+        _content.GetNode<Control>("Welcome").Show();
+        Status("Camp / Choose your next destination.");
+        return Task.CompletedTask;
+    });
 
     public void Track(Task task) => _tasks.Add(task);
     public void TrackAction(Action action)
@@ -95,6 +112,7 @@ public partial class DemoApp : Control
 
     public override void _Process(double delta)
     {
+        if (_inventoryStack?.Current is InventoryView inventory) inventory.Tick(delta);
         foreach (var task in _tasks.ToArray())
         {
             if (!task.IsCompleted) continue;
@@ -132,7 +150,7 @@ public partial class DemoApp : Control
         finally { _switching = false; }
     }
 
-    public Task OpenTabsAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenEmbeddedTabsDemoViewAsync());
+    public Task OpenPreferencesAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenPreferencesViewAsync());
 
     public Task OpenInventoryAsync() => ChangeScenarioAsync(async () =>
     {
@@ -147,13 +165,14 @@ public partial class DemoApp : Control
     {
         await _cards.OpenCardViewAsync(new CardArgs("CRYSTAL SHARD", new Vector2(520, 180)));
         await _cards.OpenCardViewAsync(new CardArgs("ANCIENT RELIC", new Vector2(890, 340)));
-        Status("INSTANCES / Close a card without affecting the other instance.");
+        Status("Collection / Compare relics side by side.");
     }
 
     public async Task ConfirmAsync()
     {
         var result = await Modals.ShowConfirmViewAsync();
-        Status($"DIALOG / Returned {result}. Focus restored to the previous valid target.");
+        if (result && Modals.Current == null) await OpenHomeAsync();
+        Status(result ? "Return to camp confirmed." : "Return canceled. Stay on this screen.");
     }
 
     public async Task CancelLoadingAsync()
@@ -196,8 +215,8 @@ public partial class DemoApp : Control
     {
         await RunAdapterSelfTestAsync();
         Check(_ui.Root.Children.Count == 4, "Only project-declared mounts should exist.");
-        await OpenTabsAsync();
-        var tabs = (EmbeddedTabsDemoView)_scenario!;
+        await OpenPreferencesAsync();
+        var tabs = (PreferencesView)_scenario!;
         var original = tabs.Tabs.Items["Audio"].Element;
         var childCount = tabs.Display.Get<Control>("TabContent").GetChildCount();
         var slider = tabs.Display.Get<HSlider>("TabContent/Graphics/Value");
@@ -212,18 +231,38 @@ public partial class DemoApp : Control
         await OpenInventoryAsync();
         var inventory = (InventoryView)_inventoryStack!.Current!;
         await inventory.SelectAsync("Materials");
-        await _inventoryStack.PushDetailsViewAsync(); await _inventoryStack.PopAsync();
+        var inspection = inventory.PreviewSeconds;
+        await inventory.InspectAsync("Moonstone"); inspection = inventory.PreviewSeconds; inventory.Tick(1);
+        Check(inventory.PreviewSeconds == inspection && !inventory.Tabs.Current!.IsActive, "Hidden inventory preview did not pause.");
+        var details = (DetailsView)_inventoryStack.Current!;
+        Check(details.GetControl<Label>("Title").Text == "MOONSTONE", "Selected item did not reach details.");
+        details.GetControl<CheckButton>("Enabled").ButtonPressed = false;
+        await _inventoryStack.PopAsync(); inventory.Tick(1);
+        Check(!inventory.Favorites.Contains("Moonstone"), "Favorite edit was not retained by the project model.");
+        inventory.GetControl<CheckButton>("TabContent/Materials/Enabled").ButtonPressed = true;
+        Check(!inventory.GetControl<Button>("TabContent/Materials/Items/Item0").Visible, "Favorites filter did not apply.");
+        inventory.GetControl<CheckButton>("TabContent/Materials/Enabled").ButtonPressed = false;
+        Check(inventory.EnterCount == 2 && inventory.PreviewSeconds > inspection, "Return lifecycle did not resume inventory.");
         Check(ReferenceEquals(inventory, _inventoryStack.Current) && inventory.Tabs.CurrentName == "Materials", "Stack/Tab restoration.");
         GD.Print("PASS stack + embedded tabs: original inventory restored");
 
         var settingsButton = GetNode<Button>("Frame/Layout/Workspace/Sidebar/Settings");
         settingsButton.GrabFocus();
         var settings = await Modals.OpenSettingsWindowViewAsync();
+        Check(settings.Display.Control.IsAncestorOf(GetViewport().GuiGetFocusOwner()), "Modal did not receive focus after input unlock.");
         Check(!_inventoryStack.IsInteractive, "Modal must block underlying input.");
+        inspection = inventory.PreviewSeconds; inventory.Tick(1);
+        Check(inventory.PreviewSeconds == inspection && inventory.IsVisible && !inventory.IsActive, "Modal cover must pause a visible inventory.");
         Check(!_menu.IsInteractive && settingsButton.FocusMode == FocusModeEnum.None, "Modal must block sidebar keyboard navigation.");
         var firstPage = settings.Body.Current;
-        await settings.Body.PushGraphicsViewAsync(); await settings.Body.PopAsync();
+        var graphics = await settings.Body.PushGraphicsViewAsync();
+        graphics.GetControl<HSlider>("Value").Value = 74;
+        await settings.Body.PopAsync();
+        graphics = await settings.Body.PushGraphicsViewAsync();
+        Check(graphics.GetControl<HSlider>("Value").Value == 74, "Project preferences did not survive recreated graphics page.");
+        await settings.Body.PopAsync();
         Check(ReferenceEquals(firstPage, settings.Body.Current), "Settings page restoration.");
+        Check(((SettingsView)firstPage!).EnterCount == 3, "Settings completed return lifecycle.");
         Check(settings.Display.Control.GetNode("Backdrop") != null, "Backdrop is missing.");
         await Modals.CloseAsync(settings);
         Check(_inventoryStack.IsInteractive, "Input was not restored.");
@@ -241,12 +280,14 @@ public partial class DemoApp : Control
         var outerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
         await WaitUntilAsync(() => Modals.Current is ConfirmView view && view.IsInteractive);
         var outer = (ConfirmView)Modals.Current!;
+        var outerFocus = GetViewport().GuiGetFocusOwner();
         var innerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
         await WaitUntilAsync(() => Modals.Current is ConfirmView view && view != outer && view.IsInteractive);
         var inner = (ConfirmView)Modals.Current!;
         Check(!outer.IsInteractive, "Nested modal did not block its parent.");
         inner.Complete(false); Check(!await innerResult, "Nested result.");
         Check(outer.IsInteractive, "Outer modal did not regain input.");
+        Check(GetViewport().GuiGetFocusOwner() == outerFocus, "Nested modal focus was not restored.");
         outer.Complete(true); Check(await outerResult, "Outer result.");
         GD.Print("PASS nested modal results");
 
@@ -289,6 +330,27 @@ public partial class DemoApp : Control
             await ExpectCancellationAsync(ui.Root.CreateContainerAsync<PanelContainerNode>("Canceled", mount, canceled.Token));
             Check(ui.Root.Children.Count == 0, "Canceled helper left an attached container.");
 
+            var stack = await ui.Root.CreateContainerAsync<StackContainerNode>("TransitionRollback", mount);
+            ui.Register<AdapterFadeNode>("res://Scenes/Settings/Graphics.tscn");
+            var retained = await stack.PushAsync<AdapterFadeNode>();
+            var transitionFailure = new InvalidOperationException("Expected adapter transition rollback failure.");
+            ui.Register(() => new UINode { Transition = new AdapterFailingTransition(transitionFailure) }, "res://Scenes/Settings/Graphics.tscn");
+            try
+            {
+                await stack.PushAsync<UINode>();
+                throw new Exception("Transition should have failed.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                Check(ReferenceEquals(ex, transitionFailure), "Transition replaced the original exception.");
+                Check(ReferenceEquals(stack.Current, retained) && retained.IsVisible && retained.GetControl().Modulate.A == 1,
+                    "Rollback restored visibility but left the previous fade transparent.");
+            }
+            await stack.DisposeAsync();
+            // Godot frees QueueFree-owned scenes at frame end before this borrowed mount is rebound.
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
             var original = new InvalidOperationException("Expected adapter attachment initialization failure.");
             var failing = new AdapterFailureNode(original);
             try
@@ -305,6 +367,17 @@ public partial class DemoApp : Control
         }
         finally { await ui.DisposeAsync(); mount.QueueFree(); }
         GD.Print("GODOT ADAPTER SELF-TEST PASSED (setup, custom services, binding, ownership, cancellation, original failure)");
+    }
+
+    private sealed class AdapterFadeNode : UINode
+    {
+        protected override Task OnInitializeAsync(CancellationToken token)
+        { Transition = new GodotFadeTransition(0.02); return Task.CompletedTask; }
+    }
+    private sealed class AdapterFailingTransition(Exception original) : IUITransition
+    {
+        public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) => Task.FromException(original);
+        public void Restore(IUIElement? element, bool visible) { }
     }
 
     private sealed class AdapterFailureNode(Exception original) : UINode

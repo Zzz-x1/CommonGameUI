@@ -52,9 +52,9 @@ public class CounterView : UINode
     public Exception? InitializeFailure, EnterFailure, DisposeFailure;
     protected override Task OnInitializeAsync(CancellationToken token)
     { Initialized++; if (InitializeFailure != null) throw InitializeFailure; return Task.CompletedTask; }
-    protected override Task OnEnterAsync(CancellationToken token)
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
     { Entered++; if (EnterFailure != null) throw EnterFailure; return Task.CompletedTask; }
-    protected override Task OnExitAsync(CancellationToken token) { Exited++; return Task.CompletedTask; }
+    protected override Task OnExitingAsync(LifecycleContext context, CancellationToken token) { Exited++; return Task.CompletedTask; }
     protected override Task OnDisposeAsync() { if (DisposeFailure != null) throw DisposeFailure; return Task.CompletedTask; }
 }
 
@@ -62,14 +62,15 @@ public sealed class ArgumentView : UINode<string> { }
 public sealed class BoolDialog : DialogNode<bool> { }
 public sealed class ReentrantView : UINode
 {
-    protected override async Task OnEnterAsync(CancellationToken token) => await Context.DisposeAsync();
+    protected override async Task OnEnteringAsync(LifecycleContext context, CancellationToken token) => await Context.DisposeAsync();
 }
 public sealed class SlowView : UINode
 {
-    protected override Task OnEnterAsync(CancellationToken token) => Task.Delay(Timeout.Infinite, token);
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token) => Task.Delay(Timeout.Infinite, token);
 }
 public sealed class FailureTransition(Exception failure) : IUITransition
 {
+        public void Restore(IUIElement? element, bool visible) { }
     public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) => throw failure;
 }
 

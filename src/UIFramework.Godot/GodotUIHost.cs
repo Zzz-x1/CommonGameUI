@@ -62,6 +62,11 @@ public sealed class GodotFadeTransition : IUITransition
 {
     public GodotFadeTransition(double duration = 0.12) => Duration = duration;
     public double Duration { get; }
+    public void Restore(IUIElement? element, bool visible)
+    {
+        if (!(element is GodotUIElement display)) throw new ArgumentException("Fade requires a Godot display.", nameof(element));
+        display.Control.Modulate = new Color(1, 1, 1, 1);
+    }
     public async Task PlayAsync(IUIElement? element, bool entering, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
