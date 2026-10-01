@@ -413,3 +413,13 @@ Godot 初始化便利 API（2026-10-02 已实现）：
 上述扩展方法只在 Godot 适配器中提供。Create 应从场景线程调用；显示 Control 必须仍有效并在场景树中，核心继续验证节点状态、归属、并发与取消。AttachToAsync、CreateContainerAsync、Control 版 BindAsync 使用 borrowed 所有权，逻辑节点销毁不会释放父场景中的 Control。项目自行创建且需由框架释放的显示根仍显式使用 `new GodotUIElement(control, owned: true)` 配合底层 AttachAsync。挂载失败仍执行核心清理并原样抛出；重复项、缺失控件或类型不匹配均报错，不隐式选择其他控件。创建的 UIContext 必须由调用方 DisposeAsync，便利 API 不隐藏任务观察或自动销毁流程。
 
 AttachToAsync / BindAsync / CreateContainerAsync 保留可等待契约，是因为挂载会执行可异步的 OnInitializeAsync，失败时还要等待清理；并非仅包装 Control 就必须异步。CreateContainerAsync 需要等初始化成功后才能返回新容器；AttachToAsync 与 Control 版 BindAsync 只直接转发核心任务。当前不新增仅适用于部分节点的同步 Attach/Bind 旁路，以免跳过生命周期或遇到异步初始化时隐式阻塞。
+
+### 生命周期完整性审查（2026-10-02）
+
+现状：初版只有受保护的 OnInitializeAsync、OnEnterAsync、OnExitAsync、OnDisposeAsync 覆写点，尚没有独立的公开生命周期处理器接口。OnEnterAsync 在显示和进入转场之前执行；OnExitAsync 在退出转场和隐藏之前执行。没有进入/退出完成通知，也不能从回调参数分辨 Push 新进入、被覆盖、Pop 返回或最终关闭。模态下层仅调整可交互状态，父节点状态传播只应用后端显隐/输入，都不会通知业务激活/失活；直接 Dispose 子树不走 OnExitAsync。
+
+官方源码对照：[IPageLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/IPageLifecycleEvent.cs)、[IModalLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Modal/IModalLifecycleEvent.cs) 区分 Will/Did 与 Push/Pop；[ISheetLifecycleEvent](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Sheet/ISheetLifecycleEvent.cs) 提供 WillEnter/DidEnter、WillExit/DidExit。Will、Initialize、Cleanup 使用协程或可选 Task，Did 为同步 void。[Page](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs) 还支持 AddLifecycleEvent/RemoveLifecycleEvent 和处理器优先级。此调研核对源码，未集成运行 UnityScreenNavigator。
+
+补齐方向（建议，尚未实现/定稿）：统一 Node 的初始化、进入前/进入完成、退出前/退出完成及清理契约；完成通知默认同步，不机械增加 Async。通过回调上下文表达进入/退出原因，而非强制业务区分 Page/Sheet/Modal 或堆叠大量特定容器方法。显示进入/退出与交互激活/失活分别定义；明确父状态传播、模态覆盖、强制销毁以及失败/取消时哪些通知会发生。完成回调的提交时机必须明确，尤其节点进入转场完成与整个容器历史、焦点和输入提交完成不是同一时刻；失败/取消不得伪造完成通知。继承覆写与独立生命周期处理器可组合，处理器订阅和执行顺序需另定契约。
+
+初版“生命周期已实现”仅表示基础创建、进出和销毁闭环已运行，不能视为与 UnityScreenNavigator 等价的完整生命周期 API。
