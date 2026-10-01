@@ -642,9 +642,9 @@ await windows.CloseAsync(left);                           // 操作具体实例�
 
 先验证已有业务场景，再为明确缺口安排实现和 Demo。Replace 继续暂缓；其余候选也不能仅靠命名、抽象栈示例或外部框架有同名功能获得必要性。
 
-### 8.8 V3 重新审计与用户选择清单（2026-10-02，待用户决定）
+### 8.8 V3 重新审计与用户选择清单（2026-10-02，已选择 1、2、3）
 
-依据当前 Containers、UINode、UIContext、Godot 适配器、Demo 业务代码及已有测试审查。本次是代码与文档审计，未运行新测试、未实现候选功能；V2 验证记录不算候选能力的验收。本节取代早期建议的优先排序，但用户此前指定“窗口/实例和栈流程优先”的方向不变。编号用于选择，不是实施顺序或 API 数量；没有任何项自动视为已批准。
+依据当前 Containers、UINode、UIContext、Godot 适配器、Demo 业务代码及已有测试审查。本次是代码与文档审计，未运行新测试、未实现候选功能；V2 验证记录不算候选能力的验收。用户随后选择 **1、2、3**，范围已经确认；4—9 不纳入本轮。具体实现方案与 API 为 8.9 的建议，不能将范围确认等同于逐项 API 契约确认。
 
 #### 建议优先选择
 
@@ -692,8 +692,116 @@ await windows.CloseAsync(left);                           // 操作具体实例�
 | 统一 Refresh API、业务键单例、持久化窗口状态 | 普通业务方法和模型先满足数据展示；不因单实例打开一次性引入所有数据策略 |
 | 新 Source Generator 功能、编辑器、MVVM、第二适配器、Analyzer | 服从已确认功能主线，诊断分析仍延期；不以工具数量替代功能缺口 |
 
-#### 用户决定前的状态与交付要求
+#### 用户选择与交付要求
 
-建议的精简组合是 **1、2、3**；若希望关闭流程结束后保留容器，可加 **4**；窗口管理操作便利可考虑 **5、6**；键盘/手柄体验可考虑 **7、8**。9 不作为窗口/栈能力的必需依赖。用户可以按编号选择、删减或补充实际场景，选择之后才整理正式开发范围和 API 契约。
+用户已选择 **1、2、3**：单实例窗口管理、窗口隐藏与恢复、返回指定历史实例。4—9 不纳入 V3；若后续调整，由用户另行指定。下节提出具体实现与 API 建议。
 
-每项选中能力同时更新核心、适配器/生成调用（受影响时）、现有游戏 Demo、操作说明和适用测试；日志与原异常、生命周期提交边界、并发/取消和清理规则为既有要求，不作为另一个需选择的功能包。本次仅审计，不修改代码、不新建 V3 开发文档、不把本审计建议写为已确认范围。
+每项选中能力同时更新核心、适配器/生成调用（受影响时）、现有游戏 Demo、操作说明和适用测试；日志与原异常、生命周期提交边界、并发/取消和清理规则为既有要求，不作为另一个需选择的功能包。当前范围确认和方案制定不等于实现完成；具体 API 建议仍须与已确认范围区分，不新建未由用户指定的 V3 开发文档。
+
+### 8.9 V3 实现方案与 API 设计（范围已确认，具体契约为建议）
+
+本节取代 8.5 的 Open/OpenNew 等初步调用建议。当前仅制定方案，尚未修改核心、生成器和 Demo。保留 PanelContainerNode 名称，不新增 WindowNode/View 基类；窗口仍是普通 UINode，单实例只约束某个 Panel 容器，不是全局单例。不把窗口操作加入 Stack/Tab/Modal。
+
+#### A. 注册决定窗口实例模式
+
+建议增加 `WindowInstanceMode.Single/Multiple`，作为节点注册描述的一个配置项；默认 Single。配置仅影响 PanelContainerNode.OpenAsync，Stack Push 和 Modal Open 继续创建新实例。同一注册类型在不同窗口容器中各有自己的单实例。
+
+```csharp
+// 手写注册；构造、注册均同步。
+ui.Register<InventoryView>("res://Scenes/Inventory/Inventory.tscn");
+ui.Register<ItemDetailsView>("res://Scenes/Inventory/Details.tscn",
+    windowMode: WindowInstanceMode.Multiple);
+
+// 使用已有生成注册工作流时，属性将同一配置传给 Register。
+[UIResource("res://Scenes/Inventory/Card.tscn", WindowMode = WindowInstanceMode.Multiple)]
+public class CardView : UINode<CardArgs> { /* 业务实现 */ }
+```
+
+统一 OpenAsync，不让同一类型通过 Open/OpenNew 两个入口混用实例语义。生成器仅迁移现有注册和调用模板，不新增 Analyzer、业务生命周期生成或新配置系统。现有比较窗口迁移为显式 Multiple；初始化和业务资源由项目决定。
+
+#### B. 窗口 API 与参数
+
+```csharp
+// 候选公开签名；实现保持类型约束 where T : UINode。
+Task<T> OpenAsync<T>(CancellationToken cancellationToken = default);
+Task<T> OpenAsync<T>(object args, CancellationToken cancellationToken = default);
+bool TryGet<T>(out T? node);
+Task HideAsync(UINode node, CancellationToken cancellationToken = default);
+Task ShowAsync(UINode node, CancellationToken cancellationToken = default);
+Task CloseAsync(UINode node, CancellationToken cancellationToken = default);
+```
+
+| 操作 | 建议行为 |
+| --- | --- |
+| Open Single，不存在 | 根据注册创建并初始化，准备进入，提交后返回新实例 |
+| Open Single，已有隐藏实例 | 显示原实例，重新进入但不初始化、不替换子树 |
+| Open Single，已有显示实例 | 验证访问、状态、取消和操作守卫后返回原实例；没有新的显示变化，不重播生命周期/动画、不自动置前 |
+| Open Multiple | 每次创建新实例，业务保存返回对象以便操作 |
+| TryGet<T> | 在当前容器中查找已提交、仍存续的注册类型 T 实例，含隐藏项；零个返回 false，一个返回 true，多个报歧义错误，不默认选一个 |
+| Hide | 本地显示中的所属窗口退出显示、失活，保留实例和资源 |
+| Show | 本地隐藏的所属窗口准备进入并恢复显示，不重新初始化 |
+| Close | 显示项退出后销毁；隐藏项直接销毁，不重复 Exiting/Exited；均等待必要清理 |
+
+TryGet 是明确的存在性查询，false 表示正常的“不存在”，不是异常兜底。多实例集合仍可用 Children，具体对象已有 Id，不新增句柄或全局查询系统。查询不能返回正在初始化/准备进入、尚未提交的新实例，也不能返回已从管理表移除但正在清理的实例。
+
+参数建议明确作为 **创建参数**，不兼任刷新：参数版 Open 只用于新建，已有单实例时再次传参直接报错，不能忽略、自动比较、覆盖 Parameters 或隐式重跑业务方法。无参数版可重开已创建的参数化单实例，但首次创建缺少必需参数仍报错；参数版拒绝 null，沿用当前 UINode<TArgs> 不接受 null 的契约。生成器为参数化窗口生成带参创建调用和无参重开调用，不用传 null 区分意图。后续数据更新由业务 View 的普通方法/模型订阅负责；需要可等待更新时由业务明确提供异步方法。
+
+```csharp
+var inventory = await windows.OpenAsync<InventoryView>();
+var same = await windows.OpenAsync<InventoryView>(); // 同一对象，不是第二个窗口
+await windows.HideAsync(inventory);
+var restored = await windows.OpenAsync<InventoryView>(); // 自动显示原对象
+await windows.HideAsync(restored);
+await windows.ShowAsync(restored); // 已持有引用时直接恢复
+await windows.CloseAsync(restored); // 释放；下次 Open 创建新对象
+
+var left = await windows.OpenAsync<CardView>(leftArgs);   // Card 注册为 Multiple
+var right = await windows.OpenAsync<CardView>(rightArgs);
+await windows.CloseAsync(left); // 不影响 right
+```
+
+Hide 已隐藏、Show 已显示、操作其他容器节点或已销毁对象均报错。判断使用窗口本地已提交显示状态，不用有效 IsVisible 推断：父隐藏不意味着窗口已执行 Hide；窗口本地隐藏时，即使父恢复也不得自动显示。Open 已显示单实例的“取得现有对象”属于明确成功语义，不是忽略非法状态；两次真正并发的容器操作仍报错，不自动排队或合并任务。
+
+#### C. 窗口内部实现与生命周期
+
+注册类型作为容器局部身份；注册描述与创建流程需保留类型键及 WindowMode，不按实例 GetType、资源路径、名称或类型继承猜测。建议维护仅包含已提交窗口的内部表，记录创建注册键和本地显示状态；Single 类型附加唯一索引。Children 继续表示逻辑归属，表表示由窗口操作管理的已提交实例，不维护另一棵层级树。
+
+新建在进入准备成功后发布实例记录；提交后通知失败时记录保留，使后续查询/关闭仍可找到已提交实例。Hide/Show 修改显示记录及本地节点状态，不改变 Parent、Id、Lifetime 或已初始化处理器；Close 在提交时移除记录，然后等待清理。直接强制 Dispose 也经 OnChildRemoved 清除索引，容器 Dispose 继续处理全部子节点，包括隐藏项。
+
+新增生命周期原因建议为 Show/Hide；首次 Open 使用 Open，已有隐藏实例经 Open 恢复使用 Show。Hide：Exiting(Hide)→退出转场→提交隐藏→状态通知→Exited(Hide)。Show：Entering(Show)→进入转场→提交显示→状态通知→Entered(Show)。首次进入通过 IsFirstEnter 判别。隐藏项 Close 不重复显示退出，只执行最终销毁协议。
+
+全部复用 V2 前置准备、提交、状态通知和失败边界：提交前取消/失败恢复本地状态和转场表现，不重新创建替代实例；提交后通知失败保持已提交状态、原异常向上传播。Close 已提交后通知失败仍清理目标，不留下已移出管理表的资源。不直接调用 Element.SetVisible 绕过核心激活/可见传播。
+
+#### D. 栈返回 API 与实现
+
+```csharp
+Task PopToAsync(UINode target, CancellationToken cancellationToken = default);
+
+var inventory = await stack.PushAsync<InventoryView>();
+await stack.PushAsync<ItemDetailsView>(itemArgs);
+await stack.PushAsync<ItemPreviewView>(previewArgs);
+await stack.PopToAsync(inventory); // 恢复原背包，清理详情和预览
+```
+
+仅增加实例目标入口，不同时提供 Id/类型/名称/数量/根页重载。历史已有实例引用与 Id，项目如持有 Id 可先在 History 显式解析。目标必须属于当前栈、Ready、仍在历史且位于当前项之前；空栈、缺失目标、其他容器对象、已销毁目标或目标等于当前项直接报错，不转为成功。
+
+实施步骤：
+
+1. 在同一操作守卫内验证目标，捕获源、目标及从栈顶到目标之上的移除项列表。
+2. 当前源执行 Exiting(Close)，目标执行 Entering(Return)，只对它们播放转场；隐藏中间项已在 Covered 时退出，不重复显示生命周期。
+3. 检查取消后一次提交历史截断和源/目标本地状态，Current 为 target；发布 V2 状态变化与源 Exited、目标 Entered。目标及更早历史保留原实例与业务状态。
+4. 按原栈顶向下销毁全部移除项；方法等待清理完成。即使完成通知或某项清理失败，也继续必要清理；首个原异常传播，其余原异常通过 UIFailure 暴露。
+
+提交前失败恢复源显示、目标隐藏及原历史；提交后失败不回滚截断历史。提交后清理不因调用方取消而遗弃；转场成功的状态已生效，但清理失败仍使任务失败。实际显示资源的最终物理释放继续遵守 Godot QueueFree 的帧末语义。
+
+重构现有 PopAsync 与 PopToAsync 共用内部返回实现，不将 PopTo 包装成循环 Pop。保留单步 Pop 最后一项可返回空栈的既有行为；这是内部共享时需支持的边界，不额外暴露 Clear API。生命周期内重入继续禁止，不引入并行动画或操作队列。
+
+#### E. 实施与验收方案
+
+顺序建议：注册描述及生成模板迁移→窗口已提交实例表与查询→单实例 Open→Hide/Show/Close→共享栈返回流程与 PopTo→业务 Demo 与回归。所有阶段遵守无兼容层要求，变更旧 Open 默认语义时同步迁移所有调用。
+
+Demo 复用现有界面：使用可隐藏恢复的单实例背包窗口外壳，内部 Stack 管理背包页及多级查看页，背包页继续包含内嵌 Tab；隐藏外壳保留完整子树，PopTo 返回内部原背包页。窗口实例与栈页是不同节点，不把同一个对象同时挂到两个容器，不向 Panel 添加栈操作。比较藏品继续 Multiple。分别验证窗口恢复与栈返回时的页签/选中项状态，不增加 Gameplay、API 按钮展台或新的全套菜单。
+
+核心验收包括：同容器重复打开为同对象，不同容器各自单实例；隐藏后恢复不加载/初始化；关闭隐藏项不重复退出；父隐藏与本地 Hide 的区别；传参重开严格报错；多实例查询歧义；查询不发布未提交实例；直接销毁移除索引；PopTo 不进入中间页、保留目标及选中状态、按序释放全部移除项；前置失败/取消保留原状态，提交后通知/多项清理失败不丢资源和原异常。同一场景对应 Godot 实际验证；未运行部分如实记录。
+
+注册配置、Open 的重开参数限制、TryGet 的精确注册类型语义、Show/Hide 严格状态及 PopTo 的目标边界是本方案提出的具体选择，尚未获得用户逐项确认，当前不宣称已实现。
