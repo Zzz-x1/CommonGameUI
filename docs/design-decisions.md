@@ -11,6 +11,7 @@
 5. [版本开发文档入口](#5-版本开发文档入口)
 6. [当前实际契约](#6-当前实际契约)
 7. [V2 生命周期契约](#7-v2-生命周期契约)
+8. [V3 功能覆盖方向](#8-v3-功能覆盖方向)
 
 ## 阅读约定
 
@@ -505,6 +506,8 @@ Demo 是虚构冒险游戏 WAYFARER 的纯 UI 原型：营地主菜单、偏好�
 
 V3 优先补齐功能特性，以覆盖绝大多数常见游戏 UI 管理需求为目标。此前提出的“业务接入与交互闭环”、控件绑定生成和减少编码，不作为 V3 的主要目标；易用性仍是实现约束，工具增强服从功能覆盖。
 
+用户进一步指定：优先窗口与实例管理、完整栈流程；先参考其他成熟方案的处理方式，再决定具体设计。下面的调研结论和 API 建议不代表实现授权或已确认契约。
+
 覆盖对象是 UI 管理：页面、窗口、弹窗、提示、输入、显示顺序、资源和作用域。列表虚拟化、布局、绘制、文本编辑、拖拽控件和 Gameplay 本身仍由引擎或项目实现，不能把管理框架的功能覆盖表述为完整控件库。
 
 ### 8.2 功能范围建议（尚未确认或实现）
@@ -526,4 +529,77 @@ V3 优先补齐功能特性，以覆盖绝大多数常见游戏 UI 管理需求�
 
 Demo 扩展为完整的游戏 UI 场景集合：登录/主菜单与会话切换、背包与地图、任务与商店、物品详情与 Tooltip、暂停设置与嵌套确认、加载遮挡、奖励提示及结算返回。不含 Gameplay；每个场景必须对应框架能力和核心测试，不能只增加界面外观。
 
-先完成实例/容器流程、排序/输入与作用域，再完成资源复用和短暂 UI。正式 V3 开发清单及 API 契约尚未制定。Source Generator 增强、编辑器、MVVM、Analyzer 与第二引擎适配器不作为本轮功能覆盖主线。
+先研究并确定窗口/实例管理与完整栈流程，其他功能组后续安排。正式 V3 开发清单及 API 契约尚未制定。Source Generator 增强、编辑器、MVVM、Analyzer 与第二引擎适配器不作为本轮功能覆盖主线。
+
+### 8.4 窗口、实例与栈流程调研（2026-10-02）
+
+本次核对官方公开源码和 API 文档，未安装运行这些方案。GitHub 来源为核对当日 master；Epic 页面为当前在线 API 文档，不能据此宣称其他历史版本行为完全一致。
+
+| 方案 | 核对到的处理方式 | 本工程可借鉴的部分 |
+| --- | --- | --- |
+| UnityScreenNavigator PageContainer | Push 创建新实例，以 pageId 维护有序历史；被覆盖的历史页保留；支持按数量或目标 pageId 返回，移除页最终清理、销毁并释放资源 | 历史保存实例、目标使用实例身份、批量返回只呈现当前源和最终目标的转场 |
+| UnityScreenNavigator SheetContainer | Register 加载并初始化实例；Show/Hide 切换已注册项，Hide 不注销；UnregisterAll 才释放 | 实例存续与显示分离；但 Sheet 是互斥显示，不等于多个独立窗口共存 |
+| FairyGUI Window | Show/Hide/BringToFront 操作具体窗口实例；隐藏不销毁，Dispose 独立；初始化与每次显示/隐藏回调分开 | 高频窗口隐藏后再显示，保留同一实例；并未自动保证同类型单实例 |
+| QFramework UIKit | OpenPanel 默认 Single，也支持 Multiple；Single 找到已有实例后重新传入数据并显示；提供显示、隐藏、关闭及批量操作 | 单实例入口、重复打开时的数据更新需求、多实例必须有明确身份 |
+| Unreal CommonUI | Stack 仅显示并激活栈顶；栈顶失活会移除并恢复前项；AddWidget 可创建或从 inactive pool 取实例 | 栈顶和历史的状态区别、实例池与业务历史分开定义；不直接复制其“失活即出栈”规则 |
+
+来源：[USN PageContainer](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)、[SheetContainer](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Sheet/SheetContainer.cs)、[FairyGUI Window](https://github.com/fairygui/FairyGUI-unity/blob/master/Assets/Scripts/UI/Window.cs)、[QFramework UIManager](https://github.com/liangxiegame/QFramework/blob/master/QFramework.Unity2018%2B/Assets/QFramework/Toolkits/UIKit/Scripts/UIManager.cs)、[CommonUI Stack](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Plugins/CommonUI/UCommonActivatableWidgetStack)、[CommonUI AddWidget](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Plugins/CommonUI/UCommonActivatableWidgetContaine-/AddWidget)。
+
+需要避免的语义误读：
+
+- USN 的 `Push(..., stack: false)` 标记新页在下一次 Push 时不保留，不是立即替换旧栈顶。例如先有 A，再推入不保留的 B，此时仍可返回 A；随后推 C 才移除 B，成为 A→C。[PagePushContext](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PagePushContext.cs) 判断的是退出页此前的保留标记。真正 Replace 应独立定义。
+- QFramework 的 [UIPanelStack](https://github.com/liangxiegame/QFramework/blob/master/QFramework.Unity2018%2B/Assets/QFramework/Toolkits/UIKit/Scripts/UIPanelStack.cs) 保存 PanelInfo；Push 关闭并移出管理表，Pop 根据资源、类型和数据重新 Open。不能把这种重开历史当作原实例恢复；本工程 V2 已采用实例历史。
+- CommonUI 的池化是物理实例复用，不代表同类型业务单实例，也不保证保留上一轮业务状态。其 [AddWidgetInstance](https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/CommonUI/UCommonActivatableWidgetContaine-/AddWidgetInstance?lang=en-US) 不参与池化，所有权仍归原创建者。本轮不据此引入自动实例池。
+- USN Pop 启动后台清理协程，转场句柄不等待全部释放；其批量返回对被移除的隐藏项也执行退出回调。本工程要求清理失败可观察，且 V2 覆盖时已完成显示退出，不能直接照搬这两个时序。
+- QFramework 部分 Show/Hide 对找不到实例不执行操作、部分查询采用首项或末项；本工程不得将它们作为缺失实例和多实例歧义的处理方式。
+
+### 8.5 结合当前模型的建议（尚未确认或实现）
+
+#### 窗口与实例
+
+建议扩展现有独立窗口容器的职责，仍以普通 Node 为内容，不要求业务继承新的 Window/View 基类。是否把 PanelContainerNode 改名为 WindowContainerNode 待定。
+
+将实例存续和显示状态分开：隐藏的实例仍归原容器管理，保持逻辑 Parent、子节点和已初始化状态；再次显示不重新初始化。Hide 执行显示退出和失活，Show 执行显示进入；Close 执行必要的退出并最终销毁。关闭已隐藏实例直接清理，不重复退出。容器销毁负责包括隐藏项在内的全部实例。
+
+API 候选按场景区分，不增加 Navigation/Selection 中间对象：
+
+```csharp
+var inventory = await windows.OpenAsync<InventoryView>(); // 候选：取得或创建单实例并显示
+await windows.HideAsync(inventory);                       // 保留实例与页面状态
+await windows.ShowAsync(inventory);                       // 显示同一实例
+await windows.CloseAsync(inventory);                      // 最终销毁
+
+var left = await windows.OpenNewAsync<ItemDetailsView>(leftItem);
+var right = await windows.OpenNewAsync<ItemDetailsView>(rightItem);
+await windows.CloseAsync(left);                           // 操作具体实例，不按类型猜测
+```
+
+倾向显式入口区分取得/创建单实例与创建新实例，避免频繁传策略枚举；也可以采用注册时声明实例策略，最终选择待定，不同时引入互相矛盾的两套规则。单实例身份建议限定在容器内，不强制全局唯一；按类型、注册资源还是业务键识别仍需确定。同类型存在多个实例时，查询须返回集合或要求 Id/实例，唯一查询遇到歧义报错。构造、配置、查询保持同步。
+
+重复 Open 的行为必须明确：隐藏实例可重新显示；已显示实例不能重新初始化或伪造一次退出/进入。携带新数据时如何刷新、是否置前，以及同一容器并发请求如何处理仍待定；不隐式丢参数、不静默跳过、不自动合并失败任务。刷新职责与初始化、显示生命周期分别定义，不直接照搬 UIKit 每次 Open 的回调时序。
+
+建议提供集合查询和 CloseAllAsync；关闭完成等待所有目标清理。批量处理失败继续必要清理，传播首个原异常并暴露其他原异常，复用既有失败契约。实例保留由 Hide 表达，暂不同时加入 Close 保留策略和自动池化，避免多个 API 表达同一种行为。
+
+#### 完整栈流程
+
+建议保持 V2 的实例历史：Push 创建新页；覆盖页留在历史中；返回恢复指定原实例；移除项最终销毁。栈上的单实例复用与独立窗口复用不能直接混用，一个节点不能重复占据多个历史位置。
+
+| API 候选 | 示例（左侧为栈底） | 语义建议 |
+| --- | --- | --- |
+| PushAsync<T> | [A,B] → [A,B,C] | 创建并推入新实例 |
+| PopAsync / PopAsync(count) | [A,B,C,D] → [A,B] | 移除指定数量，恢复最后保留项 |
+| PopToAsync(instance) | [A,B,C,D] → [A,B] | 返回具体 B 实例，销毁其上全部项 |
+| PopToRootAsync | [A,B,C] → [A] | 返回最早历史页；这里的根页不是 UIContext.Root |
+| ReplaceAsync<T> | [A,B,C] → [A,B,D] | 用新实例替换当前栈顶，不影响更早历史 |
+| ClearAsync | [A,B,C] → [] | 退出当前页、清理全部历史，保留可再次使用的容器 |
+| ResetAsync<T> | [A,B,C] → [D] | 准备新页并一次提交新历史，不拆成先 Clear 后 Push |
+
+返回目标建议使用实例或 Id；相同类型可多次入栈，不能按类型默认找到最近/最早项。非法数量、目标缺失、归属不符和空栈返回直接报错。目标就是当前项、返回根页时已在根页等边界需要明确采用严格报错还是显式成功语义，不作为未定义的静默跳过。
+
+批量返回只让当前可见源页退出、最终目标进入；已被覆盖并完成 Exited 的中间页不补播进入/退出或转场，仅按栈顶向下清理。Clear 不恢复中间页；Reset/Replace 先准备目标，提交前失败保持原历史并清理新实例；提交后清理失败不回滚已提交历史，任务仍失败。所有操作均等待其负责的清理，不启动无法由调用方观察的后台释放。
+
+新增操作需要补充相应生命周期原因与 Source/Target 语义；上面是方向建议，不能把现有 Reason 枚举硬套为已实现支持。多页清理顺序、通知失败后的必要清理、取消边界要在正式开发清单中给出验收用例。
+
+#### 本轮建议验证场景
+
+窗口：背包隐藏后重开保留当前内嵌 Tab 与选中物品；重复打开不增加单实例；同类型两个详情窗口分别关闭；批量关闭包含隐藏窗口。栈：主菜单→存档→角色创建→确认，演示返回指定存档实例、替换确认页、重置回主菜单和清空后再次推入。对新页准备失败、返回目标缺失、多实例歧义和批量清理失败补核心测试。Demo 展示业务流程，不能以 API 按钮面板替代。
