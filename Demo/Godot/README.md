@@ -21,6 +21,8 @@
 
 Demo 初始化已使用 Godot 便利 API：`GodotUI.Create(this)` 构造上下文，`Root.CreateContainerAsync<T>` 一次创建并挂载项目容器，`AttachToAsync` 接入已有业务节点。内嵌 Tab 使用 `BindAsync(name, Control)`，业务引用通过 `GetControl<T>(path)` 获取；无需逐项编写显示句柄包装。显式 owned 动态挂载仍保留底层示例。
 
+同步操作直接执行；`TrackAction` 成功时不创建空任务，信号处理器的异常以原异常进入帧观察入口。`AttachToAsync` 与 Control 版 Tab 绑定直接返回核心初始化任务，调用方仍需等待生命周期完成。
+
 ## 自动验证
 
 ```powershell

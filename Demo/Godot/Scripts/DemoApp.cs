@@ -40,7 +40,7 @@ public partial class DemoApp : Control
         Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("DemoDialogs", GetNode<Control>("ModalMount"));
         Wire("Tabs", OpenTabsAsync);
         Wire("Inventory", OpenInventoryAsync);
-        Wire("Settings", async () => await Modals.OpenSettingsWindowViewAsync());
+        Wire("Settings", () => Modals.OpenSettingsWindowViewAsync());
         Wire("Instances", OpenCardsAsync);
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", CancelLoadingAsync);
@@ -85,10 +85,12 @@ public partial class DemoApp : Control
     }
 
     public void Track(Task task) => _tasks.Add(task);
-    public void TrackAction(Action action) => Track(InvokeActionAsync(action));
-    private static async Task InvokeActionAsync(Action action)
+    public void TrackAction(Action action)
     {
-        action(); await Task.CompletedTask;
+        try { action(); }
+        // Godot signal callbacks must route errors to the same observable frame entry point.
+        // Successful synchronous actions need no task or async state machine.
+        catch (Exception ex) { Track(Task.FromException(ex)); }
     }
 
     public override void _Process(double delta)
@@ -280,8 +282,8 @@ public partial class DemoApp : Control
             Check(GodotObject.IsInstanceValid(page) && !page.IsQueuedForDeletion(), "Borrowed page was freed.");
 
             var customNode = new DemoMenuNode();
-            var attached = await customNode.AttachToAsync(ui.Root, "Custom", mount);
-            Check(ReferenceEquals(attached, customNode), "Attachment replaced the supplied node.");
+            await customNode.AttachToAsync(ui.Root, "Custom", mount);
+            Check(ReferenceEquals(ui.Root.GetChild("Custom"), customNode), "Attachment replaced the supplied node.");
             await customNode.DisposeAsync();
             using var canceled = new CancellationTokenSource(); canceled.Cancel();
             await ExpectCancellationAsync(ui.Root.CreateContainerAsync<PanelContainerNode>("Canceled", mount, canceled.Token));

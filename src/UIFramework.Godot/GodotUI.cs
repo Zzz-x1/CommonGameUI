@@ -40,16 +40,15 @@ public static class GodotUI
 /// <summary>Convenience APIs for borrowed scene Controls; no resources are loaded or cloned.</summary>
 public static class GodotUIExtensions
 {
-    /// <summary>Attach an existing node to a borrowed Control and return the same node.</summary>
-    public static async Task<T> AttachToAsync<T>(this T node, UINode parent, string name, Control control,
-        CancellationToken token = default) where T : UINode
+    /// <summary>Attach an existing node to a borrowed Control. Returns the core initialization task directly.</summary>
+    public static Task AttachToAsync(this UINode node, UINode parent, string name, Control control,
+        CancellationToken token = default)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(node);
             VerifyControl(parent, control);
-            await node.AttachAsync(parent, name, new GodotUIElement(control), token);
-            return node;
+            return node.AttachAsync(parent, name, new GodotUIElement(control), token);
         }
         catch (Exception ex) { GodotUI.Report(ex, $"Attach Godot node '{name}'"); throw; }
     }
@@ -62,7 +61,9 @@ public static class GodotUIExtensions
         {
             VerifyControl(parent, mount);
             token.ThrowIfCancellationRequested();
-            return await new T().AttachToAsync(parent, name, mount, token);
+            var node = new T();
+            await node.AttachToAsync(parent, name, mount, token);
+            return node;
         }
         catch (Exception ex) { GodotUI.Report(ex, $"Create Godot container '{name}'"); throw; }
     }
@@ -72,14 +73,14 @@ public static class GodotUIExtensions
         CancellationToken token = default) => tabs.BindAsync(name, new UINode(), page, token);
 
     /// <summary>Bind a borrowed embedded page using a custom node.</summary>
-    public static async Task BindAsync(this TabContainerNode tabs, string name, UINode node, Control page,
+    public static Task BindAsync(this TabContainerNode tabs, string name, UINode node, Control page,
         CancellationToken token = default)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(node);
             VerifyControl(tabs, page);
-            await tabs.BindAsync(name, node, new GodotUIElement(page), token);
+            return tabs.BindAsync(name, node, new GodotUIElement(page), token);
         }
         catch (Exception ex) { GodotUI.Report(ex, $"Bind Godot Tab '{name}'"); throw; }
     }

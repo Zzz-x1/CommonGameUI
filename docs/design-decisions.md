@@ -53,6 +53,8 @@ Demo 美术方向（已确认，2026-10-02）：用户选择候选④ Kenney UI 
 
 诊断延期不取消运行时异常、基础日志及正确性测试。编辑器配置格式和实现尚未确定。
 
+异步范围（已确认，2026-10-02）：不滥用异步方法。纯构造、注册、查询、配置和即时状态修改采用同步 API；需要等待资源、生命周期、转场、弹窗结果或清理时才使用异步契约。方法仅转发下层任务时直接返回 Task，不额外使用 async/await，不用 Task.Run 包装即时操作，不用 Wait/Result/GetAwaiter().GetResult 将异步操作伪装成同步 API（Demo 的帧入口观察已完成任务的结果除外）。
+
 ### 4. 异常与日志（硬性要求）
 
 用户原话：
@@ -403,9 +405,11 @@ Godot 初始化便利 API（2026-10-02 已实现）：
 | --- | --- |
 | GodotUI.Create(owner, loader?, logger?) | 从已进入场景树的 Godot Node 构造宿主、默认场景加载器及日志服务，返回 UIContext；可显式替换加载器/日志，不注册业务类型、不自动创建项目容器 |
 | parent.CreateContainerAsync<T>(name, mount, token) | 创建指定 ContainerNode 派生类型并挂载到已有 Control；支持自定义派生容器，名称与层级由项目指定 |
-| node.AttachToAsync(parent, name, control, token) | 将已有逻辑节点绑定到已有 Control，返回同一逻辑节点，适合自定义构造/依赖注入 |
+| node.AttachToAsync(parent, name, control, token) | 将已有逻辑节点绑定到已有 Control，直接返回核心 AttachAsync 的初始化任务，不另建异步状态机或返回已有节点，适合自定义构造/依赖注入 |
 | tabs.BindAsync(name, pageControl, token) | 自动创建基础 UINode，绑定既有内嵌 Control；不加载或克隆 |
 | tabs.BindAsync(name, node, pageControl, token) | 为内嵌页面绑定项目提供的逻辑节点 |
 | node.GetControl() / GetControl<T>(path) | 获取节点显示 Control 或指定路径的类型化子控件，避免业务重复转换显示句柄 |
 
 上述扩展方法只在 Godot 适配器中提供。Create 应从场景线程调用；显示 Control 必须仍有效并在场景树中，核心继续验证节点状态、归属、并发与取消。AttachToAsync、CreateContainerAsync、Control 版 BindAsync 使用 borrowed 所有权，逻辑节点销毁不会释放父场景中的 Control。项目自行创建且需由框架释放的显示根仍显式使用 `new GodotUIElement(control, owned: true)` 配合底层 AttachAsync。挂载失败仍执行核心清理并原样抛出；重复项、缺失控件或类型不匹配均报错，不隐式选择其他控件。创建的 UIContext 必须由调用方 DisposeAsync，便利 API 不隐藏任务观察或自动销毁流程。
+
+AttachToAsync / BindAsync / CreateContainerAsync 保留可等待契约，是因为挂载会执行可异步的 OnInitializeAsync，失败时还要等待清理；并非仅包装 Control 就必须异步。CreateContainerAsync 需要等初始化成功后才能返回新容器；AttachToAsync 与 Control 版 BindAsync 只直接转发核心任务。当前不新增仅适用于部分节点的同步 Attach/Bind 旁路，以免跳过生命周期或遇到异步初始化时隐式阻塞。

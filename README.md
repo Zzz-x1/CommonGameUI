@@ -85,6 +85,8 @@ await ui.DisposeAsync(); // 场景退出时显式销毁上下文。
 
 `GodotUI.Create(this, loader: customLoader, logger: customLogger)` 支持替换服务。已有业务节点使用 `await node.AttachToAsync(parent, name, control)`；业务代码用 `this.GetControl<Button>("Path")` 获取控件。便利挂载与 Tab 绑定借用已有 Control，不负责释放它；项目新建且交给框架销毁的 Control 使用底层 `GodotUIElement(control, owned: true)`。上下文创建不会自动添加项目容器，异步任务仍需调用方观察。
 
+纯构造、注册、查询和配置保持同步。`AttachToAsync` 与 Control 版 `BindAsync` 直接转发核心任务；它们仍可等待，因为挂载会执行可能异步的初始化及失败清理。`AttachToAsync` 返回 `Task`，已有节点直接使用原引用。容器创建需要等初始化成功后返回新实例。不要用同步阻塞或 fire-and-forget 绕过这些等待。
+
 ## 生命周期与失败规则
 
 - 初始化一次；进入/退出可重复；隐藏保留实例，销毁结束子树。
