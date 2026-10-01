@@ -1,0 +1,54 @@
+[gd_scene format=3]
+[node name="Confirm" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.14, 0.13, 0.62)
+mouse_filter = 0
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Panel" type="PanelContainer" parent="Center"]
+layout_mode = 2
+custom_minimum_size = Vector2(590, 360)
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_bottom = 28
+[node name="Content" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+[node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 25
+text = "CONFIRM ACTION"
+[node name="Hint" type="Label" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+text = "Try a nested dialog. Input belongs to the topmost modal."
+theme_override_font_sizes/font_size = 16
+[node name="Nested" type="Button" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+text = "Open nested confirmation"
+[node name="Yes" type="Button" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+text = "Confirm"
+[node name="No" type="Button" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+text = "Cancel"

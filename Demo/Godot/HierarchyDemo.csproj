@@ -1,0 +1,15 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>HierarchyDemo</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>obj/Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="obj/**/*.cs" />
+    <ProjectReference Include="../../src/UIFramework.Core/UIFramework.Core.csproj" />
+    <ProjectReference Include="../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
+    <ProjectReference Include="../../src/UIFramework.Generators/UIFramework.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

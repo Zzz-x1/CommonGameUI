@@ -1,0 +1,118 @@
+[gd_scene format=3]
+[node name="TabsView" type="VBoxContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+text = "EMBEDDED TABS"
+theme_override_font_sizes/font_size = 27
+[node name="Description" type="Label" parent="."]
+layout_mode = 2
+text = "Pages are embedded in this scene. Switch by name; keep state."
+theme_override_font_sizes/font_size = 16
+[node name="TabButtons" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+[node name="Graphics" type="Button" parent="TabButtons"]
+layout_mode = 2
+text = "Graphics"
+size_flags_horizontal = 3
+[node name="Audio" type="Button" parent="TabButtons"]
+layout_mode = 2
+text = "Audio"
+size_flags_horizontal = 3
+[node name="Controls" type="Button" parent="TabButtons"]
+layout_mode = 2
+text = "Controls"
+size_flags_horizontal = 3
+[node name="TabContent" type="Control" parent="."]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 320)
+size_flags_vertical = 3
+mouse_filter = 2
+[node name="Graphics" type="VBoxContainer" parent="TabContent"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+theme_override_constants/separation = 18
+[node name="Heading" type="Label" parent="TabContent/Graphics"]
+layout_mode = 2
+text = "GRAPHICS SETTINGS"
+theme_override_font_sizes/font_size = 24
+[node name="Hint" type="Label" parent="TabContent/Graphics"]
+layout_mode = 2
+text = "Change the value, switch away, then return. The same instance stays."
+theme_override_font_sizes/font_size = 16
+[node name="Value" type="HSlider" parent="TabContent/Graphics"]
+layout_mode = 2
+min_value = 0.0
+max_value = 100.0
+value = 40.0
+custom_minimum_size = Vector2(0, 36)
+[node name="Enabled" type="CheckButton" parent="TabContent/Graphics"]
+layout_mode = 2
+text = "Enable this option"
+button_pressed = true
+[node name="Audio" type="VBoxContainer" parent="TabContent"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = true
+theme_override_constants/separation = 18
+[node name="Heading" type="Label" parent="TabContent/Audio"]
+layout_mode = 2
+text = "AUDIO SETTINGS"
+theme_override_font_sizes/font_size = 24
+[node name="Hint" type="Label" parent="TabContent/Audio"]
+layout_mode = 2
+text = "Change the value, switch away, then return. The same instance stays."
+theme_override_font_sizes/font_size = 16
+[node name="Value" type="HSlider" parent="TabContent/Audio"]
+layout_mode = 2
+min_value = 0.0
+max_value = 100.0
+value = 55.0
+custom_minimum_size = Vector2(0, 36)
+[node name="Enabled" type="CheckButton" parent="TabContent/Audio"]
+layout_mode = 2
+text = "Enable this option"
+button_pressed = true
+[node name="Controls" type="VBoxContainer" parent="TabContent"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+theme_override_constants/separation = 18
+[node name="Heading" type="Label" parent="TabContent/Controls"]
+layout_mode = 2
+text = "CONTROLS SETTINGS"
+theme_override_font_sizes/font_size = 24
+[node name="Hint" type="Label" parent="TabContent/Controls"]
+layout_mode = 2
+text = "Change the value, switch away, then return. The same instance stays."
+theme_override_font_sizes/font_size = 16
+[node name="Value" type="HSlider" parent="TabContent/Controls"]
+layout_mode = 2
+min_value = 0.0
+max_value = 100.0
+value = 70.0
+custom_minimum_size = Vector2(0, 36)
+[node name="Enabled" type="CheckButton" parent="TabContent/Controls"]
+layout_mode = 2
+text = "Enable this option"
+button_pressed = true

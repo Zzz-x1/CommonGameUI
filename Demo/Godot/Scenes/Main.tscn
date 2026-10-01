@@ -1,0 +1,141 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Script" path="res://Scripts/DemoApp.cs" id="1"]
+[node name="Main" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+[node name="Frame" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 24
+[node name="Layout" type="VBoxContainer" parent="Frame"]
+layout_mode = 2
+theme_override_constants/separation = 24
+[node name="Header" type="HBoxContainer" parent="Frame/Layout"]
+layout_mode = 2
+[node name="Title" type="Label" parent="Frame/Layout/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_type_variation = &"BannerLabel"
+text = "Hierarchy"
+[node name="Version" type="Label" parent="Frame/Layout/Header"]
+theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 2
+text = "C# UI FRAMEWORK   /   ADVENTURE EDITION"
+[node name="Divider" type="HSeparator" parent="Frame/Layout"]
+layout_mode = 2
+[node name="Workspace" type="HBoxContainer" parent="Frame/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 28
+[node name="Sidebar" type="VBoxContainer" parent="Frame/Layout/Workspace"]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+[node name="Caption" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
+theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
+layout_mode = 2
+text = "EXPLORE THE FRAMEWORK"
+[node name="Tabs" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "01   Embedded tabs"
+[node name="Inventory" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "02   Inventory stack"
+[node name="Settings" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "03   Settings window"
+[node name="Instances" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "04   Independent cards"
+[node name="Confirm" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "05   Nested dialogs"
+[node name="Cancel" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+text = "06   Cancel loading"
+[node name="Spacer" type="Control" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+[node name="Note" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
+theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
+layout_mode = 2
+text = "One root.
+Composable nodes.
+Explicit failures."
+[node name="Credit" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
+theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "KENNEY ADVENTURE / CC0"
+[node name="Stage" type="PanelContainer" parent="Frame/Layout/Workspace"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Margin" type="MarginContainer" parent="Frame/Layout/Workspace/Stage"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 28
+[node name="Content" type="Control" parent="Frame/Layout/Workspace/Stage/Margin"]
+layout_mode = 2
+custom_minimum_size = Vector2(700, 520)
+mouse_filter = 2
+[node name="Welcome" type="VBoxContainer" parent="Frame/Layout/Workspace/Stage/Margin/Content"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 22
+[node name="Overline" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
+layout_mode = 2
+text = "RENDERER-INDEPENDENT CORE"
+[node name="Heading" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "Build with nodes.
+Navigate with intent."
+[node name="Description" type="Label" parent="Frame/Layout/Workspace/Stage/Margin/Content/Welcome"]
+layout_mode = 2
+text = "Choose a scenario on the left.
+
+Embedded tabs reuse existing scene controls.
+Stacks preserve pages for return navigation.
+Modal windows own input until closed."
+[node name="Status" type="Label" parent="Frame/Layout"]
+theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "READY   /   Root created. No project nodes supplied by the framework."
+[node name="FloatingMount" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="ModalMount" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

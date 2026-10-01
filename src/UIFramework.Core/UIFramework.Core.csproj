@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Description>Renderer-independent hierarchical UI management.</Description>
+  </PropertyGroup>
+</Project>

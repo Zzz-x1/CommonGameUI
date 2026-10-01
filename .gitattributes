@@ -1,0 +1,14 @@
+* text=auto eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.md text eol=lf
+*.ps1 text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.godot text eol=lf
+*.svg text eol=lf
+*.png binary
+*.ttf binary
+Demo/Godot/Assets/Adventure/License.txt -whitespace
+Demo/Godot/Assets/Fonts/OFL.txt -whitespace
