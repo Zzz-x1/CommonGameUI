@@ -203,6 +203,18 @@ public partial class DemoApp
         Store.Change(s => s.FullMotion = false);
         Pass(Shell.Pages.Current.IsInteractive, "modal input restored");
         await OpenAsync("Mail");
+        Store.Change(s => s.FullMotion = true);
+        await ModalAsync(new ModalArgs("Mail", 0));
+        var mailDetail = Modals.Current;
+        var claimSingle = ((ClientModalView)mailDetail!).ConfirmAsync();
+        await ToSignal(GetTree().CreateTimer(.15), SceneTreeTimer.SignalName.Timeout);
+        Pass(Modals.Children.OfType<RewardView>().Single().GetControl<Control>("Center").Material is ShaderMaterial && SkipCinematic == null,
+            "actual mail claim uses source-dependent reward reveal");
+        await claimSingle;
+        await BackAsync();
+        Pass(ReferenceEquals(Modals.Current, mailDetail) && Store.State.Claimed.Contains("m0"), "mail reward returns to retained claimed letter");
+        await BackAsync();
+        Store.Change(s => s.FullMotion = false);
         await PressAsync(Shell.Pages.Current!.GetControl<Button>("ClaimAll"));
         Pass(Store.State.Counts["mail"] == 8 && Modals.Current is RewardView, "batch mail grants all once");
         await BackAsync();
@@ -243,6 +255,8 @@ public partial class DemoApp
         var saved = new ClientStore(ProjectSettings.GlobalizePath("user://client-test/save.json"));
         Pass(saved.State.Gold == Store.State.Gold && saved.State.Levels[0] == Store.State.Levels[0], "client persisted");
         await RunAnimationBoundaryTestsAsync(Pass);
+        await RunRevealTestsAsync(Pass);
+        await RunSourceBranchTestsAsync(Pass);
         await RunAdapterSelfTestAsync();
         Pass(true, "retained native adapter and transition coverage");
         await RunResourceSelfTestAsync();
@@ -304,6 +318,21 @@ public partial class DemoApp
         var fixture = GodotUI.Create(this, logger: log);
         fixture.Register<RewardView>("res://Scenes/Client/Reward.tscn");
         var windows = await fixture.Root.CreateContainerAsync<PanelContainerNode>("AnimationTests", mount);
+        var complete = windows.OpenAsync<RewardView>(new PresentationArgs("多阶段奖励"));
+        while (SkipCinematic == null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var display = windows.Children.Single().GetControl();
+        var timeline = display.GetNode<AnimationPlayer>("AnimationPlayer");
+        timeline.Seek(.8, update: true);
+        pass(display.GetNode<Control>("Center/Crest").Modulate.A > .1f && display.GetNode<Control>("Center/Close").Modulate.A == 0,
+            "timeline has distinct crest and result phases");
+        SkipCinematic!();
+        var completed = await complete;
+        var card = display.GetNode<Control>("Center/Cards/C0");
+        pass(card.Scale == Vector2.One && card.PivotOffset == Vector2.Zero && display.GetNode<Control>("Center/Crest").Modulate.A == 0
+            && completed.IsInteractive && SkipCinematic == null, "timeline restores transforms and input after skip");
+        await windows.CloseAsync(completed);
         using var cancel = new CancellationTokenSource();
         var pending = windows.OpenAsync<RewardView>(new PresentationArgs("取消动画"), cancellationToken: cancel.Token);
         while (SkipCinematic == null)

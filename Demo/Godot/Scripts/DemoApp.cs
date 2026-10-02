@@ -62,6 +62,7 @@ public partial class DemoApp : Control
             Store.Count("login");
             await _shells.HideAsync(_login);
             Shell = await _shells.OpenAsync<ShellView>();
+            await Shell.EnterLobbyAsync();
         });
     }
 

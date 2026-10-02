@@ -48,14 +48,20 @@
 
 在 Godot 编辑器选中场景内 `AnimationPlayer`，预览或编辑 `enter`／`exit`：
 
-- `Lobby.tscn`：立绘、欢迎信息、任务、活动分阶段出现。
-- `Training.tscn`：立绘、星光、成长结果与粒子。
-- `Reward.tscn`：光效、结果、最多三张实际奖励卡错峰出现。
-- `Events.tscn`／`Stages.tscn`：插画或目的地内容分层进入。
+- `Lobby.tscn`：双侧幕帘、庭院字幕、背景推镜、立绘滑入、功能卡错峰落位。
+- `Training.tscn`：立绘扫入、旋转星阵蓄光、闪光、光带与属性结果。
+- `Reward.tscn`：星阵扩散、面板弹入、实际奖励卡依次跃出与结果收束。
+- `Characters`／`Friends`：卡片扇形入场；`Inventory`／`Shop`：格子波纹弹入。
+- `Team`：槽位上升；`Tasks`／`Achievements`：目标行交错滑入；`Mail`：信件行展开。
+- `Events`／`Stages`：插画推镜、标题及内容分阶段进入。
+
+先到设置→演出，开启“完整演出与装饰动画”。主要演出持续 2 秒，常规模块约 1.05 秒，均可跳过。观看路径：标题→大厅；角色→详情→培养；商店→礼包→购买→奖励。背包／商店切换分类，邮件打开详情，角色打开详情，还可看到金色斜向擦除、卷帘、菱形展开三种 Shader 效果。对比卡从两侧滑入；背包物品继续使用 Partner 连续展开。没有另设技术展示菜单。
+
+条件分支可直接操作：大厅→背包是完整时间轴；背包→商店从右滑入，商店→背包从左滑入；返回使用短反向转场。同一个奖励窗口，邮件单封附件领取是金边揭开，商店购买是完整星阵与奖励卡时间轴。`ClientTransitions.Page`／`Presentation` 使用 `Transitions.Select(context => ...)`，直接判断 Source、Target、Phase 和演出设置。
 
 轨道只写表现属性，不执行扣款、发奖或保存。项目 `CinematicTransition` 通过现有 `GodotTransitions.Animation` 等待；捕获并恢复轨道属性，负责跳过与输入门。长演出右上可跳过，键盘焦点位于跳过按钮。跳过会推进时间轴到终点，不重新执行业务。
 
-普通页面与弹窗使用 GodotTransitions；按钮悬停和看板切换使用 Tween；物品图像使用自定义动画。简化演出加快时间轴并关闭粒子、持续装饰。大厅装饰仅在有效激活时更新。正常业务不 catch 或手工处理技术错误，异步任务在帧入口观察并原样抛出。
+普通退出及弹窗使用 GodotTransitions；项目 ClientTransitions 为不同业务选择转场，自定义 GildedRevealTransition 播放并恢复原材质；按钮悬停和看板切换使用 Tween；物品图像使用自定义动画。简化演出加快时间轴并关闭粒子、持续装饰。大厅装饰仅在有效激活时更新。正常业务不 catch 或手工处理技术错误，异步任务在帧入口观察并原样抛出。
 
 ## 验证
 
@@ -63,6 +69,6 @@
 
 自测完成后 `./scripts/Run-Demo.ps1 -VerifySave -Headless` 在独立进程重新读取同一隔离档案并验证货币、装备、目标和大厅显示；不会重建预设数据。`./scripts/Test.ps1` 包含核心测试、引擎自测与重启验证。
 
-`./scripts/Run-Demo.ps1 -Capture -Resolution 1280x720` 生成所有模块与关键过场截图到仓库忽略的 artifacts；截图使用独立 `user://client-capture` 档案。也可选择 1600x900、1920x1080。
+`./scripts/Run-Demo.ps1 -Capture -Resolution 1280x720` 生成所有模块、每个模块五张时间轴采样、大厅／培养／奖励各十张时间轴采样及 Shader／Partner 中间帧截图到仓库忽略的 artifacts；截图使用独立 `user://client-capture` 档案。也可选择 1600x900、1920x1080。
 
 验收结果、适配器修复和验证限制集中记录在 `docs/design-decisions.md` 第 13 节；不把截图、存档、工具和缓存纳入 Git。

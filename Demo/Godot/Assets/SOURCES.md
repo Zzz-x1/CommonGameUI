@@ -54,3 +54,7 @@ Icons made by **Lorc** and **Delapouite**, from https://game-icons.net, licensed
 - In-client attribution: top-left game name opens the credits window.
 
 The former Kenney adventure styling and Nunito font are removed from the rebuilt Demo rather than left as an unused second theme.
+
+## Original transition artwork (2026-10-03)
+
+`Client/sigil.svg` is original vector artwork authored for this project: concentric gold rings, star and geometric seal. No external source or attribution requirement. `Shaders/GildedReveal.gdshader` is original project source implementing diagonal, blinds and diamond reveals; no downloaded shader or third-party dependency. Existing generated illustrations and licensed icons/fonts are unchanged.

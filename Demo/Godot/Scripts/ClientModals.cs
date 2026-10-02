@@ -31,7 +31,7 @@ public class ClientModalView : UINode<ModalArgs>
 
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = GodotTransitions.ScaleFade(.22, targetPath: "Center");
+        Transition = ClientTransitions.Popup(Parameters.Kind);
         DismissRequested = _ => App.Modals.CloseAsync(this);
         Wire("Center/Close", () => App.Modals.CloseAsync(this));
         Wire("Center/Cancel", CancelAsync);
@@ -103,7 +103,7 @@ public class ClientModalView : UINode<ModalArgs>
         for (int i = 0; i < 3; i++)
         {
             var n = names[i];
-            await _settings.BindAsync(n, Get<Control>(path + "SettingPages/" + n), token);
+            await _settings.BindAsync(n, new UINode { Transition = ClientTransitions.Category("Settings") }, Get<Control>(path + "SettingPages/" + n), token);
             Wire(path + "Tab" + i, () => _settings.CurrentName == n ? Task.CompletedTask : _settings.SwitchAsync(n));
         }
 
@@ -343,7 +343,6 @@ public class ClientModalView : UINode<ModalArgs>
                 else
                 {
                     App.Store.ClaimMail(new[] { p.Id });
-                    await App.Modals.CloseAsync(this);
                     await App.RewardAsync("邮件附件已领取", new("金币", "compass", 300), new("经验手记", Catalog.Item("mat6").Icon, 2));
                     return;
                 }
@@ -405,7 +404,7 @@ public class ConfirmView(string message) : DialogNode<bool>
 
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = GodotTransitions.ScaleFade(.18, targetPath: "Center");
+        Transition = ClientTransitions.Popup("Confirm");
         foreach (var page in Root.GetNode<Control>("Center/Pages").GetChildren().Cast<Control>())
             page.Visible = page.Name == "Text";
         Root.GetNode<Label>("Center/Title").Text = "请确认";
@@ -438,6 +437,7 @@ public class CompareView : UINode<CompareArgs>
 {
     protected override Task OnInitializeAsync(CancellationToken token)
     {
+        Transition = ClientTransitions.Comparison(Parameters.Position);
         var root = this.GetControl();
         var card = root.GetNode<Control>("Card");
         card.AnchorLeft += Parameters.Position * .33f;
@@ -468,7 +468,7 @@ public abstract class PresentationView : UINode<PresentationArgs>
 {
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = Transitions.Select(c => c.Entering ? new CinematicTransition() : GodotTransitions.ScaleFade(.18, targetPath: "Center"));
+        Transition = ClientTransitions.Presentation();
         this.GetControl<Label>("Center/Result").Text = Parameters.Text;
         if (this is TrainingView)
             this.GetControl<TextureRect>("Center/Portrait").Texture = GD.Load<Texture2D>($"res://Assets/Client/hero{Parameters.Hero}.png");
@@ -535,13 +535,14 @@ public sealed class CinematicTransition : IUITransition
             }
         }
 
+        var scaled = originals.Keys.Where(k => k.Item2 == "scale").Select(k => (Control)k.Item1).ToArray();
+        foreach (var control in scaled)
+            originals.TryAdd((control, "pivot_offset"), control.PivotOffset);
         player.SpeedScale = DemoApp.Instance.Store.State.FullMotion ? 1 : 5;
         CpuParticles2D? particles = null;
         if (context.Node is PresentationView)
         {
             particles = root.GetNode<CpuParticles2D>("Center/Particles");
-            particles.Position = root.GetNode<Control>("Center").Size / 2;
-            particles.Emitting = context.Entering && DemoApp.Instance.Store.State.FullMotion;
         }
 
         var inner = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", _ =>
@@ -549,13 +550,22 @@ public sealed class CinematicTransition : IUITransition
             foreach (var pair in originals)
                 pair.Key.Item1.Set(pair.Key.Item2, pair.Value);
         }).Create(context);
-        return new Run(inner, player, context.Entering, particles);
+        return new Run(inner, player, context.Entering, particles, scaled);
     }
 
-    private sealed class Run(IUITransitionRun inner, AnimationPlayer player, bool entering, CpuParticles2D? particles) : IUITransitionRun
+    private sealed class Run(IUITransitionRun inner, AnimationPlayer player, bool entering, CpuParticles2D? particles, Control[] scaled) : IUITransitionRun
     {
         public async Task PlayAsync(CancellationToken token)
         {
+            await player.ToSignal(player.GetTree(), SceneTree.SignalName.ProcessFrame);
+            token.ThrowIfCancellationRequested();
+            foreach (var control in scaled)
+                control.PivotOffset = control.Size / 2;
+            if (particles != null)
+            {
+                particles.Position = particles.GetParent<Control>().Size / 2;
+                particles.Emitting = entering && DemoApp.Instance.Store.State.FullMotion;
+            }
             if (entering)
                 DemoApp.Instance.Gate(() => player.Advance(player.GetAnimation("enter").Length - player.CurrentAnimationPosition + .01));
             try

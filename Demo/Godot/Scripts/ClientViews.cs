@@ -124,7 +124,11 @@ public class ShellView : ClientView
         Listen(() => App.Store.Changed += Refresh, () => App.Store.Changed -= Refresh);
         Feedback();
         Refresh();
-        Home = await Pages.PushAsync<LobbyView>(playAnimation: true, cancellationToken: token);
+    }
+
+    public async Task EnterLobbyAsync(CancellationToken token = default)
+    {
+        Home = await Pages.PushAsync<LobbyView>(cancellationToken: token);
     }
 
     public override void Refresh()
@@ -230,7 +234,7 @@ public abstract class ClientPage : ClientView
         foreach (var page in Get<Control>("Pages").GetChildren().Cast<Control>())
         {
             var name = page.Name.ToString();
-            await Tabs.BindAsync(name, page, token);
+            await Tabs.BindAsync(name, new UINode { Transition = ClientTransitions.Category(Module) }, page, token);
             Wire("Tabs/" + name, () => SelectTabAsync(name));
             foreach (var button in page.GetChildren().OfType<Button>())
             {
@@ -252,8 +256,7 @@ public abstract class ClientPage : ClientView
             });
         }
 
-        if (Module == "Inventory")
-            Transition = Transitions.Select(c => c.Target is ItemDetailsView ? GodotTransitions.Fade(.12) : GodotTransitions.SlideHorizontal(.24));
+        Transition = ClientTransitions.Page(Module);
         if (Module == "Inventory")
         {
             var sort = Get<OptionButton>("Sort");
@@ -275,8 +278,6 @@ public abstract class ClientPage : ClientView
 
         if (Module == "Mail")
             Wire("ClaimAll", ClaimAllAsync);
-        if (Module == "Stages")
-            Transition = Transitions.Select(c => c.Entering ? new CinematicTransition() : GodotTransitions.SlideHorizontal(.24));
         await Tabs.SwitchAsync(Get<Control>("Pages").GetChild<Control>(0).Name.ToString(), false, token);
         Feedback();
         Refresh();
@@ -504,6 +505,7 @@ public class HeroDetailsView : UINode<int>
 
     protected override Task OnInitializeAsync(CancellationToken token)
     {
+        Transition = ClientTransitions.Hero();
         Root.GetNode<Button>("Train").Pressed += Train;
         Root.GetNode<Button>("Equip").Pressed += Equip;
         Root.GetNode<Button>("Unequip").Pressed += Unequip;

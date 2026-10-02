@@ -40,7 +40,7 @@ public partial class DemoApp
     private async Task CaptureClientAsync()
     {
         await CaptureAsync("login");
-        await EnterAsync();
+        await CaptureTimelineAsync("lobby", EnterAsync());
         await CaptureAsync("lobby");
         foreach (var module in new[]
         {
@@ -56,11 +56,29 @@ public partial class DemoApp
             "Events"
         })
         {
-            await OpenAsync(module);
+            await CaptureTimelineAsync(module.ToLowerInvariant(), OpenAsync(module), frames: 5);
             await CaptureAsync(module.ToLowerInvariant());
+            if (module is "Shop" or "Inventory")
+            {
+                var page = (ClientPage)Shell.Pages.Current!;
+                var switching = page.SelectTabAsync("材料");
+                await CaptureDuringAsync(module.ToLowerInvariant() + "-category-mid", switching, .14);
+                await switching;
+            }
             await OpenAsync("Home");
         }
 
+        await OpenAsync("Inventory");
+        var fromInventory = OpenAsync("Shop");
+        await CaptureDuringAsync("inventory-to-shop-mid", fromInventory, .12);
+        await fromInventory;
+        var fromShop = OpenAsync("Inventory");
+        await CaptureDuringAsync("shop-to-inventory-mid", fromShop, .12);
+        await fromShop;
+        var pop = Shell.Pages.PopAsync();
+        await CaptureDuringAsync("inventory-pop-to-shop-mid", pop, .12);
+        await pop;
+        await OpenAsync("Home");
         await ModalAsync(new ModalArgs("Profile"));
         await CaptureAsync("profile");
         await BackAsync();
@@ -71,12 +89,21 @@ public partial class DemoApp
         await PressAsync(Modals.Current!.GetControl<Button>("Center/Pages/Settings/Tab2"));
         await CaptureAsync("settings-animation");
         await BackAsync();
+        var mailOpening = ModalAsync(new ModalArgs("Mail", 0));
+        await CaptureDuringAsync("mail-reveal-mid", mailOpening, .16);
+        await mailOpening;
+        var mailReward = ((ClientModalView)Modals.Current!).ConfirmAsync();
+        await CaptureDuringAsync("mail-reward-reveal-mid", mailReward, .2);
+        await mailReward;
+        await BackAsync();
+        await BackAsync();
         await OpenAsync("Characters");
-        var hero = await Shell.Pages.PushAsync<HeroDetailsView>(0);
+        var heroOpening = Shell.Pages.PushAsync<HeroDetailsView>(0);
+        await CaptureDuringAsync("hero-iris-mid", heroOpening, .2);
+        var hero = await heroOpening;
         await CaptureAsync("hero-details");
         var training = hero.TrainAsync();
-        await CaptureDuringAsync("training-mid", training);
-        await training;
+        await CaptureTimelineAsync("training", training);
         await CaptureAsync("training");
         await BackAsync();
         await OpenAsync("Home");
@@ -93,13 +120,15 @@ public partial class DemoApp
         await CloseComparisonsAsync();
         await OpenAsync("Home");
         await OpenAsync("Shop");
-        await ModalAsync(new ModalArgs("Shop", 0));
+        await ((ShopView)Shell.Pages.Current!).SelectTabAsync("礼包");
+        await ModalAsync(new ModalArgs("Shop", 0, Text: "装备与经验手记补给礼包"));
         var detail = (ClientModalView)Modals.Current!;
-        await detail.ConfirmAsync();
+        var confirming = detail.ConfirmAsync();
+        await CaptureDuringAsync("purchase-blinds-mid", confirming, .16);
+        await confirming;
         await CaptureAsync("purchase");
         var purchase = ((ClientModalView)Modals.Current!).ConfirmAsync();
-        await CaptureDuringAsync("reward-mid", purchase);
-        await purchase;
+        await CaptureTimelineAsync("reward", purchase);
         await CaptureAsync("reward");
         await BackAsync();
         await BackAsync();
@@ -107,13 +136,26 @@ public partial class DemoApp
         GetTree().Quit();
     }
 
-    private async Task CaptureDuringAsync(string name, Task operation)
+    private async Task CaptureDuringAsync(string name, Task operation, double time = .24)
     {
-        if (name != "partner-mid")
-            while (SkipCinematic == null && !operation.IsCompleted)
-                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        await ToSignal(GetTree().CreateTimer(name == "partner-mid" ? .24 : .55), SceneTreeTimer.SignalName.Timeout);
+        await ToSignal(GetTree().CreateTimer(time), SceneTreeTimer.SignalName.Timeout);
         await CaptureAsync(name);
+    }
+
+    private async Task CaptureTimelineAsync(string name, Task operation, int frames = 10)
+    {
+        while (SkipCinematic == null && !operation.IsCompleted)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var player = ClientView.Descendants(this).OfType<AnimationPlayer>().Single(p => p.IsPlaying() && p.CurrentAnimation == "enter");
+        var length = player.GetAnimation("enter").Length;
+        for (int i = 0; i < frames; i++)
+        {
+            while (player.CurrentAnimationPosition < i * length / frames && !operation.IsCompleted)
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await CaptureAsync($"{name}-timeline-{i:00}");
+        }
+        await operation;
     }
 
     private async Task PressAsync(Button button)
