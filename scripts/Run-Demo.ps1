@@ -3,8 +3,7 @@ param(
     [switch]$Headless,
     [switch]$SelfTest,
     [switch]$Capture,
-    [ValidateSet('Inventory', 'Preferences', 'Settings', 'Notes', 'Dialogs', 'Partner')][string]$CaptureScene = 'Inventory',
-    [ValidateSet('tab', 'duplicate', 'load', 'lifecycle', 'transition', 'entered', 'state', 'cleanup', 'window-parameters', 'window-state', 'stack-target', 'return-cleanup', 'transition-target', 'backdrop', 'backdrop-dismiss', 'selector', 'selector-null', 'selector-cycle', 'animation-parameters', 'animation-progress', 'animation-observer', 'animation-interrupted')][string]$Failure
+    [ValidateSet('Inventory', 'Preferences', 'Settings', 'Notes', 'Dialogs', 'Partner')][string]$CaptureScene = 'Inventory'
 )
 $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot
@@ -14,7 +13,7 @@ if (-not $GodotPath) {
 }
 if (-not (Test-Path -LiteralPath $GodotPath)) { throw 'Godot .NET executable not found. Pass -GodotPath or run scripts/Get-Godot.ps1.' }
 if ($Headless -and $Capture) { throw 'Capture requires the graphical renderer.' }
-if (([int]$SelfTest.IsPresent + [int]$Capture.IsPresent + [int][bool]$Failure) -gt 1) { throw 'Choose only one run mode.' }
+if (([int]$SelfTest.IsPresent + [int]$Capture.IsPresent) -gt 1) { throw 'Choose only one run mode.' }
 $taskProject = Join-Path $taskWorkspace 'Demo/Godot'
 & dotnet build (Join-Path $taskProject 'HierarchyDemo.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Demo build failed.' }
@@ -24,6 +23,5 @@ $taskArguments = @('--path', $taskProject)
 if ($Headless) { $taskArguments += '--headless' }
 if ($SelfTest) { $taskArguments += @('--', '--self-test') }
 elseif ($Capture) { $taskArguments += @('--', $(if ($CaptureScene -eq 'Partner') { '--capture-partner' } elseif ($CaptureScene -eq 'Dialogs') { '--capture-dialogs' } elseif ($CaptureScene -eq 'Settings') { '--capture-settings' } elseif ($CaptureScene -eq 'Preferences') { '--capture-preferences' } elseif ($CaptureScene -eq 'Notes') { '--capture-notes' } else { '--capture' })) }
-elseif ($Failure) { $taskArguments += @('--', "--failure-$Failure") }
 & $GodotPath @taskArguments
 exit $LASTEXITCODE

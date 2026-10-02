@@ -8,16 +8,6 @@ namespace HierarchyDemo;
 public abstract class DemoView : UINode
 {
     private readonly List<Action> _disconnect = new();
-    public int EnterCount { get; private set; }
-    public int ActivationCount { get; private set; }
-    public int DeactivationCount { get; private set; }
-    protected override void OnEntered(LifecycleContext context)
-    {
-        EnterCount++;
-        GD.Print($"UI {GetType().Name}/{Id} entered {context.Reason}, first={context.IsFirstEnter}");
-    }
-    protected override void OnActivated(StateChangeContext context) { ActivationCount++; }
-    protected override void OnDeactivated(StateChangeContext context) { DeactivationCount++; }
     public GodotUIElement Display => (GodotUIElement)Element!;
     protected void Wire(string path, Func<Task> action)
     {
@@ -29,14 +19,14 @@ public abstract class DemoView : UINode
     protected void WireSlider(string path, Action<double> action)
     {
         var slider = this.GetControl<HSlider>(path);
-        void Handler(double value) => DemoApp.Instance.TrackAction(() => action(value));
+        void Handler(double value) => action(value);
         slider.ValueChanged += Handler;
         _disconnect.Add(() => slider.ValueChanged -= Handler);
     }
     protected void WireToggle(string path, Action<bool> action)
     {
         var button = this.GetControl<CheckButton>(path);
-        void Handler(bool value) => DemoApp.Instance.TrackAction(() => action(value));
+        void Handler(bool value) => action(value);
         button.Toggled += Handler;
         _disconnect.Add(() => button.Toggled -= Handler);
     }
@@ -67,7 +57,6 @@ public class PreferencesView : DemoView
         foreach (var name in new[] { "Graphics", "Audio", "Controls" })
         {
             var page = new UINode();
-            page.AddLifecycle(new PageActivity());
             await Tabs.BindAsync(name, page, this.GetControl<Control>($"TabContent/{name}"), token);
             Wire($"TabButtons/{name}", () => SelectAsync(name));
         }
@@ -150,12 +139,10 @@ public class GraphicsView : DemoView
 [UIResource("res://Scenes/Inventory/InventoryWindow.tscn")]
 public class InventoryWindowView : DemoView
 {
-    public int InitializeCount { get; private set; }
     public StackContainerNode Body { get; private set; } = null!;
     public InventoryView Inventory { get; private set; } = null!;
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
-        InitializeCount++;
         Transition = GodotTransitions.Fade();
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
         var slide = GodotTransitions.SlideHorizontal();
@@ -184,6 +171,7 @@ public class InventoryWindowView : DemoView
 [UIResource("res://Scenes/Inventory/Inventory.tscn")]
 public class InventoryView : DemoView
 {
+    private readonly Dictionary<(string Tab, string Item), TextureRect> _itemIcons = new();
     public HashSet<string> Favorites => DemoApp.Instance.GameState.Favorites;
     public string SelectedItem { get; private set; } = "Oakheart Bow";
     public TextureRect SelectedIcon { get; private set; } = null!;
@@ -201,7 +189,6 @@ public class InventoryView : DemoView
         foreach (var name in new[] { "Equipment", "Materials" })
         {
             var page = new UINode();
-            page.AddLifecycle(new PageActivity());
             await Tabs.BindAsync(name, page, this.GetControl<Control>($"TabContent/{name}"), token);
             Wire($"TabButtons/{name}", () => SelectAsync(name));
             WireToggle($"TabContent/{name}/Enabled", _ => RefreshFavorites());
@@ -210,6 +197,7 @@ public class InventoryView : DemoView
             for (var i = 0; i < 6; i++)
             {
                 var button = this.GetControl<Button>($"TabContent/{name}/Items/Item{i}");
+                _itemIcons.Add((name, button.Text.Split(" x")[0]), button.GetNode<TextureRect>("Icon"));
                 Wire($"TabContent/{name}/Items/Item{i}", () => InspectAsync(button.Text.Split(" x")[0]));
             }
         }
@@ -235,10 +223,7 @@ public class InventoryView : DemoView
     }
     public Task InspectAsync(string item, bool playAnimation = true, CancellationToken token = default)
     {
-        var buttons = this.GetControl<Control>($"TabContent/{Tabs.CurrentName}/Items").GetChildren().OfType<Button>();
-        var button = buttons.Single(b => b.Text.Split(" x")[0] == item);
-        if (!button.Visible) throw new InvalidOperationException("Cannot inspect a hidden item; use the visible inspection action.");
-        return InspectFromAsync(item, button.GetNode<TextureRect>("Icon"), playAnimation, token);
+        return InspectFromAsync(item, _itemIcons[(Tabs.CurrentName!, item)], playAnimation, token);
     }
     private Task InspectFromAsync(string item, TextureRect icon, bool playAnimation = true, CancellationToken token = default)
     {
@@ -337,7 +322,7 @@ public class ConfirmView : DialogNode<bool>
     private void Wire(string name, Action action)
     {
         var button = this.GetControl<Button>($"Center/Panel/Margin/Content/{name}");
-        void Handler() => DemoApp.Instance.TrackAction(action);
+        void Handler() => action();
         button.Pressed += Handler; _disconnect.Add(() => button.Pressed -= Handler);
     }
     protected override Task OnInitializeAsync(CancellationToken token)
@@ -353,14 +338,4 @@ public class ConfirmView : DialogNode<bool>
     {
         foreach (var disconnect in _disconnect) disconnect(); return Task.CompletedTask;
     }
-}
-
-// Reusable lifecycle behavior on basic embedded Nodes, without empty View subclasses.
-public sealed class PageActivity : NodeLifecycle
-{
-    public int Activations { get; private set; }
-    public bool Running { get; private set; }
-    public override void Activated(StateChangeContext context) { Running = true; Activations++; GD.Print($"Page {context.Node.Name} resume ({context.Operation.Reason})"); }
-    public override void Deactivated(StateChangeContext context) { Running = false; GD.Print($"Page {context.Node.Name} pause ({context.Operation.Reason})"); }
-    public override Task DisposeAsync(UINode node) { Running = false; return Task.CompletedTask; }
 }

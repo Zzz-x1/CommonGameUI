@@ -11,7 +11,7 @@
 | 游戏入口 | 操作 | 展示的框架行为 |
 | --- | --- | --- |
 | Camp overview | 查看营地主菜单，返回主界面 | 项目自行定义菜单与容器，不依赖默认 HUD/Overlay |
-| Preferences | 调整画质、音量或灵敏度，按名称切换三个标签 | 内嵌基础 Node + PageActivity；不加载/克隆；控件与会话偏好保留 |
+| Preferences | 调整画质、音量或灵敏度，按名称切换三个标签 | 内嵌基础 Node；不加载/克隆；控件与会话偏好保留 |
 | Backpack | 重复点击入口；Equipment/Materials 切换，点物品格或 Inspect，收藏后返回 | 单实例窗口外壳，重复打开不创建或重播；内部栈保留原背包与选中 Tab |
 | Stow backpack | 在背包或详情/手记页收起，再点击 Backpack | Hide 保留完整实例、控件和内部历史；恢复时不重新初始化，隐藏期间预览暂停 |
 | Read field notes | 从物品详情查看手记，选择 Return to backpack | PopTo 返回原背包，跳过详情页恢复，并释放详情和手记；Return to item details 仍为单步 Pop |
@@ -19,13 +19,13 @@
 | Compare relics | 打开两张藏品窗口，分别关闭 | 注册明确标记 Multiple，独立多实例，只关闭目标对象 |
 | Return to camp | 可再开一层确认；按钮或点击窗口外部取消，再结束外层 | 默认共享一张遮罩，位于顶层窗口下；外部点击返回正常 false；只有顶部交互，焦点逐层恢复 |
 
-背包的 Inspection time 只在选中页面有效激活时更新：详情覆盖或模态阻挡时暂停，返回后继续。阶段、原因、实例 ID 输出普通 Godot 日志，不设专门诊断面板。偏好和收藏由项目 `GameUiState` 保存，跨页面重建保留；只是本地 UI 会话数据，未接入真实渲染设置、磁盘存档或 Gameplay。
+背包的 Inspection time 只在选中页面有效激活时更新：详情覆盖或模态阻挡时暂停，返回后继续。偏好和收藏由项目 `GameUiState` 保存，跨页面重建保留；只是本地 UI 会话数据，未接入真实渲染设置、磁盘存档或 Gameplay。
 
-`Scenes/Preferences/Preferences.tscn` 和背包场景直接包含 Tab 页面，可在 Godot 编辑器开关节点预览，运行时显式选择初始项。页面无需定义空 View 类。`Scripts/Views.cs` 演示业务覆写与处理器组合；原始 Enter/Exit 钩子已迁移为 V2 前置和完成阶段。
+`Scenes/Preferences/Preferences.tscn` 和背包场景直接包含 Tab 页面，可在 Godot 编辑器开关节点预览，运行时显式选择初始项。页面无需定义空 View 类。`Scripts/Views.cs` 只保留业务初始化、生命周期与控件事件；不包含生命周期计数或调试日志。
 
 V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount 挂载 Stack；`Inventory.tscn` 是栈内背包页，包含内嵌 Tab；`Details.tscn` 和 `Provenance.tscn` 是多级查看页面。同一 Node 不在两个容器中复用。Camp overview 或切换 Preferences 会隐藏背包外壳；Preferences 自身仍按正常关闭重建。隐藏背包只保留本次 UI 会话，不是磁盘存档。Close 与下一次创建的验证位于自动测试，游戏界面不添加技术清理按钮。
 
-初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页挂处理器时先构造 `UINode`、同步 `AddLifecycle`，再绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
+初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页直接构造 `UINode` 并绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
 
 转场：项目默认 Fade，背包列表与详情使用物品图标连续展开/缩回，列表和详情文字分阶段淡出/淡入；涉及手记时两侧保留原有淡入淡出。窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包内容。
 
@@ -53,40 +53,22 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Partner
 ```
 
-自测覆盖原有 19 场景，以及 Partner 图像展开/返回与失败恢复两类，共 21 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (21 scenarios)`，退出 0。Partner 断言采样两种不同物品纹理、实际矩形插值、源/目标图像不重复、临时图像不截获输入、进入/返回取消、观察回调原始 IOException、失败后历史恢复和即时显示。既有验证继续检查显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。Partner 截图模式生成列表、展开中、详情和返回中四张原生截图，输出到忽略的 artifacts。
+自测覆盖原有 19 场景，以及 Partner 图像展开/返回与失败恢复两类，加上异步错误观察共 22 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (22 scenarios)`，退出 0。Partner 断言采样两种不同物品纹理、实际矩形插值、源/目标图像不重复、临时图像不截获输入、进入/返回取消、观察回调原始 IOException、失败后历史恢复和即时显示。既有验证继续检查显示对象没有克隆、窗口与内页实例保持、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。Partner 截图模式生成列表、展开中、详情和返回中四张原生截图，输出到忽略的 artifacts。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
-故障夹具分别运行，必须打印原始异常并退出 1：
+正常 Demo 不捕获和手工处理运行异常：同步事件直接调用业务代码，异步任务在帧入口读取已经完成的结果，原始异常直接交给 Godot 报错。没有自定义错误日志、强制退出、异常包装或失败保底。
 
-```powershell
-./scripts/Run-Demo.ps1 -Headless -Failure tab
-./scripts/Run-Demo.ps1 -Headless -Failure duplicate
-./scripts/Run-Demo.ps1 -Headless -Failure load
-./scripts/Run-Demo.ps1 -Headless -Failure lifecycle
-./scripts/Run-Demo.ps1 -Headless -Failure transition
-./scripts/Run-Demo.ps1 -Headless -Failure entered
-./scripts/Run-Demo.ps1 -Headless -Failure state
-./scripts/Run-Demo.ps1 -Headless -Failure cleanup
-./scripts/Run-Demo.ps1 -Headless -Failure window-parameters
-./scripts/Run-Demo.ps1 -Headless -Failure window-state
-./scripts/Run-Demo.ps1 -Headless -Failure stack-target
-./scripts/Run-Demo.ps1 -Headless -Failure return-cleanup
-./scripts/Run-Demo.ps1 -Headless -Failure transition-target
-./scripts/Run-Demo.ps1 -Headless -Failure backdrop
-./scripts/Run-Demo.ps1 -Headless -Failure backdrop-dismiss
-./scripts/Run-Demo.ps1 -Headless -Failure selector
-./scripts/Run-Demo.ps1 -Headless -Failure selector-null
-./scripts/Run-Demo.ps1 -Headless -Failure selector-cycle
-./scripts/Run-Demo.ps1 -Headless -Failure animation-parameters
-./scripts/Run-Demo.ps1 -Headless -Failure animation-progress
-./scripts/Run-Demo.ps1 -Headless -Failure animation-observer
-./scripts/Run-Demo.ps1 -Headless -Failure animation-interrupted
-```
+业务代码集中于 `Scripts`，实际引擎自测集中于 `Tests/DemoApp.Tests.cs`，显式截图模式集中于 `Tools/DemoApp.Development.cs`。测试中的预期取消/异常捕获只用于断言结果，不参与普通游戏 UI 流程。原 `-Failure` 故障注入入口和 FailureView 已删除；错误契约由核心测试与引擎自测验证。
 
-同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
+## 验证记录：2026-10-02 / Demo 简化
 
-## 验证记录：2026-10-02 / Partner Screen Demo 分支
+- 业务入口由941 行缩减为 144 行；移出自测和截图流程，删除故障注入分支、生命周期计数和仅用于打印状态的 PageActivity。
+- 伙伴动画直接使用既定 View/场景引用，删除类型、纹理匹配、有限值及尺寸的重复检查；创建时就持有确定的临时图像，恢复时直接移除并恢复原表现，不维护手工异常汇总或空对象跳过。
+- 构建 0 警告、0 错误；核心 127 项测试通过；Godot headless 与原生 OpenGL 自测通过 22 场景，新增异步错误原样从帧入口抛出的断言。
+- 伙伴原生截图已检查，展开、返回效果保留。仍未验证所有分辨率、实体输入设备与导出平台。
+
+## 历史验证记录：2026-10-02 / Partner Screen Demo 分支
 
 - 构建 0 警告、0 错误；核心与生成器 127 项测试通过，未修改核心或引擎适配 API。
 - Godot 4.7.2 .NET headless 和原生 OpenGL 自测均通过 21 场景；新增两类 Partner 场景，故意取消与故意回调失败仍记录并断言原始异常。
