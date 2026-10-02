@@ -101,8 +101,11 @@ public partial class DemoApp
         model.Buy("mat0", 2, true);
         Pass(model.State.Counts["purchase"] == purchases + 1 && model.State.Inventory["mat6"] == materials + 6, "bundle is one committed purchase");
         Store.Change(s => s.FullMotion = false);
-        await EnterAsync();
+        await MouseClickAsync(_login!.GetControl<Button>("LoginCard/Enter"));
         Pass(Shell.Pages.Current == Shell.Home && Shell.Home.IsInteractive, "client entry");
+        await MouseClickAsync(Shell.GetControl<Button>("Bottom/Shop"));
+        Pass(Shell.Pages.Current is ShopView, "mouse reaches lobby navigation through empty mounts");
+        await MouseClickAsync(Shell.GetControl<Button>("Bottom/Home"));
         foreach (var module in new[]
         {
             "Characters",
@@ -267,6 +270,23 @@ public partial class DemoApp
         GD.Print("CLIENT RESTART TESTS PASSED: 4");
         await _ui.DisposeAsync();
         GetTree().Quit();
+    }
+
+    private async Task MouseClickAsync(Button button)
+    {
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var position = button.GetGlobalTransformWithCanvas() * (button.Size / 2);
+        int before = _tasks.Count;
+        foreach (bool pressed in new[] { true, false })
+            GetViewport().PushInput(new InputEventMouseButton
+            {
+                Position = position,
+                GlobalPosition = position,
+                ButtonIndex = MouseButton.Left,
+                Pressed = pressed
+            }, true);
+        Check(_tasks.Count > before, $"鼠标点击未到达 {button.GetPath()}");
+        await Task.WhenAll(_tasks.Skip(before).ToArray());
     }
 
     private sealed class TestLog : IUILog
