@@ -1353,3 +1353,18 @@ Demo 使用真实设置、偏好、背包与手记流程：设置采用上移/�
 - **22 个独立故障夹具**均记录预期异常并退出 1；原 18 项加 animation-parameters、animation-progress、animation-observer、animation-interrupted。分别覆盖无效配置、非法报告、观察回调原始 IOException 和编辑器动画提前停止；没有默认配方回退、静默成功或无观察的异步失败。
 - 原生截图检查发现动态 VBoxContainer 的位移动画曾因保存绝对 Position 破坏锚点布局，已按 11.3 重构为锚点偏移播放/恢复，并加入手记位置归零、大小与挂载匹配的实际引擎回归断言。设置、手记、偏好最终原生截图已目视检查；截图、日志、构建产物和工具不入库。
 - 仅核对 USN 官方文档/源码，未运行其 Unity 项目；没有交付 Unity Timeline/Inspector 适配。未验证所有分辨率、实体手柄、导出平台或其他引擎；不将 Godot 验收当作所有后端能力已完成。资源加载仍同步。
+
+### 11.6 USN Partner Screen 原理与场景调研（2026-10-02）
+
+Partner Screen 表示本次转场中当前动画节点的另一侧页面，由容器流程传递，不是永久绑定的父节点或另一个独立屏幕类型。Page A 推进 B 时，B 入场的伙伴是 A，A 退场的伙伴是 B；返回时交换进入/退出角色。无对应页面时伙伴为 null。Modal 也传递伙伴，但不能据此推断双方都播放动画：Modal.cs 中 Push 仅新弹窗播放入场，Pop 仅关闭弹窗播放退场，底层弹窗仍可提供几何参照。
+
+能力分为两层：
+
+- 条件选择：使用伙伴 Identifier 选择本节点动画，默认标识来自 prefab 名称，也可显式设置；USN 配置支持伙伴标识正则，多个条目自上而下匹配。同一详情页从列表进入或从其他页面进入，可选择不同表现。
+- 跨页面动画：播放前调用 SetPartner，再 Setup 本节点；自定义 TransitionAnimationObject/TransitionAnimationBehaviour 通过 PartnerRectTransform 访问对方根 RectTransform，自行寻找需要的子元素并计算动画。官方 README 演示前一弹窗的角色图片放大并连续过渡到下一弹窗。USN 不会仅凭伙伴引用自动匹配图片、转换子元素坐标或完成共享元素动画；这些表现由项目自定义实现。
+
+游戏场景包括角色列表头像展开到角色详情、背包物品图标展开到物品详情，以及详情关闭时缩回来源卡片。前两者是对官方图片连续过渡机制的项目应用建议，不是新增通用业务节点或本次实现范围。实际实现需要在统一坐标系采样两侧元素位置/大小，处理重复图片显隐，并在结束、取消、失败时恢复自定义动画改动。
+
+本工程已有 TransitionContext.Source/Target/Node/Element，可取得另一侧 `ReferenceEquals(context.Node, context.Source) ? context.Target : context.Source`；Transitions.Select 承担条件选择，自定义 IUITransition/IUITransitionRun 承担跨节点表现。当前未内置自动共享元素匹配/插值系统，也不因本次问答新增 PartnerScreen 类型或第二套选择 API。
+
+来源：[USN 条件选择说明](https://github.com/Haruma-K/UnityScreenNavigator#change-transition-animation-according-to-partner-screen)、[伙伴交互动画说明](https://github.com/Haruma-K/UnityScreenNavigator#implement-interactive-animation-with-partner-screen)、[Page.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs)、[Modal.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Modal/Modal.cs)、[TransitionAnimationObject.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/TransitionAnimationObject.cs)。本次为官方文档与源码静态核对，未运行 USN；README 所链 CharacterImageModalTransitionAnimation 示例源码当前返回 404，未将其作为已审计实现引用。
