@@ -65,13 +65,14 @@ public sealed class MemoryResource(TestHost host) : IUIResource
 
 public class CounterView : UINode
 {
-    public int Initialized, Entered, Exited;
+    public int Initialized, Entered, Exited, Activated;
     public Exception? InitializeFailure, EnterFailure, DisposeFailure;
     protected override Task OnInitializeAsync(CancellationToken token)
     { Initialized++; if (InitializeFailure != null) throw InitializeFailure; return Task.CompletedTask; }
     protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
     { Entered++; if (EnterFailure != null) throw EnterFailure; return Task.CompletedTask; }
     protected override Task OnExitingAsync(LifecycleContext context, CancellationToken token) { Exited++; return Task.CompletedTask; }
+    protected override void OnActivated(StateChangeContext context) => Activated++;
     protected override Task OnDisposeAsync() { if (DisposeFailure != null) throw DisposeFailure; return Task.CompletedTask; }
 }
 

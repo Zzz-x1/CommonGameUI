@@ -87,6 +87,7 @@ public partial class DemoApp
     {
         await RunAdapterSelfTestAsync();
         await RunResourceSelfTestAsync();
+        await RunContainerReturnSelfTestAsync();
         Check(_ui.Root.Children.Count == 4, "Only project-declared mounts should exist.");
         await OpenPreferencesAsync();
         var tabs = (PreferencesView)_scenario!;
@@ -245,9 +246,67 @@ public partial class DemoApp
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (23 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (25 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
+    }
+
+    private async Task RunContainerReturnSelfTestAsync()
+    {
+        await OpenJournalAsync(); var journal = (JournalView)_scenario!;
+        await journal.ToggleAsync("Tasks");
+        var page = journal.Tabs.Current!; var note = journal.GetControl<TextEdit>("Pages/Tasks/Note");
+        note.Text = "Meet the merchant before dawn.";
+        journal.GetControl<CheckButton>("Pages/Tasks/Supplies").ButtonPressed = true;
+        var count = journal.GetControl<Control>("Pages").GetChildCount();
+        await journal.ToggleAsync("Tasks");
+        Check(journal.Tabs.Current == null && !page.IsVisible && page.State == NodeState.Ready &&
+            journal.GetControl<Label>("Prompt").Visible, "Journal did not fold its current page.");
+        await journal.ToggleAsync("Map"); journal.GetControl<HSlider>("Pages/Map/Zoom").Value = 130;
+        await journal.ToggleAsync("Map"); await journal.ToggleAsync("Tasks");
+        Check(ReferenceEquals(journal.Tabs.Current, page) && note.Text == "Meet the merchant before dawn." &&
+            journal.GetControl<CheckButton>("Pages/Tasks/Supplies").ButtonPressed &&
+            journal.GetControl<HSlider>("Pages/Map/Zoom").Value == 130 &&
+            journal.GetControl<Control>("Pages").GetChildCount() == count, "Journal recreated pages or lost their values.");
+        GD.Print("PASS journal folding: no selection, retained notes/map/controls, reopen embedded page by name");
+
+        foreach (var mode in new[] { ModalBackdropMode.Shared, ModalBackdropMode.PerModal })
+        {
+            Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), mode);
+            var shop = await Modals.OpenShopViewAsync();
+            var noteField = shop.GetControl<LineEdit>("Center/Panel/Margin/Content/Note"); noteField.Text = "Hold this bow for Lyra.";
+            var detailsButton = shop.GetControl<Button>("Center/Panel/Margin/Content/Details"); detailsButton.GrabFocus();
+            var display = shop.GetControl(); var backdrop = Modals.CurrentBackdrop;
+            var item = await Modals.OpenShopItemViewAsync(); var itemTransition = item.TransitionState;
+            var purchase = await Modals.OpenPurchaseViewAsync();
+            var returning = purchase.ConfirmAsync();
+            var visibleDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Count(d => !d.IsQueuedForDeletion() && d.Visible);
+            Check(!item.IsVisible && !item.GetControl().Visible && !item.IsActive && shop.IsVisible && !shop.IsInteractive &&
+                visibleDims == (mode == ModalBackdropMode.Shared ? 1 : 2), "Return animation exposed an intermediate modal or its backdrop.");
+            await returning;
+            var remainingDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Where(d => !d.IsQueuedForDeletion()).ToArray();
+            Check(ReferenceEquals(Modals.Current, shop) && shop.IsInteractive && ReferenceEquals(shop.GetControl(), display) &&
+                ReferenceEquals(Modals.CurrentBackdrop, backdrop) && GetViewport().GuiGetFocusOwner() == detailsButton,
+                "Batch return lost merchant instance, backdrop, input or original focus.");
+            Check(item.State == NodeState.Disposed && purchase.State == NodeState.Disposed &&
+                ReferenceEquals(item.TransitionState, itemTransition) && noteField.Text == "Hold this bow for Lyra." &&
+                shop.Orders == 1 && remainingDims.Length == 1 && remainingDims[0].Visible,
+                "Batch return replayed intermediate transition, lost merchant data or left extra backdrops.");
+
+            using var resources = await _ui.PreloadAsync<ConfirmView>();
+            var waiting = Modals.ShowConfirmViewAsync(playAnimation: false);
+            var unresolved = (ConfirmView)Modals.Current!;
+            await Modals.CloseToAsync(shop, playAnimation: false); await ExpectCancellationAsync(waiting);
+            Check(unresolved.State == NodeState.Disposed && Modals.Current == shop, "Batch close left a result waiter or closed the target.");
+            var completed = Modals.ShowConfirmViewAsync(playAnimation: false);
+            ((ConfirmView)Modals.Current!).Complete(true);
+            await Modals.CloseToAsync(shop, playAnimation: false);
+            Check(await completed, "Batch close discarded a submitted dialog result.");
+            await Modals.CloseAsync(shop);
+            Check(Modals.Current == null && Modals.CurrentBackdrop == null && _menu.IsInteractive, "Merchant close retained modal input or backdrop.");
+        }
+        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track));
+        GD.Print("PASS merchant batch return: shared/per-modal backdrop, original focus/data, cleanup and result waiters");
     }
 
     private async Task RunTransitionSelectionSelfTestAsync()

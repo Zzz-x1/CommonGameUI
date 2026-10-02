@@ -44,7 +44,7 @@ theme_override_constants/separation = 28
 [node name="Sidebar" type="VBoxContainer" parent="Frame/Layout/Workspace"]
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 10
 [node name="Caption" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
@@ -61,6 +61,17 @@ text = "Settings"
 [node name="Instances" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
 text = "Compare relics"
+[node name="Destinations" type="HBoxContainer" parent="Frame/Layout/Workspace/Sidebar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+[node name="Shop" type="Button" parent="Frame/Layout/Workspace/Sidebar/Destinations"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Merchant"
+[node name="Journal" type="Button" parent="Frame/Layout/Workspace/Sidebar/Destinations"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Journal"
 [node name="Confirm" type="Button" parent="Frame/Layout/Workspace/Sidebar"]
 layout_mode = 2
 text = "Return to camp"
@@ -74,9 +85,7 @@ mouse_filter = 2
 [node name="Note" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
-text = "Northern frontier
-Chapter II / Quiet camp
-No gameplay simulation"
+text = "Northern frontier / Quiet camp"
 [node name="Credit" type="Label" parent="Frame/Layout/Workspace/Sidebar"]
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2

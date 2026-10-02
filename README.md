@@ -89,7 +89,15 @@ await stack.PopToAsync(first); // 跳过中间页，恢复 first，等待移除�
 
 窗口参数是创建参数：新建使用 `OpenAsync<T>(args)`，已有参数化单实例重开省略 args 或传 null，更新数据调用业务方法。已有单实例再次带非 null 参数 Open、Hide 已隐藏对象、Show 已显示对象均报错。`PopToAsync` 仅接收当前栈中更早的实例，不能返回当前项；中间隐藏项不重播显示生命周期。
 
-`ModalContainerNode.OpenAsync<T>` / `CloseAsync(node)` 处理模态窗口。`ShowDialogAsync<T, TResult>` 等待 `DialogNode<TResult>.Complete(result)`，关闭成功后返回结果。
+`ModalContainerNode.OpenAsync<T>` / `CloseAsync(node)` 处理模态窗口。`CloseToAsync(target)` 一次返回具体下层实例，不逐层激活中间弹窗。`ShowDialogAsync<T, TResult>` 等待 `DialogNode<TResult>.Complete(result)`，关闭成功后返回结果；外部关闭未回答的弹窗以取消结束，已回答的弹窗等待关闭清理后返回结果，不重复关闭。
+
+```csharp
+await modals.CloseToAsync(shop); // 保留原商店，清理其上的详情和确认。
+await tabs.HideAsync();         // 清空当前选中，保留全部内嵌页面。
+await tabs.SwitchAsync("Map"); // 再次展开原实例。
+```
+
+批量返回仅当前顶层执行退出生命周期和动画，中间项暂时隐藏、提交后销毁；目标恢复输入与原焦点。Tab 收起执行当前项的退出生命周期，保留控件值；无当前项或无效返回目标直接报错。提交前失败恢复原状态，提交后通知/清理失败保留已提交状态并传播原异常。实际契约及验收见设计文档第 10.4、12.2 节。
 
 业务类可以使用 View 命名。声明 `[UIResource("res://...")]` 后，引用生成器并 `using UIFramework.Generated`，可调用 `ui.RegisterGeneratedUI()` 和生成的 `PushInventoryViewAsync` 等方法。属性可设置 `WindowMode = WindowInstanceMode.Multiple`。`UINode<TArgs>` 的窗口调用同时生成带参创建、无参重开重载；生成代码仍调用同一核心 API。自定义构造通过 `ui.Register(() => new MyNode(service), resource)` 手写接入。
 

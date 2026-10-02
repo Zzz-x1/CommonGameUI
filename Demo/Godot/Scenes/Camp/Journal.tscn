@@ -1,0 +1,86 @@
+[gd_scene format=3]
+[node name="Journal" type="VBoxContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 18
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 27
+text = "RANGER'S FIELD JOURNAL"
+[node name="Description" type="Label" parent="."]
+layout_mode = 2
+text = "Open a page. Press its tab again to fold it away."
+[node name="Buttons" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+[node name="Map" type="Button" parent="Buttons"]
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "Frontier map"
+[node name="Tasks" type="Button" parent="Buttons"]
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "Expedition tasks"
+[node name="Prompt" type="Label" parent="."]
+layout_mode = 2
+text = "The trail can wait. Choose a journal page when you are ready."
+[node name="Pages" type="Control" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 330)
+mouse_filter = 2
+[node name="Map" type="VBoxContainer" parent="Pages"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+theme_override_constants/separation = 20
+[node name="Title" type="Label" parent="Pages/Map"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "THE NORTHERN FRONTIER"
+[node name="Trail" type="Label" parent="Pages/Map"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "NORTHWOODS\n     │\nOLD WATCHTOWER ───── RIVER CROSSING\n     │\nRANGER CAMP / You are here"
+[node name="ZoomLabel" type="Label" parent="Pages/Map"]
+layout_mode = 2
+text = "Map scale"
+[node name="Zoom" type="HSlider" parent="Pages/Map"]
+layout_mode = 2
+min_value = 50.0
+max_value = 150.0
+value = 100.0
+[node name="Tasks" type="VBoxContainer" parent="Pages"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+theme_override_constants/separation = 18
+[node name="Title" type="Label" parent="Pages/Tasks"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "BEFORE THE NEXT EXPEDITION"
+[node name="Supplies" type="CheckButton" parent="Pages/Tasks"]
+layout_mode = 2
+text = "Review camp supplies"
+[node name="Route" type="CheckButton" parent="Pages/Tasks"]
+layout_mode = 2
+text = "Mark the river crossing"
+[node name="Note" type="TextEdit" parent="Pages/Tasks"]
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 150)
+placeholder_text = "Your expedition notes..."

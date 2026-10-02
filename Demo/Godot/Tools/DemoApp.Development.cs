@@ -10,6 +10,18 @@ public partial class DemoApp
     private async Task RunDevelopmentModeAsync()
     {
         if (OS.GetCmdlineUserArgs().Contains("--self-test")) await RunSelfTestAsync();
+        else if (OS.GetCmdlineUserArgs().Contains("--capture-camp"))
+        {
+            await OpenJournalAsync(); var journal = (JournalView)_scenario!;
+            await journal.ToggleAsync("Tasks"); journal.GetControl<TextEdit>("Pages/Tasks/Note").Text = "Meet the merchant before dawn.";
+            await CaptureAsync("journal-tasks.png");
+            await journal.ToggleAsync("Tasks"); await CaptureAsync("journal-folded.png");
+            var shop = await Modals.OpenShopViewAsync();
+            shop.GetControl<LineEdit>("Center/Panel/Margin/Content/Note").Text = "Hold this bow for Lyra.";
+            await Modals.OpenShopItemViewAsync(); var purchase = await Modals.OpenPurchaseViewAsync();
+            await CaptureAsync("merchant-purchase.png"); await purchase.ConfirmAsync(); await CaptureAsync("merchant-returned.png");
+            await _ui.DisposeAsync(); GetTree().Quit();
+        }
         else if (OS.GetCmdlineUserArgs().Contains("--capture-partner"))
         {
             await CapturePartnerAsync();

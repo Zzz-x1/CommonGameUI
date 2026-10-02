@@ -17,9 +17,13 @@
 | Read field notes | 从物品详情查看手记，选择 Return to backpack | PopTo 返回原背包，跳过详情页恢复，并释放详情和手记；Return to item details 仍为单步 Pop |
 | Settings | 打开设置，进入画质页，返回；关闭按钮或点击窗口外部关闭 | 内容缩放淡入、内部页面淡入淡出；容器管理遮罩，恢复输入/焦点 |
 | Compare relics | 打开两张藏品窗口，分别关闭 | 注册明确标记 Multiple，独立多实例，只关闭目标对象 |
+| Merchant | 输入商店备注，查看 Oakheart Bow，Review order，再确认；取消则单步回详情 | CloseTo 一次回原商店，保留备注、焦点和订单展示；中间详情不重新激活，遮罩只保留目标层 |
+| Journal | 点击 Frontier map / Expedition tasks；再点击当前标签收起，重新点击展开 | Hide 清空选中，保留内嵌页面、任务备注/勾选和地图缩放；窗口外壳继续显示 |
 | Return to camp | 可再开一层确认；按钮或点击窗口外部取消，再结束外层 | 默认共享一张遮罩，位于顶层窗口下；外部点击返回正常 false；只有顶部交互，焦点逐层恢复 |
 
 背包的 Inspection time 只在选中页面有效激活时更新：详情覆盖或模态阻挡时暂停，返回后继续。偏好和收藏由项目 `GameUiState` 保存，跨页面重建保留；只是本地 UI 会话数据，未接入真实渲染设置、磁盘存档或 Gameplay。
+
+商店的订单展示是纯 UI 会话数据，不操作真实货币或背包。日志页面数据在收起/切换期间保留；离开 Journal 会关闭该窗口，下次进入重建。`Scripts/CampViews.cs` 管理业务事件；`Scenes/Camp/Journal.tscn` 内嵌两个基础 Node 页面，三个商店场景独立加载，继续复用原已许可素材。
 
 `Scenes/Preferences/Preferences.tscn` 和背包场景直接包含 Tab 页面，可在 Godot 编辑器开关节点预览，运行时显式选择初始项。页面无需定义空 View 类。`Scripts/Views.cs` 只保留业务初始化、生命周期与控件事件；不包含生命周期计数或调试日志。
 
@@ -51,9 +55,10 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Notes
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Dialogs
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Partner
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Camp
 ```
 
-自测覆盖原有 22 场景及新增资源持有流程，成功输出 `GODOT DEMO SELF-TEST PASSED (23 scenarios)`，退出 0。资源验证检查共享加载不创建实例、预加载释放不影响开窗、关闭最后实例归还资源及 Context 回收剩余预加载。Partner 断言采样两种不同物品纹理、实际矩形插值、源/目标图像不重复、临时图像不截获输入、进入/返回取消、观察回调原始 IOException、失败后历史恢复和即时显示。既有验证继续检查显示对象没有克隆、窗口与内页实例保持、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；关闭动画仍可能等待资源，就绪后的即时显示仍完成生命周期、输入交接和清理。Partner 截图模式生成列表、展开中、详情和返回中四张原生截图，输出到忽略的 artifacts。
+自测成功输出 `GODOT DEMO SELF-TEST PASSED (25 scenarios)`，退出 0。新增日志收起/重新展开及商店批量返回两类，检查控件值/实例、两种遮罩、原焦点/备注及结果等待。资源验证检查共享加载不创建实例、预加载释放不影响开窗、关闭最后实例归还资源及 Context 回收剩余预加载。Partner 验证图像插值、恢复和原始失败。既有验证继续检查窗口/历史/Tab 实例保持、中间项不重新进入及最终销毁；关闭动画仍可能等待资源，就绪后的即时显示仍完成生命周期、输入交接和清理。Partner 和 Camp 各输出四张原生截图至忽略的 artifacts。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
@@ -61,7 +66,15 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 
 业务代码集中于 `Scripts`，实际引擎自测集中于 `Tests/DemoApp.Tests.cs`，显式截图模式集中于 `Tools/DemoApp.Development.cs`。测试中的预期取消/异常捕获只用于断言结果，不参与普通游戏 UI 流程。原 `-Failure` 故障注入入口和 FailureView 已删除；错误契约由核心测试与引擎自测验证。
 
-## 验证记录：2026-10-02 / 资源流程与预加载
+## 验证记录：2026-10-02 / 容器收起与返回
+
+- 构建 0 警告、0 错误，核心/生成器 152 项通过；Godot headless 与原生 OpenGL 均通过 25 场景并退出 0。
+- 日志收起清空选中，页面/笔记/勾选/地图值保持。商店确认直接回原实例，输入/焦点一次恢复；Shared/PerModal 最终仅保留商店遮罩，结果等待未回答取消、已回答正常返回。
+- 返回动画前暂时隐藏中间弹窗及其逐层遮罩，不让中间页面露出；核心取消测试验证恢复原状态。提交后通知/清理失败仍清理全部移除项，传播原异常。
+- 四张 Camp 原生截图已目视检查，菜单入口紧凑排布，无按钮或内容越界；复用已许可资源，没有新增下载素材。普通业务不捕获运行异常，不添加默认结果/失败降级。
+- 未运行 USN，未验证所有分辨率、实体输入设备、导出平台或其他后端；截图、日志和缓存不提交。
+
+## 历史验证记录：2026-10-02 / 资源流程与预加载
 
 - 构建 0 警告、0 错误，核心/生成器 138 项通过；Godot headless 和原生 OpenGL 均通过 23 场景，退出 0。
 - 菜单预加载背包外壳，开窗后同步归还预加载凭据；内部页面按需取得，Hide 保留实例资源，没有新增缓存面板、技术按钮或人工业务延时。

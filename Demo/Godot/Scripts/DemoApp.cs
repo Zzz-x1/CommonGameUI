@@ -46,6 +46,8 @@ public partial class DemoApp : Control
         Wire("Tabs", OpenPreferencesAsync);
         Wire("Inventory", OpenInventoryAsync);
         Wire("Settings", () => Modals.OpenSettingsWindowViewAsync());
+        Wire("Destinations/Shop", () => Modals.OpenShopViewAsync());
+        Wire("Destinations/Journal", OpenJournalAsync);
         Wire("Instances", OpenCardsAsync);
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", OpenHomeAsync);
@@ -100,6 +102,7 @@ public partial class DemoApp : Control
     }
 
     public Task OpenPreferencesAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenPreferencesViewAsync());
+    public Task OpenJournalAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenJournalViewAsync());
 
     public Task OpenInventoryAsync() => ChangeScenarioAsync(async () =>
     {

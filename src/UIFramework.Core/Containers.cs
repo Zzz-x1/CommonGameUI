@@ -323,6 +323,22 @@ public class TabContainerNode : ContainerNode
         catch (Exception ex) { Context.Report(ex, $"SwitchTab<{typeof(T).Name}> {Name}"); throw; }
     }
 
+    public Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default) =>
+        OperateAsync("HideTab", async ct =>
+        {
+            var current = Current ?? throw new InvalidOperationException("No tab is selected.");
+            var exit = Describe(current, LifecycleReason.Hide, current, null);
+            try { await PrepareChangeAsync(exit, null, ct, playAnimation); ct.ThrowIfCancellationRequested(); }
+            catch (Exception ex)
+            {
+                await Context.CleanupAsync(ex, () => { current.RestoreLocalState(true, true); return Task.CompletedTask; });
+                throw;
+            }
+            CurrentName = null;
+            CompleteChange(exit, current, exit, null, null);
+            return true;
+        }, cancellationToken);
+
     protected override void OnChildRemoved(UINode child)
     {
         var name = _items.FirstOrDefault(pair => ReferenceEquals(pair.Value, child)).Key;
@@ -333,8 +349,14 @@ public class TabContainerNode : ContainerNode
 /// <summary>Topmost modal owns input; this container owns its configured backdrop displays.</summary>
 public class ModalContainerNode : ContainerNode
 {
+    private sealed class ModalRecord(object? focus)
+    {
+        public object? Focus { get; } = focus;
+        // The outcome is shared with result waiters, including failed close attempts.
+        public TaskCompletionSource<Exception?>? CloseAttempt;
+    }
     private readonly List<UINode> _modals = new();
-    private readonly Dictionary<UINode, object?> _focus = new();
+    private readonly Dictionary<UINode, ModalRecord> _records = new();
     private readonly Dictionary<UINode, IUIBackdrop> _backdrops = new();
     private IUIBackdropFactory? _backdropFactory;
     private IUIBackdrop? _sharedBackdrop;
@@ -389,7 +411,7 @@ public class ModalContainerNode : ContainerNode
     {
         foreach (var backdrop in _backdrops.Values.Distinct())
         {
-            backdrop.SetVisible(IsVisible && _modals.Any(n => _backdrops.TryGetValue(n, out var owned) && ReferenceEquals(owned, backdrop)));
+            backdrop.SetVisible(IsVisible && _modals.Any(n => n.IsVisible && _backdrops.TryGetValue(n, out var owned) && ReferenceEquals(owned, backdrop)));
             backdrop.SetInteractive(!_backdropLocked && IsInteractive && ReferenceEquals(backdrop, CurrentBackdrop));
         }
     }
@@ -454,7 +476,7 @@ public class ModalContainerNode : ContainerNode
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
                 throw;
             }
-            _modals.Add(node); _focus.Add(node, focus);
+            _modals.Add(node); _records.Add(node, new ModalRecord(focus));
             if (backdrop != null)
             {
                 _backdrops.Add(node, backdrop);
@@ -474,60 +496,125 @@ public class ModalContainerNode : ContainerNode
     public Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("CloseModal", async ct =>
         {
+            if (node == null) throw new ArgumentNullException(nameof(node));
             if (!ReferenceEquals(node, Current)) throw new InvalidOperationException("Only the current modal can be closed.");
-            var focus = _focus[node];
-            var exit = Describe(node, LifecycleReason.Close, node, _modals.Count > 1 ? _modals[_modals.Count - 2] : null);
+            await CloseRangeAsync(_modals.Count - 1, LifecycleReason.Close, playAnimation, ct);
+            return true;
+        }, cancellationToken);
+
+    public Task CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+        OperateAsync("CloseToModal", async ct =>
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            var index = _modals.IndexOf(target);
+            if (index < 0 || target.State != NodeState.Ready || index == _modals.Count - 1)
+                throw new InvalidOperationException("Target must be a live lower modal of this container.");
+            await CloseRangeAsync(index + 1, LifecycleReason.Return, playAnimation, ct);
+            return true;
+        }, cancellationToken);
+
+    private async Task CloseRangeAsync(int firstRemoved, LifecycleReason reason, bool playAnimation, CancellationToken token)
+    {
+        var removed = _modals.Skip(firstRemoved).Reverse().ToArray();
+        var current = removed[0];
+        var target = firstRemoved == 0 ? null : _modals[firstRemoved - 1];
+        var focus = _records[removed[removed.Length - 1]].Focus;
+        var outcome = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        foreach (var node in removed) _records[node].CloseAttempt = outcome;
+        Exception? failure = null;
+        try
+        {
+            var exit = Describe(current, reason, current, target);
             try
             {
-                await PrepareChangeAsync(exit, null, ct, playAnimation);
-                if (CurrentBackdrop is { } backdrop && (BackdropMode == ModalBackdropMode.PerModal || _modals.Count == 1))
-                    await backdrop.HideAsync(playAnimation, ct);
+                // Reveal the final destination behind the exiting top, not an intermediate modal.
+                foreach (var node in removed.Skip(1)) node.StageVisibility(false);
+                UpdateBackdropInput();
+                await PrepareChangeAsync(exit, null, token, playAnimation);
+                if (CurrentBackdrop is { } backdrop && (BackdropMode == ModalBackdropMode.PerModal || target == null))
+                    await backdrop.HideAsync(playAnimation, token);
+                token.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
-                await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; });
+                foreach (var node in removed)
+                    await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; });
                 if (CurrentBackdrop is { } backdrop)
                     await Context.CleanupAsync(ex, () => { backdrop.Restore(true); return Task.CompletedTask; });
+                await Context.CleanupAsync(ex, () => { UpdateBackdropInput(); return Task.CompletedTask; });
                 throw;
             }
-            _modals.Remove(node); _focus.Remove(node);
-            await FinishCloseAsync(node, () =>
+            // Commit the final history and input owner once. Intermediate modals never activate.
+            _modals.RemoveRange(firstRemoved, _modals.Count - firstRemoved);
+            foreach (var node in removed) _records.Remove(node);
+            Exception? first = null;
+            void Attempt(Action action)
             {
-                Context.SetInputOwner(Current);
-                OrderBackdrops();
-                CompleteChange(exit, node, exit, null, null, () => Context.Host.RestoreFocus(focus));
-            });
-            return true;
-        }, cancellationToken);
+                try { action(); }
+                catch (Exception ex)
+                { Context.Report(ex, "Modal return completion"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex); }
+            }
+            foreach (var node in removed) Attempt(() => node.SetLocalState(false, false));
+            Attempt(() => Context.SetInputOwner(target));
+            Attempt(OrderBackdrops);
+            Attempt(() => CompleteChange(exit, current, exit, null, null, () => Context.Host.RestoreFocus(focus)));
+            foreach (var node in removed)
+            {
+                try { await node.DisposeAsync(); }
+                catch (Exception ex)
+                { Context.Report(ex, "Modal return cleanup"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex); }
+            }
+            if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+        }
+        catch (Exception ex) { failure = ex; throw; }
+        finally
+        {
+            if (failure != null)
+                foreach (var node in removed)
+                    if (_records.TryGetValue(node, out var record) && !(node is IDialogResult dialog && dialog.HasResult))
+                        record.CloseAttempt = null; // A restored, unanswered dialog can still complete normally later.
+            outcome.SetResult(failure);
+        }
+    }
+
+    private static async Task AwaitCloseAsync(ModalRecord record)
+    {
+        var failure = await record.CloseAttempt!.Task;
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
 
     public async Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default)
         where T : DialogNode<TResult>
     {
         var node = await OpenAsync<T>(args, playAnimation, cancellationToken);
+        var record = _records[node];
+        TResult result;
         try
         {
-            var result = await node.WaitForResultAsync(cancellationToken);
-            await CloseAsync(node, playAnimation, cancellationToken);
-            return result;
+            result = await node.WaitForResultAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             Context.Report(ex, $"Dialog {node.Name}");
-            if (node.State == NodeState.Ready)
-                await Context.CleanupAsync(ex, () => CloseAsync(node, playAnimation));
+            await Context.CleanupAsync(ex, () => record.CloseAttempt != null ? AwaitCloseAsync(record) :
+                node.State == NodeState.Ready ? CloseAsync(node, playAnimation) : node.DisposeAsync().AsTask());
             throw;
         }
+        if (record.CloseAttempt != null) await AwaitCloseAsync(record);
+        else if (node.State == NodeState.Ready) await CloseAsync(node, playAnimation, cancellationToken);
+        else await node.DisposeAsync();
+        return result;
     }
 
     protected override void OnChildRemoved(UINode child)
     {
         var ownsInput = ReferenceEquals(Context.InputOwner, child);
-        _focus.TryGetValue(child, out var focus);
-        _modals.Remove(child); _focus.Remove(child);
+        _records.TryGetValue(child, out var record);
+        _modals.Remove(child); _records.Remove(child);
         if (ownsInput)
         {
             Context.SetInputOwner(Current);
-            Context.Host.RestoreFocus(focus);
+            Context.Host.RestoreFocus(record?.Focus);
             Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, Current), continueOnFailure: true);
         }
     }
@@ -552,9 +639,12 @@ public class ModalContainerNode : ContainerNode
     }
 }
 
-public class DialogNode<TResult> : UINode
+internal interface IDialogResult { bool HasResult { get; } }
+
+public class DialogNode<TResult> : UINode, IDialogResult
 {
     private readonly TaskCompletionSource<TResult> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    bool IDialogResult.HasResult => _result.Task.IsCompletedSuccessfully;
 
     public void Complete(TResult result)
     {
@@ -573,6 +663,8 @@ public class DialogNode<TResult> : UINode
         var canceled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = linked.Token.Register(() => canceled.TrySetResult(true));
         await Task.WhenAny(_result.Task, canceled.Task);
+        token.ThrowIfCancellationRequested();
+        if (_result.Task.IsCompletedSuccessfully) return await _result.Task;
         linked.Token.ThrowIfCancellationRequested();
         return await _result.Task;
     }

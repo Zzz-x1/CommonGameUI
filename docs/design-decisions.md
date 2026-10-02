@@ -396,7 +396,7 @@ V1 范围建议、默认规则、开发阶段及验收标准统一维护在 [V1 
 | PanelContainerNode | OpenAsync<T>(args = null, playAnimation = true, cancellationToken = default)、TryGet<T>、HideAsync、ShowAsync、CloseAsync；注册模式决定容器内 Single/Multiple，隐藏保留，关闭销毁 |
 | StackContainerNode | PushAsync<T>(args = null, playAnimation = true, cancellationToken = default)、PopAsync、PopToAsync、Current、History；覆盖保留，返回恢复原实例，移除项销毁 |
 | TabContainerNode | BindAsync(name, node, embeddedElement, token)、SwitchAsync(name, playAnimation = true, cancellationToken = default)、SwitchAsync<T>、Items、CurrentName；仅绑定既有项 |
-| ModalContainerNode | OpenAsync<T>、CloseAsync(node)、ShowDialogAsync<T,TResult>；仅关闭当前模态，持有输入并恢复焦点；V4 增加 ConfigureBackdrop、RequestDismissAsync、CurrentBackdrop |
+| ModalContainerNode | OpenAsync<T>、CloseAsync(node)、CloseToAsync(target)、ShowDialogAsync<T,TResult>；单步关闭或一次返回下层实例，持有输入并恢复焦点；ConfigureBackdrop、RequestDismissAsync、CurrentBackdrop 管理遮罩 |
 | DialogNode<TResult> | 可选结果契约，Complete(result)；普通模态窗口仍可为一般 UINode，不要求继承此类 |
 | GodotUIElement | owned 动态场景与 borrowed 内嵌 Control 句柄；显隐、输入、排序及按所有权销毁 |
 | Source Generator | UIResource 特性生成模块注册、容器直接调用、类型化参数及弹窗结果便利 API |
@@ -1002,7 +1002,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | USN 能力 | 本工程实际对应 | 限制 |
 | --- | --- | --- |
 | Page 历史、逐层返回、返回指定历史项 | Stack Push/Pop/PopTo | 使用具体实例，未复制数量/字符串 ID 全部重载 |
-| 基础 Modal 嵌套和关闭 | Modal Open/Close，额外支持结果等待 | 多层一次返回仍缺失 |
+| 基础 Modal 嵌套和关闭 | Modal Open/Close/CloseTo，额外支持结果等待 | 已支持返回具体下层实例，实际契约见 10.4 |
 | 页面生命周期及外部处理器 | V2 生命周期、AddLifecycle/RemoveLifecycle | 外部处理器执行顺序仍有差距，见 15 |
 | 通用、逐页和自定义转场 | Context/Container/Node 配方继承及自定义执行对象 | 6—11 动画能力已由 V5 与本轮补齐；后端编辑器配置仍待规划 |
 | 伙伴页面参与动画 | TransitionContext.Source/Target、V5 Transitions.Select | 已支持同一函数按阶段、来源/目标和业务状态选择配方 |
@@ -1020,7 +1020,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | --- | --- | --- | --- |
 | 1 | 资源取得、实例创建分离；异步加载与释放 | 已实现 IUIResourceLoader → IUIResource → IUIElement；Godot 后台加载，同步归还持有 | 大型界面按需加载和关闭后归还资源 |
 | 2 | 预加载与显式释放 | 已实现 Context.PreloadAsync<T> 与 UIResourceLease.Dispose | 菜单预备背包/商店资源 |
-| 3 | Modal 一次返回指定下层实例 | 只有顶层 Close | 商品确认后直接回商店 |
+| 3 | Modal 一次返回指定下层实例 | 已实现 CloseToAsync(target)，一次提交，不逐层激活 | 商品确认后直接回商店 |
 | 4 | 临时页不保留历史 | 每次 Push 都保留 | 资源准备页不出现在返回路径 |
 | 5 | 容器整体操作前后回调 | 只有节点生命周期与状态通知 | 外壳统一同步标题/返回按钮 |
 | 6 | 单次操作选择是否播放动画 | V5 已实现容器操作的 playAnimation 选项，生成 API 和遮罩同步透传 | 首次恢复菜单立即显示，之后操作正常动画；不临时改共享配方 |
@@ -1030,7 +1030,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 11 | 转场状态、类型、进度及变化通知 | 本轮补齐 Node 状态/阶段/进度和 TransitionChanged，配方可报告进度 | 窗口动画期间协调外壳装饰/按钮状态；这是运行能力，不能自动视为诊断系统 |
 | 12 | 转场输入控制策略 | 普通容器锁局部，模态临时锁全局；无法配置全部/局部锁及允许转场期交互 | 主内容换页时允许独立侧栏继续交互 |
 | 13 | 更多遮罩策略及时序 | Shared 会移到顶层下，PerModal 每层创建；没有始终位于首层下及动画前/后重排的全套选项 | 某项目希望嵌套弹窗不再暗化底层弹窗，或旧弹窗退出后才移动遮罩 |
-| 14 | 隐藏当前 Tab 项并进入无选中状态 | Tab 只能 Switch；隐藏整个父容器不会清空 Current | 某互斥侧栏收起当前页面，但保留外壳和全部页面实例 |
+| 14 | 隐藏当前 Tab 项并进入无选中状态 | 已实现 HideAsync，清空 Current/CurrentName，保留绑定页面 | 某互斥侧栏收起当前页面，但保留外壳和全部页面实例 |
 | 15 | 外部生命周期处理器顺序 | 业务虚方法先执行，处理器按注册顺序；不能声明先于业务/后于业务及优先级 | 通用数据准备行为先于 View 进入，另一个行为在业务处理后执行 |
 | 16 | 独立资源动态 Tab 项 | 当前 Bind 采用既有实例，没有从注册资源创建项的直接入口 | 项目扩展页面来自独立资源；内嵌 Tab 仍是默认，不替换已有工作流 |
 
@@ -1073,7 +1073,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 ### 10.4 实现与 API 方向
 
-资源流程 1、2 已由用户选择并实施；其余为候选，名称、签名及细节在用户选择后定稿。
+资源流程 1、2、Modal 返回 3 与 Tab 收起 14 已由用户选择并实施；其余为候选，名称、签名及细节在用户选择后定稿。
 
 #### 1、2. 资源流程与预加载（已实现）
 
@@ -1113,17 +1113,28 @@ Godot 资源释放清空此持有对象的 PackedScene 引用，不对引擎可�
 
 Demo 菜单初始化时预加载背包外壳，首次开窗成功后释放预加载句柄；内部背包页/详情仍按需加载，Hide 保留实例与资源。主菜单没有缓存按钮或诊断面板，正常流程不人工延时；延时加载仅用于显式取消测试。实例池、LRU、内存预算不在本次范围。
 
-#### 3. 弹窗一次返回指定实例
+#### 3. 弹窗一次返回指定实例（已实现）
 
-[USN 多层返回](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#pop-multiple-screens-at-once) 同时支持 Page/Modal。本工程 Stack 已有 PopTo，Modal 只有关闭顶层。候选 `await modals.CloseToAsync(shop, token)`，shop 是当前容器中仍存活的下层具体实例；保留目标，移除其上的弹窗。
+[USN 多层返回](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#pop-multiple-screens-at-once) 同时支持 Page/Modal。本工程 Stack 使用 PopTo，Modal 使用 CloseTo；没有照搬数量/ID 等多个重载。
 
-沿用 Open/Close 术语，方法名待定。目标不按类型猜测、不依赖项目全局 ID；不同时堆叠数量、索引、类型、名称等重载。
+```csharp
+Task ModalContainerNode.CloseToAsync(UINode target, bool playAnimation = true,
+    CancellationToken cancellationToken = default);
 
-整体准备/提交一次，中间项不重新进入，输入与焦点只交给最终目标。需明确被移除项的动画和生命周期：USN 中间 Modal 可同时退出；本工程建议可见的被移除项并行退出，隐藏项只清理，最终目标正常恢复，实施前核对现有覆盖可见性语义。
+await modals.CloseToAsync(shop); // 保留这个商店实例，移除其上的弹窗。
+```
 
-Shared 遮罩保留并移到目标下；PerModal 清理被移除层。准备/动画失败保留原栈；提交后清理失败传播原异常并明确已提交。带结果等待的对话框被移除时必须完成或取消等待，协议先定稿，禁止悬挂任务或默认结果伪装业务确认。
+目标必须是同一容器中仍存活的具体下层实例；null、其他容器的节点、已移除/销毁节点或当前顶层均直接报错。不按类型猜测，不使用全局 ID。CloseAsync 仍仅关闭当前项，和 CloseTo 共用关闭范围的实现，不通过循环调用 Close 模拟批量返回。
 
-Demo 使用商店详情/确认的纯 UI 流程，或复用已有嵌套弹窗形成同类场景；无 Gameplay。验证归属错误/已销毁目标、一次交接、两种遮罩、结果等待、失败恢复与提交后清理失败。
+只有当前顶层执行 Exiting/退出动画/Exited；LifecycleReason.Return、Source=原顶层、Target=保留实例，动画 Phase.Exit、Direction.None。中间项暂时隐藏，逐层遮罩同步隐藏，避免顶层淡出时露出被跳过页面；它们不重新激活、不执行 Entering/Entered 或 Exiting/Exited，只在提交后的可见性变化和销毁流程中通知/清理。保留项仅恢复有效激活状态，不重播进入生命周期和动画。
+
+一次提交最终模态列表和输入所有者；焦点采用紧邻目标的被移除项入场前捕获值，直接恢复到目标原来的焦点。准备期取消/失败恢复全部原弹窗可见性、遮罩和原输入所有者，不修改列表。提交后不回滚，结束通知或清理失败仍清理所有移除项，按首个原异常及 UIFailure 附加异常契约传播。提交后的必要清理不会被调用者取消而跳过。
+
+Shared 遮罩保留并移到目标下；PerModal 仅最顶层遮罩播放隐藏动画，被移除的中间遮罩直接隐藏并释放，目标自己的遮罩保留。普通关闭最后项仍隐藏并释放其遮罩。显示和资源持有按节点销毁契约归还。
+
+结果等待契约：未提交结果的 Dialog 被单步/批量关闭或销毁时，ShowDialogAsync 以取消结束，不伪造 false/default；提交过的结果在关闭与全部相关清理完成后返回。明确的调用者取消优先于结果；否则已经提交的结果优先于销毁带来的生命周期取消。ShowDialogAsync 共享正在进行的关闭结果，不重复发起 Close；外部关闭失败传播原异常，等待取消时的清理失败附加到原取消异常。未回答的 Dialog 关闭失败且已恢复时，仍可继续回答并正常关闭；已回答 Dialog 的失败不通过自动重试隐藏。直接销毁同样等待销毁完成。
+
+Demo 使用商店 → 商品详情 → 确认订单 → 原商店的纯 UI 流程，无 Gameplay。确认页使用普通业务 Node，显式调用 CloseTo 后更新保留商店的订单展示，不强制所有确认 UI 都是结果弹窗。结果等待语义由核心及真实引擎自测另外覆盖。
 
 #### 4. 临时页不保留历史
 
@@ -1417,19 +1428,19 @@ ItemPartnerTransition 从 Source/Target 获取另一侧 InventoryView，详情�
 
 ## 12. 下一版候选与当前 USN 覆盖结论（2026-10-02）
 
-用户已选择本节第 1 项，资源流程/预加载已实施；第 2、3 项及其他差距继续待定，不新建版本文档。基于当前 demo/partner-screen-transition 分支代码、USN master README、PageContainer.cs 与 ScreenContainerTransitionHandler.cs 静态核对；未运行 USN。以最小场景/API 和代码简洁规范执行，不为填平功能表自动加入全部候选。
+用户先选择第 1 项，再确认第 2、3 项；资源流程、Modal 返回和 Tab 收起已实施，其他差距继续待定，不新建版本文档。基于当前 demo/partner-screen-transition 分支代码、USN master README、PageContainer.cs 与 ScreenContainerTransitionHandler.cs 静态核对；未运行 USN。以最小场景/API 和代码简洁规范执行，不为填平功能表自动加入全部候选。
 
 结论：常用页面历史、内嵌切换、嵌套弹窗、生命周期和动画主干已有对应能力；尚不能宣称完整覆盖 USN，资源主流程已补齐，容器边界操作及后端便利能力仍有差距。Partner Demo 验证的是现有上下文支持项目自定义伙伴动画，不代表新增自动共享元素系统。Unity Inspector、Timeline、Addressables 没有交付对应 Unity 适配，Godot AnimationPlayer 是不同后端的对应能力；不按方法数量计算覆盖百分比。
 
-当前未完成项继续沿用 10.2 编号：3 Modal 一次返回下层实例；4 不保留历史的临时页；5 容器整体操作通知；12 输入策略；13 更多遮罩策略/时序；14 隐藏当前 Tab 并清空选中；15 生命周期处理器顺序；16 独立资源动态 Tab。除此之外还有后端编辑器配置、已加载 PackedScene 引用便利注册等接入差异。1/2、6—11 已实现，不再重复列为缺失。
+当前未完成项继续沿用 10.2 编号：4 不保留历史的临时页；5 容器整体操作通知；12 输入策略；13 更多遮罩策略/时序；15 生命周期处理器顺序；16 独立资源动态 Tab。除此之外还有后端编辑器配置、已加载 PackedScene 引用便利注册等接入差异。1/2/3、6—11、14 已实现，不再重复列为缺失。
 
 上一轮评估的三项范围及当前状态：
 
 1. **已实施：资源加载与预加载作为同一完整能力交付。** 场景是主菜单提前取得背包/商店资源，玩家打开时再创建页面；加载期间逐帧等待，实例化/初始化仍可能消耗主线程时间，不宣称全部开窗步骤无成本。实际接口、共享/取消/释放及 Godot 限制见 10.4，不新增实例池、LRU、缓存预算或多套策略。
-2. **次选：Modal 返回指定下层实例。** 场景为商店弹窗→商品详情→购买确认，完成后直接回原商店；现有循环 Close 会逐层交接焦点/输入，不能表达一次整体提交。仅保留一个按具体下层实例定位的候选 CloseToAsync，不堆叠数量/索引/字符串等重载；结果弹窗、中间项生命周期与遮罩清理在选定后明确。
-3. **小范围可选：Tab 隐藏当前项。** 场景是互斥侧栏收起内容，但保留外壳与内嵌页面，之后重新选中。隐藏父容器不等于 Current=null；候选 HideAsync 隐藏当前项并清空选中，不销毁页面、不引入历史。没有当前项时的行为须在 API 定稿时明确，不能实现时偷偷保底。
+2. **已实施：Modal 返回指定下层实例。** 商店弹窗→商品详情→购买确认，完成后直接回原商店；CloseToAsync 一次提交并清理跳过项，实际契约见 10.4。
+3. **已实施：Tab 隐藏当前项。** 任务/地图互斥页面收起内容，保留外壳与内嵌页面；HideAsync 清空 Current/CurrentName，没有当前项明确报错，实际契约见 12.2。
 
-本次仅实施第 1 项。临时历史页、容器通知、输入/遮罩策略、处理器顺序、动态 Tab 与编辑器配置继续待定；不将伙伴动画通用化或 Analyzer/诊断系统作为此次默认范围。
+以上三项分两轮实施。临时历史页、容器通知、输入/遮罩策略、处理器顺序、动态 Tab 与编辑器配置继续待定；不将伙伴动画通用化或 Analyzer/诊断系统作为默认范围。
 
 调研来源：[资源加载](https://github.com/Haruma-K/UnityScreenNavigator#loading-screen-resources)、[预加载](https://github.com/Haruma-K/UnityScreenNavigator#preloading)、[多层返回](https://github.com/Haruma-K/UnityScreenNavigator#pop-multiple-screens-at-once)、[Sheet 的隐藏](https://github.com/Haruma-K/UnityScreenNavigator#create-sheet-and-transition)、[其他特性](https://github.com/Haruma-K/UnityScreenNavigator#other-features)、[PageContainer.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)、[ScreenContainerTransitionHandler.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/ScreenContainerTransitionHandler.cs)。初次评估只记录候选；用户随后确认第 1 项，其实施验收如下。
 
@@ -1441,19 +1452,21 @@ ItemPartnerTransition 从 Source/Target 获取另一侧 InventoryView，详情�
 - Demo 菜单预备背包外壳，开窗后释放预加载持有，保留窗口和历史；内部页面按需加载。即时转场测试先预备所需资源，再验证不等待动画；不能把 playAnimation:false 当作同步资源加载保证。原生 Partner 四阶段截图生成成功，详情布局已目视检查。
 - 未运行 USN、实测大资源帧耗时/加载性能、验证全部分辨率、实体手柄、导出平台或其他引擎。Godot 无底层中止接口、实际内存回收边界按 10.4；未增加池化/LRU/缓存预算/编辑器/诊断机制，也未实施本节第 2、3 项。
 
-### 12.2 下一轮范围建议：补齐容器收起与返回（待用户确认）
+### 12.2 容器收起与返回（已确认并实现）
 
-资源迭代之后，用户要求确认下一轮内容。建议只推进上一轮剩余的两项容器能力；本节记录建议，不视为已授权实现，不新建版本文档。
+用户在资源迭代后确认实施上一轮剩余的两项容器能力，不新建版本文档。Modal 实际流程集中于 10.4；Tab 实际流程及本轮验收如下。
 
-| 优先级 | 实际场景与现有缺口 | 最小 API 建议 |
+| 优先级 | 实际场景与此前缺口 | 实际 API |
 | --- | --- | --- |
-| 主项 | 商店弹窗 → 商品详情弹窗 → 购买确认，完成后直接恢复原商店。当前 Modal 只能关闭顶层，项目循环 Close 会逐层恢复中间弹窗的输入、焦点及遮罩 | ModalContainerNode.CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) |
-| 小项 | 任务/地图等互斥侧栏：点击当前标签收起内容，保留外壳与所有内嵌页面，之后按名称展开。隐藏父容器仍保留 Current，不能表达无选中状态 | TabContainerNode.HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default) |
+| 主项 | 商店弹窗 → 商品详情弹窗 → 购买确认，完成后直接恢复原商店。此前循环 Close 会逐层恢复中间弹窗的输入、焦点及遮罩 | ModalContainerNode.CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) |
+| 小项 | 任务/地图等互斥页面：点击当前标签收起内容，保留外壳与所有内嵌页面，之后按名称展开。隐藏父容器仍保留 Current，不能表达无选中状态 | TabContainerNode.HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default) |
 
-Modal 建议按同一容器中存活的具体下层实例定位，保留目标、关闭其上的所有弹窗，一次提交最终输入/焦点，不逐层激活中间项；Shared/PerModal 遮罩及资源持有同步清理。无效目标直接报错，不新增数量/索引/类型/名称重载。必须同步审查 ShowDialogAsync 的自动 Close 和结果等待契约：直接销毁结果弹窗不能遗留等待，也不能伪造默认业务结果；具体完成/取消行为及取消/清理失败时的提交边界在实施前定稿，不能只加循环包装现有 Close。
+Modal 和结果等待契约见 10.4 第 3 项。CloseAsync 与 CloseToAsync 共用范围关闭，结果等待共享关闭结果；没有循环关闭、旧接口兼容层或默认业务结果。
 
-Tab 建议只退出当前项并清空 Current/CurrentName，保留绑定项和控件值；之后继续使用 SwitchAsync(string)。无当前项时明确报错，避免静默跳过；不增加空白页面、历史或第二套选择对象。
+Tab.HideAsync 只退出当前项，LifecycleReason.Hide、Source=当前项、Target=null、Phase.Exit。准备/动画成功后清空 Current/CurrentName，发布退出与有效状态通知，保留全部绑定项、控件和资源。之后继续使用 SwitchAsync(string) 重新展开原实例，重新执行进入生命周期，不重复初始化。无当前项时直接报错；prepare/播放失败或提交前取消恢复原选中，提交后的通知失败保留无选中状态并传播原异常，不回滚或静默成功。没有空白页面、历史或第二套选择对象。
 
-Demo 同步增加纯 UI 的商店 → 商品详情 → 确认 → 返回原商店流程，以及侧栏收起/重新展开流程，不加入 Gameplay 或技术测试按钮。验收重点是原实例及数据保持、中间项不短暂激活、遮罩/焦点/资源清理、结果等待能结束、取消/原始异常和 Tab 控件值保留。
+Demo 增加 Merchant 和 Journal 入口。Shop/ShopItem/Purchase 为独立场景、业务 Node；Journal 父资源内嵌 Map/Tasks 基础 Node。重复点击当前日志标签明确选择 Hide，否则 Switch，不修改框架重复 Switch 报错的契约。任务备注/勾选、地图缩放在页面收起和切换期间保留，离开日志窗口按普通关闭重建；不是跨窗口或磁盘存档。订单只更新保留商店里的 UI 展示，不接入真实交易、背包或 Gameplay。不增加技术按钮、故障吞错或业务诊断计数。
+
+验收：构建 0 警告、0 错误；核心/生成器 152 项通过（新增 14 项，包含两种遮罩），覆盖无效目标、原实例/资源持有、无中间激活/动画、准备取消恢复、提交后清理/通知失败、结果等待/已提交结果/关闭失败后继续回答、Tab 保留与失败边界。Godot headless 与原生 OpenGL 均通过 25 场景并退出 0，验证两种遮罩仅保留目标层、原焦点/商店备注、结果等待结束、日志控件值及实例保持。任务/收起/购买确认/返回商店四张原生截图已目视检查，菜单采用紧凑排布避免新增入口越界；素材复用原已许可资源。截图、日志、导入缓存和构建产物不入库。未运行 USN，未验证所有分辨率、实体手柄、导出平台或其他后端。
 
 临时历史页、整体操作回调、输入/遮罩新策略、处理器顺序、动态 Tab、编辑器、池化和诊断继续待定，不随本轮默认加入。
