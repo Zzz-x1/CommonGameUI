@@ -888,3 +888,64 @@ API 方向：容器同步配置遮罩提供方及共享/逐层方式；业务声
 建议实施顺序：确定转场上下文、配置优先级和表现恢复协议 → 重构核心转场契约与 Godot 动画适配 → 确定遮罩提供、共享/逐层、点击请求及所有权协议 → 实现模态遮罩管理 → 迁移 Demo 弹窗资源并补齐业务流程与故障验证。整体遵守无历史兼容要求，不保留旧转场接口或资源自带遮罩的双轨默认行为。
 
 选中项实施前确定最小 API 与失败边界；实现同步更新适配器、受影响生成调用、游戏 Demo、操作说明和测试。验收包括实际业务流程及取消/故障路径；多容器仲裁、实体手柄、性能和导出平台未验证时如实标注，不把一个 Godot Demo 等同所有引擎适配完成。
+
+### 9.5 V4 转场使用方案（建议，尚未实现或确认 API）
+
+用户要求从使用者角度明确第 1 项的实现与调用方式。建议保持 PushAsync/PopAsync/PopToAsync/SwitchAsync/OpenAsync 等业务入口不变，动画通过同步配置自动参与这些操作，调用方 await 同一个操作即可等待准备、动画、提交及必要清理，不另调用 Play。
+
+#### 配置与常用调用
+
+候选 API（GodotTransitions 属于 Godot 适配器，非纯核心）：
+
+```csharp
+ui.DefaultTransition = GodotTransitions.Fade(duration: 0.15);
+inventoryStack.ChildTransition = GodotTransitions.SlideHorizontal(duration: 0.20);
+settingsBody.ChildTransition = GodotTransitions.Fade(duration: 0.12);
+modals.ChildTransition = GodotTransitions.ScaleFade(duration: 0.16, fromScale: 0.94);
+
+await inventoryStack.PushAsync<ItemDetailsView>(itemArgs);
+await inventoryStack.PopAsync();
+await settingsBody.PushAsync<GraphicsView>();
+await tabs.SwitchAsync("Materials");
+```
+
+优先级为节点显式 Transition → 直接管理容器的 ChildTransition → UIContext.DefaultTransition；Context 默认 Instant。Node/Container 未配置表示明确继承配置，不是异常后的兜底；显式 Instant 禁用本节点动画。ChildTransition 仅针对该容器直接管理项，不穿透到后代容器，不改变容器自身进入/退出；父窗口动画带动资源子树，但不重播所有子节点生命周期与动画。DefaultTransition 是项目级动画配置，不创建默认项目节点。
+
+单界面覆盖放在构造或初始化中，在首次进入前完成：
+
+```csharp
+public SettingsView()
+{
+    Transition = GodotTransitions.Fade(duration: 0.18);
+}
+
+public ConfirmView()
+{
+    Transition = GodotTransitions.ScaleFade(duration: 0.14, fromScale: 0.96);
+}
+
+public StaticPanelView()
+{
+    Transition = new InstantTransition();
+}
+```
+
+配置变化只影响后续操作；一次操作开始时捕获所用配置，操作中不替换正在执行的动画。参数非法直接报错。配方可以复用，但不能在配方实例上存当前 Node、Tween 或动画前状态，防止多个容器或实例共享配置时互相污染。
+
+#### 前进、返回与显示对象
+
+Stack Push：源向左退出、目标从右进入；Pop/PopTo：源向右退出、目标从左进入。初次 Push 无源，仅播放目标进入；最后一次 Pop 无目标，仅播放源退出。PopTo 只涉及当前页与目标页，中间历史项直接清理。方向由容器操作提供，不根据类型名、资源名或调用方维护的布尔值猜测。SlideHorizontal 是栈前进/返回预设，非栈使用需要固定方向的滑动预设或自定义动画；Tab 默认示例用 Fade，不自行推断页签顺序。Modal 打开只动画新弹窗，底层弹窗仅失活，不强制离场；Panel Hide/Show 分别退出/进入，已显示 Single 的重复 Open 不重播。
+
+Godot 默认目标为 Node 的显示对象；滑动/缩放若根由布局 Container 控制，项目资源提供独立的内容包装层。候选 `targetPath` 参数可指定该包装层，例如 `GodotTransitions.ScaleFade(duration: 0.16, fromScale: 0.94, targetPath: "Window")`；相对 Node 显示根解析。路径缺失/类型不匹配报错。其他引擎提供自己的配置入口，核心不解析引擎控件路径。窗口内容与模态遮罩独立动画，不能把遮罩一起缩放。
+
+#### 执行与自定义扩展
+
+核心提供不可变 TransitionContext，包含当前 Node/Element、Container、Source/Target、生命周期原因、进入/退出阶段和容器给出的方向；尽量复用 LifecycleContext，不重复维护导航状态。建议 IUITransition 表示可复用配方，以同步 Create(context) 创建一次执行对象；执行对象提供 PlayAsync(token)、同步 Restore 和必要同步清理。接口名称/最终成员待定，但逐次状态必须由执行对象持有，不能在共享配方内保存。
+
+正常业务只使用预设；特殊动画实现转场配方与执行对象即可，取得源/目标后可控制伙伴相关效果，业务仍调用容器 API。Godot AnimationPlayer 接入使用指定进入/退出动画及明确的表现恢复约定；不能宣称框架能自动恢复任意脚本/音频/方法轨道副作用。动画查找失败直接报错，不退回 Fade；标准预设负责保存其修改的颜色/位置/缩放等原值。
+
+建议将当前“准备退出并播动画，再准备进入并播动画”重构为：操作守卫和输入锁 → 源退出准备 → 目标进入准备 → 建立各自执行对象并捕获原表现 → 源/目标动画同时播放 → 全部完成后一次提交 → 解锁并发送完成通知 → 必要清理。两项的准备仍依序执行；动画重叠不开放容器操作并发。转场临时绘制顺序由容器处理：Push 目标在前，Return 源在前；与最终排序区分，失败恢复原排序，不添加全局层级预设。
+
+任一动画失败/取消，取消另一项并等待其结束，恢复所有已开始执行项的表现及原框架状态，再传播原异常；其他动画/恢复/清理异常同样记录并可获取。一次调用中的所有动画任务必须被观察，不能只等待 Task.WhenAll 而丢失其余原异常。操作取消之后的恢复和必要清理不被同一取消令牌跳过。成功后也归还临时动画状态，不能让入场偏移成为下一次基线或覆盖原 Modulate 颜色；具体完成态与隐藏先后在实现时验证。
+
+本节是使用方案与执行建议，尚未修改核心代码，不表示用户已确认 ChildTransition、预设命名、并行动画或执行对象接口。
