@@ -1,35 +1,56 @@
-# Demo asset sources
+# Client asset sources
 
-Kenney, **UI Pack - Adventure 1.1** (archive version; created 2024-08-13).
+All resources are local; no runtime downloads. Retrieved / created 2026-10-03.
 
-- Pack: https://kenney.nl/assets/ui-pack-adventure
-- Download: https://kenney.nl/media/pages/assets/ui-pack-adventure/9a877376bc-1723597274/kenney_ui-pack-adventure.zip
-- License: CC0 1.0, https://creativecommons.org/publicdomain/zero/1.0/
-- Included original license: `Adventure/License.txt`.
-- Included files: parchment panel, brown/grey buttons, curtain banner, checkbox textures, scrollbar, green progress strip, and round slider handle.
-- PNG textures retain the original artwork. `slider_handle.svg` derives from `Vector/round_brown.svg`: only viewport size changed to 28 × 28 with the original 64 × 64 viewBox, to fit the slider control.
-- Retrieved 2026-10-02. Attribution is optional; this Demo credits Kenney.
+## Original character and background artwork
 
-The Nunito Project Authors, **Nunito** variable font.
+`Client/lobby.png`, `Client/event.png`, and `Client/hero0.png` through `hero5.png` were generated for this project with the built-in OpenAI image_gen tool. They are original fictional characters and environments, not screenshots or artwork extracted from an existing game. These files are not labeled CC0 or attributed to a third-party asset author. Transparent alpha is preserved in the six character files.
 
-- Project: https://github.com/googlefonts/nunito
-- Distribution: https://github.com/google/fonts/tree/main/ofl/nunito
-- Download: https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf
-- License: SIL Open Font License 1.1; original license and copyright notice included in `Fonts/OFL.txt`.
-- Included unmodified font: `Fonts/Nunito.ttf`. The Theme configures its weight and rendering; it does not modify the font file.
-- Retrieved 2026-10-02.
+The exact prompts used follow. Each character was generated in a separate call with `transparent_background: true`; both backgrounds used `false`. Original selected outputs were copied into this project; there is no dependency on a Codex cache path.
 
-`Themes/Adventure.tres` defines the Demo palette, texture slicing, typography, focus ring and control states. It is project presentation, not a core framework style system.
+**lobby.png**
 
-All included assets are local. No runtime downloads or external image dependencies.
+> Create a polished original fantasy anime mobile RPG lobby environment illustration, wide landscape 16:9 composition, luminous ivory and gold sky city, floating terraces, distant blue mountains, morning light, flowers and elegant stone balustrade, richly painted professional game key art, pastel teal and warm cream palette. Leave center foreground open for a separate character portrait and leave top and bottom visually quiet for UI. No people, no text, no logos, no interface.
 
-## Item portraits / Partner Screen Demo
+**event.png**
 
-Icons made by **Lorc** and **Delapouite**, from [game-icons.net](https://game-icons.net), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+> Original fantasy anime game event illustration, wide landscape, magical moonlit botanical garden with luminous blue flowers, crystal observatory and gold celestial instruments, elegant painterly polished mobile RPG key art, teal navy gold palette, no people no words no logos no interface.
+
+For each of the following character descriptions, the complete prompt was:
+
+> Create one original fantasy anime RPG character: {description}. Full body standing three-quarter elegant pose, polished high quality hand-painted anime game character illustration, detailed face, cohesive pastel ivory gold teal fantasy aesthetic. Character fills frame with generous space around feet and hair, no cropping. Transparent background, no environment, no text, no logo, no interface. Adult character.
+
+| File | Exact description |
+| --- | --- |
+| hero0.png | silver-haired female knight in ivory and gold armor, elegant longsword, blue cape |
+| hero1.png | young adult male forest ranger, chestnut hair, green and gold cloak, ornate bow |
+| hero2.png | adult female celestial mage, lavender hair, white gold flowing robes, star staff |
+| hero3.png | adult male guardian, dark blue hair, teal silver heavy armor and shield |
+| hero4.png | adult female alchemist, auburn hair, cream gold dress, satchel and glowing potion |
+| hero5.png | adult male bard, blond hair, white green embroidered coat and lyre |
+
+`Client/glow.svg` and `Client/star.svg` are original project vector graphics, authored directly as SVG for radial light and decorative particles. `Themes/Client.tres` is original editable presentation styling; interface text and controls are rendered by Godot, not baked into generated images.
+
+## Chinese font
+
+The Noto Project / Adobe / Google, **Noto Sans CJK SC Regular**.
+
+- Official project: https://github.com/notofonts/noto-cjk
+- Original font: https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf
+- License: SIL Open Font License 1.1, original notice retained in `Fonts/Noto-LICENSE.txt`.
+- Included file: `Fonts/NotoSansSC.otf`, unchanged font bytes, local filename changed for project references.
+- Bundled for Chinese glyph coverage. No runtime or OS font dependency.
+
+## Item icons
+
+Icons made by **Lorc** and **Delapouite**, from https://game-icons.net, licensed under **CC BY 3.0**, https://creativecommons.org/licenses/by/3.0/.
 
 - Official repository: https://github.com/game-icons/icons ; contributor/license notice retained in `Items/License.txt`.
 - Delapouite (https://delapouite.com): `bow-arrow`, `diamond-ring`, `belt-armor`, `herbs-bundle`, `sewing-string`, `amber-mosquito`.
 - Lorc (https://lorcblog.blogspot.com): `hood`, `boots`, `compass`, `crystal-growth`, `rock`, `dead-wood`.
-- Source SVGs: `https://raw.githubusercontent.com/game-icons/icons/master/{author}/{name}.svg`, with the author and names listed above. Retrieved 2026-10-02, bundled under `Items/`.
-- Modifications: removed the black background rectangle; changed white foreground fill to the Demo's dark teal `#335653`. Original path geometry/viewBox retained. The Demo renders the same modified texture at thumbnail and portrait sizes.
-- Visible attribution is included in the camp menu; this file provides the source, license links and modification notice for redistribution.
+- Sources: `https://raw.githubusercontent.com/game-icons/icons/master/{author}/{name}.svg`, authors and names listed above.
+- Retrieved 2026-10-02 and retained for the rebuilt client.
+- Modifications: black background removed, white foreground changed to dark teal `#335653`; geometry and viewBox unchanged.
+- In-client attribution: top-left game name opens the credits window.
+
+The former Kenney adventure styling and Nunito font are removed from the rebuilt Demo rather than left as an unused second theme.

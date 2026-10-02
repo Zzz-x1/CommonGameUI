@@ -1,0 +1,110 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Client/lobby.png" id="1"]
+[node name="Login" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+[node name="Tint" type="ColorRect" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05,0.15,0.22,0.25)
+mouse_filter = 2
+[node name="Tag" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.1
+anchor_top = 0.24
+anchor_right = 0.6
+anchor_bottom = 0.3
+grow_horizontal = 2
+grow_vertical = 2
+text = "A JOURNEY UNDER THE STARS"
+theme_override_font_sizes/font_size = 20
+mouse_filter = 2
+theme_override_colors/font_color = Color(1,0.9,0.65,1)
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.095
+anchor_top = 0.31
+anchor_right = 0.65
+anchor_bottom = 0.46
+grow_horizontal = 2
+grow_vertical = 2
+text = "星庭远征"
+theme_override_font_sizes/font_size = 76
+mouse_filter = 2
+theme_override_colors/font_color = Color(1,0.97,0.9,1)
+[node name="Story" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.1
+anchor_top = 0.48
+anchor_right = 0.7
+anchor_bottom = 0.57
+grow_horizontal = 2
+grow_vertical = 2
+text = "在晨光抵达之前，与星辰约定下一段旅途。"
+theme_override_font_sizes/font_size = 24
+mouse_filter = 2
+theme_override_colors/font_color = Color(1,1,1,1)
+[node name="LoginCard" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.1
+anchor_top = 0.65
+anchor_right = 0.46
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Account" type="Label" parent="LoginCard"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.1
+anchor_right = 0.92
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = "本地旅行档案 · 无需联网"
+theme_override_font_sizes/font_size = 20
+mouse_filter = 2
+[node name="Enter" type="Button" parent="LoginCard"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.48
+anchor_right = 0.92
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "继续旅程  →"
+focus_mode = 2
+[node name="Footnote" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.1
+anchor_top = 0.91
+anchor_right = 0.9
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = "原创纯 UI 客户端 · 不包含战斗与联网服务"
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+theme_override_colors/font_color = Color(1,1,1,0.8)

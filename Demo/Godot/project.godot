@@ -10,16 +10,16 @@ config_version=5
 
 [application]
 
-config/name="Hierarchy / UI Framework Demo"
-run/main_scene="res://Scenes/Main.tscn"
+config/name="星庭远征 · UI Framework"
+run/main_scene="res://Scenes/Client/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=800
-window/size/window_width_override=1280
-window/size/window_height_override=800
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/window_width_override=1600
+window/size/window_height_override=900
 window/stretch/mode="canvas_items"
 
 [dotnet]
@@ -28,7 +28,7 @@ project/assembly_name="HierarchyDemo"
 
 [gui]
 
-theme/custom="res://Themes/Adventure.tres"
+theme/custom="res://Themes/Client.tres"
 
 [rendering]
 

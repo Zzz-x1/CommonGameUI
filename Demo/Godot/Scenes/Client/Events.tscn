@@ -1,0 +1,273 @@
+[gd_scene load_steps=5 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Client/event.png" id="1"]
+[sub_resource type="Animation" id="Enter"]
+resource_name = "enter"
+length = 1
+tracks/0/type = "value"
+tracks/0/path = NodePath("Art:modulate")
+tracks/0/interp = 1
+tracks/0/enabled = true
+tracks/0/keys = { "times": PackedFloat32Array(0, 0.7), "transitions": PackedFloat32Array(1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,1)] }
+tracks/1/type = "value"
+tracks/1/path = NodePath("Pages:modulate")
+tracks/1/interp = 1
+tracks/1/enabled = true
+tracks/1/keys = { "times": PackedFloat32Array(0, 0.4, 1), "transitions": PackedFloat32Array(1, 1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,0), Color(1,1,1,1)] }
+[sub_resource type="Animation" id="Exit"]
+resource_name = "exit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/path = NodePath(".:modulate")
+tracks/0/keys = { "times": PackedFloat32Array(0, 0.2), "transitions": PackedFloat32Array(1, 1), "update": 0, "values": [Color(1,1,1,1), Color(1,1,1,0)] }
+[sub_resource type="AnimationLibrary" id="Library"]
+_data = { &"enter": SubResource("Enter"), &"exit": SubResource("Exit") }
+[node name="Events" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Paper" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.035
+anchor_right = 0.975
+anchor_bottom = 0.975
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Heading" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.055
+anchor_right = 0.7
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "花园与星光"
+theme_override_font_sizes/font_size = 34
+mouse_filter = 2
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.145
+anchor_right = 0.89
+anchor_bottom = 0.2
+grow_horizontal = 2
+grow_vertical = 2
+text = "三段固定活动 · 奖励状态随档案保存"
+theme_override_font_sizes/font_size = 18
+mouse_filter = 2
+[node name="Art" type="TextureRect" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.24
+anchor_right = 0.6
+anchor_bottom = 0.89
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+[node name="Tabs" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.64
+anchor_top = 0.24
+anchor_right = 0.94
+anchor_bottom = 0.32
+grow_horizontal = 2
+grow_vertical = 2
+[node name="庆典" type="Button" parent="Tabs"]
+text = "庆典"
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="签到" type="Button" parent="Tabs"]
+text = "签到"
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="采购" type="Button" parent="Tabs"]
+text = "采购"
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Pages" type="Control" parent="."]
+layout_mode = 1
+anchor_left = 0.64
+anchor_top = 0.37
+anchor_right = 0.94
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+[node name="庆典" type="Panel" parent="Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Name" type="Label" parent="Pages/庆典"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.08
+anchor_right = 0.92
+anchor_bottom = 0.22
+grow_horizontal = 2
+grow_vertical = 2
+text = "花园庆典"
+theme_override_font_sizes/font_size = 25
+mouse_filter = 2
+[node name="Description" type="Label" parent="Pages/庆典"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.26
+anchor_right = 0.92
+anchor_bottom = 0.55
+grow_horizontal = 2
+grow_vertical = 2
+text = "领取来自花园的问候。"
+theme_override_font_sizes/font_size = 19
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Reward" type="Label" parent="Pages/庆典"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.58
+anchor_right = 0.92
+anchor_bottom = 0.73
+grow_horizontal = 2
+grow_vertical = 2
+text = "星石 × 50\n经验手记 × 3"
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+[node name="Claim" type="Button" parent="Pages/庆典"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.78
+anchor_right = 0.92
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = "领取奖励"
+focus_mode = 2
+[node name="签到" type="Panel" parent="Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Name" type="Label" parent="Pages/签到"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.08
+anchor_right = 0.92
+anchor_bottom = 0.22
+grow_horizontal = 2
+grow_vertical = 2
+text = "星光签到"
+theme_override_font_sizes/font_size = 25
+mouse_filter = 2
+[node name="Description" type="Label" parent="Pages/签到"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.26
+anchor_right = 0.92
+anchor_bottom = 0.55
+grow_horizontal = 2
+grow_vertical = 2
+text = "每个本地档案可签到一次。"
+theme_override_font_sizes/font_size = 19
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Reward" type="Label" parent="Pages/签到"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.58
+anchor_right = 0.92
+anchor_bottom = 0.73
+grow_horizontal = 2
+grow_vertical = 2
+text = "星石 × 50\n经验手记 × 3"
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+[node name="Claim" type="Button" parent="Pages/签到"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.78
+anchor_right = 0.92
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = "领取奖励"
+focus_mode = 2
+[node name="采购" type="Panel" parent="Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Name" type="Label" parent="Pages/采购"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.08
+anchor_right = 0.92
+anchor_bottom = 0.22
+grow_horizontal = 2
+grow_vertical = 2
+text = "工坊采购季"
+theme_override_font_sizes/font_size = 25
+mouse_filter = 2
+[node name="Description" type="Label" parent="Pages/采购"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.26
+anchor_right = 0.92
+anchor_bottom = 0.55
+grow_horizontal = 2
+grow_vertical = 2
+text = "完成一次工坊购买，即可领取回礼。"
+theme_override_font_sizes/font_size = 19
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Reward" type="Label" parent="Pages/采购"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.58
+anchor_right = 0.92
+anchor_bottom = 0.73
+grow_horizontal = 2
+grow_vertical = 2
+text = "星石 × 50\n经验手记 × 3"
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+[node name="Claim" type="Button" parent="Pages/采购"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.78
+anchor_right = 0.92
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = "领取奖励"
+focus_mode = 2
+[node name="Fold" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.64
+anchor_top = 0.91
+anchor_right = 0.94
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = "收起活动目标"
+focus_mode = 2
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = { &"": SubResource("Library") }

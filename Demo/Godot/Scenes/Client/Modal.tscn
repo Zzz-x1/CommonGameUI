@@ -1,0 +1,1229 @@
+[gd_scene load_steps=21 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Items/bow-arrow.svg" id="1"]
+[ext_resource type="Texture2D" path="res://Assets/Items/hood.svg" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Items/boots.svg" id="3"]
+[ext_resource type="Texture2D" path="res://Assets/Items/diamond-ring.svg" id="4"]
+[ext_resource type="Texture2D" path="res://Assets/Items/belt-armor.svg" id="5"]
+[ext_resource type="Texture2D" path="res://Assets/Items/compass.svg" id="6"]
+[ext_resource type="Texture2D" path="res://Assets/Items/crystal-growth.svg" id="7"]
+[ext_resource type="Texture2D" path="res://Assets/Items/rock.svg" id="8"]
+[ext_resource type="Texture2D" path="res://Assets/Items/herbs-bundle.svg" id="9"]
+[ext_resource type="Texture2D" path="res://Assets/Items/sewing-string.svg" id="10"]
+[ext_resource type="Texture2D" path="res://Assets/Items/amber-mosquito.svg" id="11"]
+[ext_resource type="Texture2D" path="res://Assets/Items/dead-wood.svg" id="12"]
+[ext_resource type="Texture2D" path="res://Assets/Items/bow-arrow.svg" id="13"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero0.png" id="14"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero1.png" id="15"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero2.png" id="16"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero3.png" id="17"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero4.png" id="18"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero5.png" id="19"]
+[ext_resource type="Texture2D" path="res://Assets/Items/crystal-growth.svg" id="20"]
+[node name="Modal" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Center" type="Control" parent="."]
+layout_mode = 1
+anchor_left = 0.24
+anchor_top = 0.1
+anchor_right = 0.76
+anchor_bottom = 0.89
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Paper" type="Panel" parent="Center"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center"]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.035
+anchor_right = 0.85
+anchor_bottom = 0.115
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 29
+mouse_filter = 2
+[node name="Close" type="Button" parent="Center"]
+layout_mode = 1
+anchor_left = 0.87
+anchor_top = 0.035
+anchor_right = 0.96
+anchor_bottom = 0.1
+grow_horizontal = 2
+grow_vertical = 2
+text = "×"
+focus_mode = 2
+[node name="Description" type="Label" parent="Center"]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.14
+anchor_right = 0.95
+anchor_bottom = 0.26
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 19
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Pages" type="Control" parent="Center"]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.29
+anchor_right = 0.95
+anchor_bottom = 0.82
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Text" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Pick" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Shop" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Settings" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Profile" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Reward" type="Control" parent="Center/Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Body" type="Label" parent="Center/Pages/Text"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 23
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C0" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.012
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.238
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C0"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C0"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C0"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C1" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.012
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.238
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C1"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C1"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C1"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C2" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.012
+anchor_right = 0.994
+anchor_bottom = 0.238
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C2"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C2"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C2"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C3" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.262
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.488
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C3"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("4")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C3"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C3"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C4" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.262
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.488
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C4"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("5")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C4"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C4"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C5" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.262
+anchor_right = 0.994
+anchor_bottom = 0.488
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C5"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C5"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C5"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C6" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.512
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.738
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C6"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C6"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C6"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C7" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.512
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.738
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C7"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("8")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C7"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C7"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C8" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.512
+anchor_right = 0.994
+anchor_bottom = 0.738
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C8"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("9")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C8"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C8"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C9" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.762
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.988
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C9"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("10")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C9"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C9"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C10" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.762
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.988
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C10"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("11")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C10"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C10"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C11" type="Button" parent="Center/Pages/Pick"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.762
+anchor_right = 0.994
+anchor_bottom = 0.988
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Pick/C11"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("12")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Pick/C11"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Pick/C11"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Shop"]
+layout_mode = 1
+anchor_left = 0.02
+anchor_top = 0.05
+anchor_right = 0.4
+anchor_bottom = 0.58
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("13")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Name" type="Label" parent="Center/Pages/Shop"]
+layout_mode = 1
+anchor_left = 0.45
+anchor_top = 0.08
+anchor_right = 0.98
+anchor_bottom = 0.3
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 25
+mouse_filter = 2
+[node name="Price" type="Label" parent="Center/Pages/Shop"]
+layout_mode = 1
+anchor_left = 0.45
+anchor_top = 0.33
+anchor_right = 0.98
+anchor_bottom = 0.56
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 22
+mouse_filter = 2
+[node name="Quantity" type="SpinBox" parent="Center/Pages/Shop"]
+layout_mode = 1
+anchor_left = 0.45
+anchor_top = 0.65
+anchor_right = 0.98
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+min_value = 1
+max_value = 10
+value = 1
+[node name="Tab0" type="Button" parent="Center/Pages/Settings"]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0
+anchor_right = 0.3133333333333333
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "声音"
+focus_mode = 2
+[node name="Tab1" type="Button" parent="Center/Pages/Settings"]
+layout_mode = 1
+anchor_left = 0.3333333333333333
+anchor_top = 0
+anchor_right = 0.6466666666666666
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "画面"
+focus_mode = 2
+[node name="Tab2" type="Button" parent="Center/Pages/Settings"]
+layout_mode = 1
+anchor_left = 0.6666666666666666
+anchor_top = 0
+anchor_right = 0.98
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "演出"
+focus_mode = 2
+[node name="SettingPages" type="Control" parent="Center/Pages/Settings"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.22
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="声音" type="Control" parent="Center/Pages/Settings/SettingPages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="画面" type="Control" parent="Center/Pages/Settings/SettingPages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="演出" type="Control" parent="Center/Pages/Settings/SettingPages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="VolumeLabel" type="Label" parent="Center/Pages/Settings/SettingPages/声音"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.05
+anchor_right = 1
+anchor_bottom = 0.2
+grow_horizontal = 2
+grow_vertical = 2
+text = "主音量"
+theme_override_font_sizes/font_size = 24
+mouse_filter = 2
+[node name="Volume" type="HSlider" parent="Center/Pages/Settings/SettingPages/声音"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.3
+anchor_right = 1
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+max_value = 100
+value = 70
+[node name="AudioNote" type="Label" parent="Center/Pages/Settings/SettingPages/声音"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.62
+anchor_right = 1
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+text = "控制客户端音频总线音量。"
+theme_override_font_sizes/font_size = 20
+mouse_filter = 2
+[node name="Fullscreen" type="CheckButton" parent="Center/Pages/Settings/SettingPages/画面"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.05
+anchor_right = 1
+anchor_bottom = 0.25
+grow_horizontal = 2
+grow_vertical = 2
+text = "全屏显示"
+[node name="Quality" type="OptionButton" parent="Center/Pages/Settings/SettingPages/画面"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.35
+anchor_right = 1
+anchor_bottom = 0.55
+grow_horizontal = 2
+grow_vertical = 2
+[node name="QualityNote" type="Label" parent="Center/Pages/Settings/SettingPages/画面"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.65
+anchor_right = 1
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = "画质为 UI 偏好模拟，不修改渲染管线。"
+theme_override_font_sizes/font_size = 18
+mouse_filter = 2
+autowrap_mode = 2
+[node name="FullMotion" type="CheckButton" parent="Center/Pages/Settings/SettingPages/演出"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.05
+anchor_right = 1
+anchor_bottom = 0.3
+grow_horizontal = 2
+grow_vertical = 2
+text = "完整演出与装饰动画"
+[node name="MotionNote" type="Label" parent="Center/Pages/Settings/SettingPages/演出"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.45
+anchor_right = 1
+anchor_bottom = 0.8
+grow_horizontal = 2
+grow_vertical = 2
+text = "关闭后缩短演出，停用粒子与持续装饰。"
+theme_override_font_sizes/font_size = 20
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Name" type="LineEdit" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 0.18
+grow_horizontal = 2
+grow_vertical = 2
+max_length = 16
+[node name="Prompt" type="Label" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.2
+anchor_right = 1
+anchor_bottom = 0.3
+grow_horizontal = 2
+grow_vertical = 2
+text = "选择头像与看板角色"
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+[node name="C0" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.37
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.66
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C0"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("14")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C0"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C0"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C1" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.37
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.66
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C1"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("15")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C1"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C1"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C2" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.37
+anchor_right = 0.994
+anchor_bottom = 0.66
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C2"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("16")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C2"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C2"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C3" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.6799999999999999
+anchor_right = 0.3273333333333333
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C3"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("17")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C3"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C3"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C4" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.3393333333333333
+anchor_top = 0.6799999999999999
+anchor_right = 0.6606666666666666
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C4"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("18")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C4"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C4"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C5" type="Button" parent="Center/Pages/Profile"]
+layout_mode = 1
+anchor_left = 0.6726666666666666
+anchor_top = 0.6799999999999999
+anchor_right = 0.994
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Center/Pages/Profile/C5"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.015
+anchor_right = 0.34
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("19")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Center/Pages/Profile/C5"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Center/Pages/Profile/C5"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Result" type="Label" parent="Center/Pages/Reward"]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.12
+anchor_right = 0.95
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 36
+mouse_filter = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+[node name="Glow" type="TextureRect" parent="Center/Pages/Reward"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.5
+anchor_right = 0.68
+anchor_bottom = 0.92
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("20")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Cancel" type="Button" parent="Center"]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.87
+anchor_right = 0.45
+anchor_bottom = 0.96
+grow_horizontal = 2
+grow_vertical = 2
+text = "取消"
+focus_mode = 2
+[node name="Confirm" type="Button" parent="Center"]
+layout_mode = 1
+anchor_left = 0.53
+anchor_top = 0.87
+anchor_right = 0.95
+anchor_bottom = 0.96
+grow_horizontal = 2
+grow_vertical = 2
+text = "确定"
+focus_mode = 2

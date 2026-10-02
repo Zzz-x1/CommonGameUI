@@ -1,0 +1,172 @@
+[gd_scene load_steps=1 format=3]
+[node name="Shell" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Top" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 0.09
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Brand" type="Label" parent="Top"]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.1
+anchor_right = 0.2
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 28
+mouse_filter = 2
+[node name="Profile" type="Button" parent="Top"]
+layout_mode = 1
+anchor_left = 0.21
+anchor_top = 0.15
+anchor_right = 0.35
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+text = "旅行者"
+focus_mode = 2
+[node name="Wallet" type="Label" parent="Top"]
+layout_mode = 1
+anchor_left = 0.39
+anchor_top = 0.1
+anchor_right = 0.75
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 19
+mouse_filter = 2
+[node name="Mail" type="Button" parent="Top"]
+layout_mode = 1
+anchor_left = 0.77
+anchor_top = 0.15
+anchor_right = 0.86
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+text = "邮件"
+focus_mode = 2
+[node name="Settings" type="Button" parent="Top"]
+layout_mode = 1
+anchor_left = 0.87
+anchor_top = 0.15
+anchor_right = 0.97
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+text = "设置"
+focus_mode = 2
+[node name="PageMount" type="Control" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.095
+anchor_right = 1
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Bottom" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0.91
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Home" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.12
+anchor_right = 0.15
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "大厅"
+focus_mode = 2
+[node name="Characters" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.161
+anchor_top = 0.12
+anchor_right = 0.28600000000000003
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "角色"
+focus_mode = 2
+[node name="Inventory" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.29700000000000004
+anchor_top = 0.12
+anchor_right = 0.42200000000000004
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "背包"
+focus_mode = 2
+[node name="Team" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.43300000000000005
+anchor_top = 0.12
+anchor_right = 0.558
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "编队"
+focus_mode = 2
+[node name="Stages" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.5690000000000001
+anchor_top = 0.12
+anchor_right = 0.6940000000000001
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "冒险"
+focus_mode = 2
+[node name="Shop" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.7050000000000001
+anchor_top = 0.12
+anchor_right = 0.8300000000000001
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "商店"
+focus_mode = 2
+[node name="Tasks" type="Button" parent="Bottom"]
+layout_mode = 1
+anchor_left = 0.8410000000000001
+anchor_top = 0.12
+anchor_right = 0.9660000000000001
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+text = "任务"
+focus_mode = 2
+
+[node name="Back" type="Button" parent="Top"]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.18
+anchor_right = 0.08
+anchor_bottom = 0.82
+text = "‹"
+[node name="Credits" type="Button" parent="Top"]
+layout_mode = 1
+anchor_left = 0.095
+anchor_top = 0.18
+anchor_right = 0.20
+anchor_bottom = 0.82
+text = "星庭远征"

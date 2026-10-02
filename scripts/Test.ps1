@@ -6,4 +6,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Core / generator tests failed.' }
 $taskArguments = @{ Headless = $true; SelfTest = $true }
 if ($GodotPath) { $taskArguments.GodotPath = $GodotPath }
 & (Join-Path $PSScriptRoot 'Run-Demo.ps1') @taskArguments
+if ($LASTEXITCODE -ne 0) { throw 'Godot client tests failed.' }
+$taskArguments.Remove('SelfTest')
+$taskArguments.VerifySave = $true
+& (Join-Path $PSScriptRoot 'Run-Demo.ps1') @taskArguments
 exit $LASTEXITCODE

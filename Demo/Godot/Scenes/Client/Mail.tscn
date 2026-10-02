@@ -1,0 +1,455 @@
+[gd_scene load_steps=9 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Items/bow-arrow.svg" id="1"]
+[ext_resource type="Texture2D" path="res://Assets/Items/hood.svg" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Items/boots.svg" id="3"]
+[ext_resource type="Texture2D" path="res://Assets/Items/diamond-ring.svg" id="4"]
+[ext_resource type="Texture2D" path="res://Assets/Items/belt-armor.svg" id="5"]
+[ext_resource type="Texture2D" path="res://Assets/Items/compass.svg" id="6"]
+[ext_resource type="Texture2D" path="res://Assets/Items/crystal-growth.svg" id="7"]
+[ext_resource type="Texture2D" path="res://Assets/Items/rock.svg" id="8"]
+[node name="Mail" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Paper" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.035
+anchor_right = 0.975
+anchor_bottom = 0.975
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Heading" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.055
+anchor_right = 0.7
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "远方来信"
+theme_override_font_sizes/font_size = 34
+mouse_filter = 2
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.145
+anchor_right = 0.89
+anchor_bottom = 0.2
+grow_horizontal = 2
+grow_vertical = 2
+text = "查看来信与附件；已领取的邮件可以删除。"
+theme_override_font_sizes/font_size = 18
+mouse_filter = 2
+[node name="Tabs" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.215
+anchor_right = 0.945
+anchor_bottom = 0.285
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+[node name="全部" type="Button" parent="Tabs"]
+layout_mode = 2
+text = "全部"
+custom_minimum_size = Vector2(150, 45)
+[node name="Pages" type="Control" parent="."]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.33
+anchor_right = 0.95
+anchor_bottom = 0.94
+grow_horizontal = 2
+grow_vertical = 2
+[node name="全部" type="Control" parent="Pages"]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+[node name="C0" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.012
+anchor_right = 0.244
+anchor_bottom = 0.3213333333333333
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C0"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C0"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C0"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C1" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.256
+anchor_top = 0.012
+anchor_right = 0.494
+anchor_bottom = 0.3213333333333333
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C1"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C1"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C1"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C2" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.506
+anchor_top = 0.012
+anchor_right = 0.744
+anchor_bottom = 0.3213333333333333
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C2"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C2"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C2"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C3" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.756
+anchor_top = 0.012
+anchor_right = 0.994
+anchor_bottom = 0.3213333333333333
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C3"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("4")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C3"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C3"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C4" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.006
+anchor_top = 0.3453333333333333
+anchor_right = 0.244
+anchor_bottom = 0.6546666666666666
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C4"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("5")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C4"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C4"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C5" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.256
+anchor_top = 0.3453333333333333
+anchor_right = 0.494
+anchor_bottom = 0.6546666666666666
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C5"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C5"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C5"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C6" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.506
+anchor_top = 0.3453333333333333
+anchor_right = 0.744
+anchor_bottom = 0.6546666666666666
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C6"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C6"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C6"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="C7" type="Button" parent="Pages/全部"]
+layout_mode = 1
+anchor_left = 0.756
+anchor_top = 0.3453333333333333
+anchor_right = 0.994
+anchor_bottom = 0.6546666666666666
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+focus_mode = 2
+[node name="Icon" type="TextureRect" parent="Pages/全部/C7"]
+layout_mode = 1
+anchor_left = 0.04
+anchor_top = 0.1
+anchor_right = 0.27
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("8")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Title" type="Label" parent="Pages/全部/C7"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.08
+anchor_right = 0.95
+anchor_bottom = 0.4
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Info" type="Label" parent="Pages/全部/C7"]
+layout_mode = 1
+anchor_left = 0.32
+anchor_top = 0.4
+anchor_right = 0.95
+anchor_bottom = 0.9
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="ClaimAll" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.7
+anchor_top = 0.215
+anchor_right = 0.94
+anchor_bottom = 0.285
+grow_horizontal = 2
+grow_vertical = 2
+text = "领取全部附件"
+focus_mode = 2

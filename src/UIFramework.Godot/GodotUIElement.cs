@@ -57,7 +57,13 @@ public sealed class GodotUIElement : IUIElement
         if (_disposed) return default;
         if (!GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion())
             throw new ObjectDisposedException(nameof(GodotUIElement), "Display was destroyed before its logical owner.");
-        if (_owned) Control.QueueFree();
+        if (_owned)
+        {
+            // Remove the disposed display from sibling ordering immediately. QueueFree alone
+            // leaves a stale child until frame end while the next transition captures indices.
+            Control.GetParent().RemoveChild(Control);
+            Control.QueueFree();
+        }
         _disposed = true;
         return default;
     }

@@ -1,705 +1,347 @@
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
-using UIFramework.Generated;
 
 namespace HierarchyDemo;
-
 public partial class DemoApp
 {
-    public async Task CancelLoadingAsync()
+    private static void Check(bool condition, string description)
     {
-        // Cancellation is a normal, explicitly requested test outcome, not error suppression.
-        var host = new GodotUIHost(GetViewport());
-        var loading = new DelayedLoader(new GodotSceneLoader(host));
-        var ui = GodotUI.Create(this, loader: loading);
-        ui.Register<CardView>("res://Scenes/Inventory/Card.tscn");
-        var panels = await ui.Root.CreateContainerAsync<PanelContainerNode>("CancellationCase", GetNode<Control>("FloatingMount"));
-        var pending = panels.OpenAsync<CardView>(new CardArgs("CANCELED", Vector2.Zero));
-        await ui.DisposeAsync();
-        await ExpectCancellationAsync(pending);
-        Check(loading.InstancesCreated == 0, "Cancellation created a late scene instance.");
-        Status("CANCELLATION / Scope disposed. Pending load canceled. No late scene created.");
+        if (!condition)
+            throw new InvalidOperationException("Client test: " + description);
     }
 
-    private sealed class DelayedLoader(IUIResourceLoader inner) : IUIResourceLoader
+    private static void Throws<T>(Action action)
+        where T : Exception
     {
-        public int InstancesCreated;
-        public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
-        {
-            await Task.Delay(500, token);
-            return new Resource(this, await inner.LoadAsync(resource, token));
-        }
-        private sealed class Resource(DelayedLoader owner, IUIResource inner) : IUIResource
-        {
-            public IUIElement Instantiate(IUIElement? mount) { owner.InstancesCreated++; return inner.Instantiate(mount); }
-            public void Dispose() => inner.Dispose();
-        }
-    }
-
-    private static async Task ExpectCancellationAsync(Task pending)
-    {
-        try { await pending; }
-        catch (OperationCanceledException) { return; }
-        throw new InvalidOperationException("Expected an explicitly canceled operation.");
-    }
-    private static void Check(bool condition, string message)
-    {
-        if (!condition) throw new InvalidOperationException($"Demo validation failed: {message}");
-    }
-
-    private sealed class CountingLoader(IUIResourceLoader inner) : IUIResourceLoader
-    {
-        public int Loads, Instances, Releases;
-        public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
-        { Loads++; return new Resource(this, await inner.LoadAsync(resource, token)); }
-        private sealed class Resource(CountingLoader owner, IUIResource inner) : IUIResource
-        {
-            public IUIElement Instantiate(IUIElement? mount) { owner.Instances++; return inner.Instantiate(mount); }
-            public void Dispose() { owner.Releases++; inner.Dispose(); }
-        }
-    }
-
-    private async Task RunResourceSelfTestAsync()
-    {
-        var host = new GodotUIHost(GetViewport());
-        var loader = new CountingLoader(new GodotSceneLoader(host));
-        await using var ui = GodotUI.Create(this, loader: loader);
-        ui.Register<CardView>("res://Scenes/Inventory/Card.tscn");
-        var first = ui.PreloadAsync<CardView>(); var second = ui.PreloadAsync<CardView>();
-        var a = await first; var b = await second;
-        Check(loader.Loads == 1 && loader.Instances == 0 && ui.Root.Children.Count == 0,
-            "Preload did not share a pure resource acquisition.");
-        var panels = await ui.Root.CreateContainerAsync<PanelContainerNode>("ResourceCase", GetNode<Control>("FloatingMount"));
-        var window = await panels.OpenAsync<CardView>(new CardArgs("PREPARED RELIC", Vector2.Zero), playAnimation: false);
-        a.Dispose(); b.Dispose();
-        Check(loader.Loads == 1 && loader.Instances == 1 && loader.Releases == 0 && window.GetControl().IsInsideTree(),
-            "Releasing preload damaged the opened window or reloaded its resource.");
-        await panels.CloseAsync(window, playAnimation: false);
-        Check(loader.Releases == 1, "Closing the last instance kept its resource hold.");
-        var remaining = await ui.PreloadAsync<CardView>();
-        await ui.DisposeAsync(); remaining.Dispose();
-        Check(loader.Loads == 2 && loader.Releases == 2 && loader.Instances == 1, "Context retained a preload or instantiated it.");
-        GD.Print("PASS resources: threaded acquisition, pure/shared preload, independent instance hold, explicit/context release");
-    }
-
-    private async Task RunSelfTestAsync()
-    {
-        await RunAdapterSelfTestAsync();
-        await RunResourceSelfTestAsync();
-        await RunContainerReturnSelfTestAsync();
-        Check(_ui.Root.Children.Count == 4, "Only project-declared mounts should exist.");
-        await OpenPreferencesAsync();
-        var tabs = (PreferencesView)_scenario!;
-        var original = tabs.Tabs.Items["Audio"].Element;
-        var childCount = tabs.Display.Get<Control>("TabContent").GetChildCount();
-        var slider = tabs.Display.Get<HSlider>("TabContent/Graphics/Value");
-        slider.Value = 82;
-        await tabs.SelectAsync("Audio"); await tabs.SelectAsync("Graphics");
-        Check(slider.Value == 82, "Embedded tab state was lost.");
-        Check(ReferenceEquals(original, tabs.Tabs.Items["Audio"].Element), "Tab instance was cloned.");
-        Check(tabs.Display.Get<Control>("TabContent").GetChildCount() == childCount, "Extra tab scene created.");
-        Check(tabs.Tabs.Items["Graphics"].IsInteractive && !tabs.Tabs.Items["Audio"].IsInteractive, "Tab input state.");
-        GD.Print("PASS embedded tabs: names, basic nodes, state, no clones");
-
-        await OpenInventoryAsync();
-        var inventory = (InventoryView)_inventoryStack!.Current!;
-        await inventory.SelectAsync("Materials");
-        var inspection = inventory.PreviewSeconds;
-        await inventory.InspectAsync("Moonstone"); inspection = inventory.PreviewSeconds; inventory.Tick(1);
-        Check(inventory.PreviewSeconds == inspection && !inventory.Tabs.Current!.IsActive, "Hidden inventory preview did not pause.");
-        var details = (DetailsView)_inventoryStack.Current!;
-        Check(details.GetControl<Label>("Title").Text == "MOONSTONE", "Selected item did not reach details.");
-        details.GetControl<CheckButton>("Enabled").ButtonPressed = false;
-        await _inventoryStack.PopAsync(); inventory.Tick(1);
-        Check(!inventory.Favorites.Contains("Moonstone"), "Favorite edit was not retained by the project model.");
-        inventory.GetControl<CheckButton>("TabContent/Materials/Enabled").ButtonPressed = true;
-        Check(!inventory.GetControl<Button>("TabContent/Materials/Items/Item0").Visible, "Favorites filter did not apply.");
-        inventory.GetControl<CheckButton>("TabContent/Materials/Enabled").ButtonPressed = false;
-        Check(inventory.IsActive && inventory.PreviewSeconds > inspection, "Return lifecycle did not resume inventory.");
-        Check(ReferenceEquals(inventory, _inventoryStack.Current) && inventory.Tabs.CurrentName == "Materials", "Stack/Tab restoration.");
-        GD.Print("PASS stack + embedded tabs: original inventory restored");
-
-        var inventoryWindow = (InventoryWindowView)_scenario!;
-        var originalDisplay = inventoryWindow.GetControl();
-        var windowTransition = inventoryWindow.TransitionState;
-        await OpenInventoryAsync();
-        Check(ReferenceEquals(inventoryWindow, _scenario) && ReferenceEquals(inventoryWindow.TransitionState, windowTransition),
-            "Repeated backpack opening replayed entry or created another window.");
-        await OpenHomeAsync(); inspection = inventory.PreviewSeconds; inventory.Tick(1);
-        Check(!inventoryWindow.IsVisible && inventory.PreviewSeconds == inspection, "Stowed backpack kept updating.");
-        Check(_stage.TryGet<InventoryWindowView>(out var hidden) && ReferenceEquals(hidden, inventoryWindow), "Hidden single window was lost.");
-        await OpenInventoryAsync();
-        Check(ReferenceEquals(originalDisplay, inventoryWindow.GetControl()) && ReferenceEquals(inventoryWindow.Inventory, inventory),
-            "Restoring backpack loaded another scene or initialized again.");
-        Check(ReferenceEquals(inventory, _inventoryStack.Current) && inventory.Tabs.CurrentName == "Materials",
-            "Window restoration lost inner stack or tab.");
-        await _stage.HideAsync(inventoryWindow); await _stage.ShowAsync(inventoryWindow);
-        Check(inventory.IsActive, "Explicit Show did not reactivate backpack subtree.");
-        GD.Print("PASS V3 single window: repeated open, retained hide/show, subtree pause/resume");
-
-        await inventory.InspectAsync("Moonstone");
-        var skippedDetails = (DetailsView)_inventoryStack.Current!;
-        var notes = await _inventoryStack.PushProvenanceViewAsync();
-        var detailsTransition = skippedDetails.TransitionState;
-        await OpenHomeAsync(); await OpenInventoryAsync();
-        Check(ReferenceEquals(notes, _inventoryStack.Current), "Stowing a nested page lost its history.");
-        await _inventoryStack.PopToAsync(inventory);
-        Check(ReferenceEquals(inventory, _inventoryStack.Current) && _inventoryStack.History.Count == 1,
-            "Target return did not commit the original backpack.");
-        Check(ReferenceEquals(skippedDetails.TransitionState, detailsTransition) && skippedDetails.State == NodeState.Disposed && notes.State == NodeState.Disposed,
-            "Target return resumed an intermediate page or left it owned.");
-        Check(inventory.SelectedItem == "Moonstone" && inventory.Tabs.CurrentName == "Materials", "Target return lost game UI state.");
-        GD.Print("PASS V3 target return: field notes -> original backpack, intermediate pages released");
-
-        var settingsButton = GetNode<Button>("Frame/Layout/Workspace/Sidebar/Settings");
-        settingsButton.GrabFocus();
-        var settings = await Modals.OpenSettingsWindowViewAsync();
-        Check(settings.Display.Control.IsAncestorOf(GetViewport().GuiGetFocusOwner()), "Modal did not receive focus after input unlock.");
-        Check(!_inventoryStack.IsInteractive, "Modal must block underlying input.");
-        inspection = inventory.PreviewSeconds; inventory.Tick(1);
-        Check(inventory.PreviewSeconds == inspection && inventory.IsVisible && !inventory.IsActive, "Modal cover must pause a visible inventory.");
-        Check(!_menu.IsInteractive && settingsButton.FocusMode == FocusModeEnum.None, "Modal must block sidebar keyboard navigation.");
-        var firstPage = settings.Body.Current;
-        var graphics = await settings.Body.PushGraphicsViewAsync();
-        graphics.GetControl<HSlider>("Value").Value = 74;
-        await settings.Body.PopAsync();
-        graphics = await settings.Body.PushGraphicsViewAsync();
-        Check(graphics.GetControl<HSlider>("Value").Value == 74, "Project preferences did not survive recreated graphics page.");
-        await settings.Body.PopAsync();
-        Check(ReferenceEquals(firstPage, settings.Body.Current), "Settings page restoration.");
-        Check(firstPage!.GetControl<Label>("Description").Text.StartsWith("Welcome back."), "Settings return did not refresh its business description.");
-        Check(Modals.CurrentBackdrop != null, "Managed backdrop is missing.");
-        await Modals.CloseAsync(settings);
-        Check(_inventoryStack.IsInteractive, "Input was not restored.");
-        Check(_menu.IsInteractive, "Sidebar input was not restored.");
-        Check(GetViewport().GuiGetFocusOwner() == settingsButton, "Focus was not restored.");
-        GD.Print("PASS settings modal: single shell, page return, focus");
-
-        await OpenCardsAsync();
-        var card1 = _cards.Children[0]; var card2 = _cards.Children[1];
-        await _cards.CloseAsync(card1);
-        Check(card2.State == NodeState.Ready && card2.IsVisible, "Independent close affected other card.");
-        await _cards.CloseAsync(card2);
-        GD.Print("PASS independent instances");
-
-        var outerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
-        await WaitUntilAsync(() => Modals.Current is ConfirmView view && view.IsInteractive);
-        var outer = (ConfirmView)Modals.Current!;
-        var sharedBackdrop = Modals.CurrentBackdrop!;
-        var outerFocus = GetViewport().GuiGetFocusOwner();
-        var innerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
-        await WaitUntilAsync(() => Modals.Current is ConfirmView view && view != outer && view.IsInteractive);
-        var inner = (ConfirmView)Modals.Current!;
-        Check(ReferenceEquals(sharedBackdrop, Modals.CurrentBackdrop), "Nested modal created a second shared backdrop.");
-        var dim = GetNode<Control>("ModalMount/ModalBackdrop");
-        Check(dim.GetIndex() < inner.GetControl().GetIndex() && dim.GetIndex() > outer.GetControl().GetIndex(),
-            "Shared backdrop must sit between the outer and inner dialogs.");
-        Check(!outer.IsInteractive, "Nested modal did not block its parent.");
-        dim.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left });
-        Check(!await innerResult, "Backdrop click must yield the normal false result.");
-        Check(outer.IsInteractive, "Outer modal did not regain input.");
-        Check(GetViewport().GuiGetFocusOwner() == outerFocus, "Nested modal focus was not restored.");
-        outer.Complete(true); Check(await outerResult, "Outer result.");
-        GD.Print("PASS nested modal results");
-        Check(Modals.CurrentBackdrop == null, "Last dialog left a backdrop behind.");
-        GD.Print("PASS V4 shared backdrop: one display, ordering, native click cancellation, final release");
-
-        var clickSettings = await Modals.OpenSettingsWindowViewAsync();
-        Check(await Modals.RequestDismissAsync(), "Settings did not handle its external click request.");
-        Check(clickSettings.State == NodeState.Disposed && Modals.Current == null, "External click did not close settings.");
-        GD.Print("PASS V4 settings external dismissal");
-
-        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track, duration: 0.02), ModalBackdropMode.PerModal);
-        var layeredOuter = await Modals.OpenAsync<ConfirmView>(); var outerBackdrop = Modals.CurrentBackdrop;
-        var layeredInner = await Modals.OpenAsync<ConfirmView>(); var innerBackdrop = Modals.CurrentBackdrop;
-        Check(!ReferenceEquals(outerBackdrop, innerBackdrop), "PerModal reused one backdrop.");
-        var liveDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Where(c => !c.IsQueuedForDeletion()).ToArray();
-        Check(liveDims.Length == 2 && liveDims.All(c => c.Visible), "PerModal must own two visible dim layers.");
-        Check((int)outerBackdrop!.CaptureOrder() < layeredOuter.GetControl().GetIndex()
-            && layeredOuter.GetControl().GetIndex() < (int)innerBackdrop!.CaptureOrder()
-            && (int)innerBackdrop.CaptureOrder() < layeredInner.GetControl().GetIndex(), "PerModal layer order is incorrect.");
-        await Modals.CloseAsync(layeredInner); Check(ReferenceEquals(Modals.CurrentBackdrop, outerBackdrop) && layeredOuter.IsInteractive, "PerModal did not restore outer input/backdrop.");
-        await layeredOuter.DisposeAsync(); Check(Modals.CurrentBackdrop == null && _menu.IsInteractive, "Forced modal disposal left its backdrop/input owner.");
-        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
-        GD.Print("PASS V4 layered backdrops: distinct displays, ordering, nested close and forced release");
-
-        await OpenHomeAsync(); await _stage.CloseAsync(inventoryWindow);
-        Check(inventoryWindow.State == NodeState.Disposed && inventory.State == NodeState.Disposed,
-            "Closing hidden backpack did not release its subtree.");
-        Check(!_stage.TryGet<InventoryWindowView>(out _), "Closed backpack remained in the instance index.");
-        await OpenInventoryAsync();
-        Check(!ReferenceEquals(inventoryWindow, _scenario) && ((InventoryWindowView)_scenario!).Body.Current is InventoryView,
-            "Reopening a closed backpack reused a disposed instance.");
-        GD.Print("PASS V3 hidden close: subtree released, next open creates fresh window");
-
-        await RunTransitionSelectionSelfTestAsync();
-        await RunAnimationCapabilitySelfTestAsync();
-        await RunPartnerSelfTestAsync();
-        var runtimeError = new IOException("Expected original async Demo error.");
-        Track(Task.FromException(runtimeError));
-        var observed = false;
-        try { _Process(0); }
-        catch (IOException ex) { Check(ReferenceEquals(ex, runtimeError), "Demo replaced the task error."); observed = true; }
-        Check(observed, "Demo discarded an asynchronous failure.");
-        GD.Print("PASS Demo task observation: original exception escapes the frame entry without manual handling");
-        await CancelLoadingAsync();
-        await _ui.DisposeAsync();
-        Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (25 scenarios)");
-        _exiting = true;
-        GetTree().Quit(0);
-    }
-
-    private async Task RunContainerReturnSelfTestAsync()
-    {
-        await OpenJournalAsync(); var journal = (JournalView)_scenario!;
-        await journal.ToggleAsync("Tasks");
-        var page = journal.Tabs.Current!; var note = journal.GetControl<TextEdit>("Pages/Tasks/Note");
-        note.Text = "Meet the merchant before dawn.";
-        journal.GetControl<CheckButton>("Pages/Tasks/Supplies").ButtonPressed = true;
-        var count = journal.GetControl<Control>("Pages").GetChildCount();
-        await journal.ToggleAsync("Tasks");
-        Check(journal.Tabs.Current == null && !page.IsVisible && page.State == NodeState.Ready &&
-            journal.GetControl<Label>("Prompt").Visible, "Journal did not fold its current page.");
-        await journal.ToggleAsync("Map"); journal.GetControl<HSlider>("Pages/Map/Zoom").Value = 130;
-        await journal.ToggleAsync("Map"); await journal.ToggleAsync("Tasks");
-        Check(ReferenceEquals(journal.Tabs.Current, page) && note.Text == "Meet the merchant before dawn." &&
-            journal.GetControl<CheckButton>("Pages/Tasks/Supplies").ButtonPressed &&
-            journal.GetControl<HSlider>("Pages/Map/Zoom").Value == 130 &&
-            journal.GetControl<Control>("Pages").GetChildCount() == count, "Journal recreated pages or lost their values.");
-        GD.Print("PASS journal folding: no selection, retained notes/map/controls, reopen embedded page by name");
-
-        foreach (var mode in new[] { ModalBackdropMode.Shared, ModalBackdropMode.PerModal })
-        {
-            Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), mode);
-            var shop = await Modals.OpenShopViewAsync();
-            var noteField = shop.GetControl<LineEdit>("Center/Panel/Margin/Content/Note"); noteField.Text = "Hold this bow for Lyra.";
-            var detailsButton = shop.GetControl<Button>("Center/Panel/Margin/Content/Details"); detailsButton.GrabFocus();
-            var display = shop.GetControl(); var backdrop = Modals.CurrentBackdrop;
-            var item = await Modals.OpenShopItemViewAsync(); var itemTransition = item.TransitionState;
-            var purchase = await Modals.OpenPurchaseViewAsync();
-            var returning = purchase.ConfirmAsync();
-            var visibleDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Count(d => !d.IsQueuedForDeletion() && d.Visible);
-            Check(!item.IsVisible && !item.GetControl().Visible && !item.IsActive && shop.IsVisible && !shop.IsInteractive &&
-                visibleDims == (mode == ModalBackdropMode.Shared ? 1 : 2), "Return animation exposed an intermediate modal or its backdrop.");
-            await returning;
-            var remainingDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Where(d => !d.IsQueuedForDeletion()).ToArray();
-            Check(ReferenceEquals(Modals.Current, shop) && shop.IsInteractive && ReferenceEquals(shop.GetControl(), display) &&
-                ReferenceEquals(Modals.CurrentBackdrop, backdrop) && GetViewport().GuiGetFocusOwner() == detailsButton,
-                "Batch return lost merchant instance, backdrop, input or original focus.");
-            Check(item.State == NodeState.Disposed && purchase.State == NodeState.Disposed &&
-                ReferenceEquals(item.TransitionState, itemTransition) && noteField.Text == "Hold this bow for Lyra." &&
-                shop.Orders == 1 && remainingDims.Length == 1 && remainingDims[0].Visible,
-                "Batch return replayed intermediate transition, lost merchant data or left extra backdrops.");
-
-            using var resources = await _ui.PreloadAsync<ConfirmView>();
-            var waiting = Modals.ShowConfirmViewAsync(playAnimation: false);
-            var unresolved = (ConfirmView)Modals.Current!;
-            await Modals.CloseToAsync(shop, playAnimation: false); await ExpectCancellationAsync(waiting);
-            Check(unresolved.State == NodeState.Disposed && Modals.Current == shop, "Batch close left a result waiter or closed the target.");
-            var completed = Modals.ShowConfirmViewAsync(playAnimation: false);
-            ((ConfirmView)Modals.Current!).Complete(true);
-            await Modals.CloseToAsync(shop, playAnimation: false);
-            Check(await completed, "Batch close discarded a submitted dialog result.");
-            await Modals.CloseAsync(shop);
-            Check(Modals.Current == null && Modals.CurrentBackdrop == null && _menu.IsInteractive, "Merchant close retained modal input or backdrop.");
-        }
-        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track));
-        GD.Print("PASS merchant batch return: shared/per-modal backdrop, original focus/data, cleanup and result waiters");
-    }
-
-    private async Task RunTransitionSelectionSelfTestAsync()
-    {
-        await OpenPreferencesAsync(); var preferences = (PreferencesView)_scenario!;
-        var contexts = new List<TransitionContext>(); var tabRecipe = preferences.Tabs.ChildTransition!;
-        preferences.Tabs.ChildTransition = Transitions.Select(c => { contexts.Add(c); return tabRecipe; });
-        await preferences.SelectAsync("Audio", playAnimation: false);
-        Check(contexts.Count == 0 && preferences.Tabs.CurrentName == "Audio", "Instant Tab switch invoked selection or failed to commit.");
-        await preferences.SelectAsync("Graphics");
-        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.Exit, TransitionPhase.Enter })
-            && contexts.All(c => c.Source?.Name == "Audio" && c.Target?.Name == "Graphics"), "Tab selection context lost phases or names.");
-        GD.Print("PASS V5 preferences: initial/instant pages, name-based selection, normal transitions");
-
-        await OpenInventoryAsync(); var stack = ((InventoryWindowView)_scenario!).Body; var inventory = (InventoryView)stack.Current!;
-        await inventory.SelectAsync("Materials");
-        contexts.Clear(); var stackRecipe = stack.ChildTransition!;
-        stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return stackRecipe; });
-        await inventory.InspectAsync("Moonstone"); var details = stack.Current!;
-        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.PushExit, TransitionPhase.PushEnter })
-            && contexts.All(c => ReferenceEquals(c.Source, inventory) && ReferenceEquals(c.Target, details)), "Stack selection did not receive source/target phases.");
-        contexts.Clear(); await stack.PushProvenanceViewAsync(); var notes = stack.Current!;
-        Check(contexts.All(c => c.Source is DetailsView && c.Target is ProvenanceView), "Field note transition lost its business types.");
-        contexts.Clear(); await stack.PopAsync();
-        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.PopExit, TransitionPhase.PopEnter }), "Return selection phases.");
-        contexts.Clear(); await stack.PopToAsync(inventory, playAnimation: false);
-        Check(contexts.Count == 0 && ReferenceEquals(stack.Current, inventory) && details.State == NodeState.Disposed && notes.State == NodeState.Disposed,
-            "Instant return selected animation or failed to release intermediate pages.");
-        GD.Print("PASS V5 backpack: phase/type selection, reverse return, instant return cleanup");
-
-        foreach (var mode in new[] { ModalBackdropMode.Shared, ModalBackdropMode.PerModal })
-        {
-            Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track, duration: 2), mode);
-            using var preloaded = await _ui.PreloadAsync<SettingsWindowView>();
-            using var settingsPage = await _ui.PreloadAsync<SettingsView>();
-            var opening = Modals.OpenSettingsWindowViewAsync(playAnimation: false);
-            Check(opening.IsCompletedSuccessfully, "Preloaded instant modal waited for its node or dim animation."); var window = await opening;
-            var dim = window.GetControl().GetParent().GetChildren().OfType<ColorRect>().Single(c => !c.IsQueuedForDeletion());
-            Check(dim.Visible && dim.Modulate.A == 1 && Modals.Current == window && window.IsInteractive, "Instant backdrop/input final state.");
-            var closing = Modals.CloseAsync(window, playAnimation: false); Check(closing.IsCompletedSuccessfully, "Instant close waited for animation.");
-            await closing; Check(Modals.CurrentBackdrop == null && window.State == NodeState.Disposed && _menu.IsInteractive, "Instant modal cleanup or input restoration.");
-        }
-        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track));
-        using var confirmResources = await _ui.PreloadAsync<ConfirmView>();
-        var dialog = Modals.ShowConfirmViewAsync(playAnimation: false); ((ConfirmView)Modals.Current!).Complete(false);
-        Check(!await dialog && Modals.Current == null, "Generated instant dialog failed to return the explicit cancel result.");
-        GD.Print("PASS V5 modal: instant shared/per-modal dim, lifecycle/input/cleanup, generated dialog result");
-    }
-
-    private async Task RunAnimationCapabilitySelfTestAsync()
-    {
-        await OpenPreferencesAsync(); var preferences = (PreferencesView)_scenario!;
-        var audio = preferences.Tabs.Items["Audio"]; var control = audio.GetControl();
-        var position = control.Position; var scale = control.Scale; var pivot = control.PivotOffset; var tint = control.Modulate;
-        var neutral = new GodotTransitionFrame();
-        var start = neutral with { Offset = new Vector2(0, 20), Scale = Vector2.One * .9f, Alpha = .2f };
-        audio.Transition = GodotTransitions.Simple(start, neutral, duration: .4, delay: .2, transition: Tween.TransitionType.Linear);
-        var states = new List<TransitionState>(); audio.TransitionChanged += states.Add;
-        var switching = preferences.SelectAsync("Audio");
-        Check(audio.IsTransitioning && audio.CurrentTransitionPhase == TransitionPhase.Enter
-            && control.Position.IsEqualApprox(position + start.Offset) && control.Scale.IsEqualApprox(scale * .9f)
-            && Mathf.IsEqualApprox(control.Modulate.A, tint.A * .2f), "Simple initial pose or public state.");
-        await WaitUntilAsync(() => audio.TransitionProgress > 0);
-        var active = Mathf.Clamp((audio.TransitionProgress * .6f - .2f) / .4f, 0, 1);
-        Check(control.Position.IsEqualApprox(position + start.Offset * (1 - active))
-            && control.Scale.IsEqualApprox(scale * Mathf.Lerp(.9f, 1, active))
-            && Mathf.IsEqualApprox(control.Modulate.A, tint.A * Mathf.Lerp(.2f, 1, active)), "Delay/time/linear interpolation mismatch.");
-        await switching;
-        Check(!audio.IsTransitioning && audio.TransitionState!.Stage == TransitionStage.Completed && audio.TransitionProgress == 1
-            && control.Position == position && control.Scale == scale && control.PivotOffset == pivot && control.Modulate == tint,
-            "Simple animation did not restore authored presentation.");
-        Check(states.Any(s => s.Stage == TransitionStage.Preparing) && states.Count(s => s.Stage == TransitionStage.Playing) > 2,
-            "Animation state did not publish intermediate progress.");
-        audio.TransitionChanged -= states.Add; audio.Transition = null;
-        GD.Print("PASS animation parameters: delay, pixel offset, scale/alpha, linear progress and restoration");
-
-        var frame = neutral with { RelativeOffset = new Vector2(-1, 1), Offset = new Vector2(3, -4), Scale = new Vector2(.8f, -1.1f), Alpha = .4f };
-        var lifecycle = new LifecycleContext(audio, preferences.Tabs, LifecycleReason.Switch, null, audio);
-        var instant = GodotTransitions.Simple(neutral, frame, duration: 0).Create(new(lifecycle, true, TransitionDirection.None));
-        await instant.PlayAsync(CancellationToken.None);
-        Check(control.Position.IsEqualApprox(position + frame.RelativeOffset * control.Size + frame.Offset)
-            && control.Scale.IsEqualApprox(scale * frame.Scale) && Mathf.IsEqualApprox(control.Modulate.A, tint.A * frame.Alpha),
-            "Simple final relative pose.");
-        instant.Restore(); Check(control.Position == position && control.Scale == scale && control.Modulate == tint, "Simple endpoint restoration.");
-        var delayed = GodotTransitions.Simple(neutral, frame, duration: 0, delay: .10).Create(new(lifecycle, true, TransitionDirection.None));
-        var delayedPlay = delayed.PlayAsync(CancellationToken.None);
-        Check(!delayedPlay.IsCompleted && control.Position == position, "Zero-duration animation ignored its explicit delay.");
-        await delayedPlay; delayed.Restore();
-        void Reject<T>(Action configure) where T : Exception
-        {
-            try { configure(); }
-            catch (T) { return; } // The exact expected configuration error is asserted; the adapter already logs it.
-            throw new InvalidOperationException($"Expected {typeof(T).Name} for invalid animation configuration.");
-        }
-        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(duration: -1));
-        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(delay: double.NaN));
-        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(transition: (Tween.TransitionType)999));
-        Reject<ArgumentNullException>(() => GodotTransitions.Simple(null!, neutral));
-        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Simple(neutral with { RelativeOffset = new Vector2(float.PositiveInfinity, 0) }, neutral));
-        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Simple(neutral with { Scale = new Vector2(float.NaN, 1) }, neutral));
-        var easingChecks = 0;
-        var eased = GodotTransitions.Simple(neutral with { Offset = new Vector2(100, 0) }, neutral,
-            duration: .2, transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
-        audio.Transition = eased;
-        void VerifyEase(TransitionState s)
-        {
-            if (s.Stage != TransitionStage.Playing || s.Progress <= 0 || s.Progress >= 1) return;
-            var factor = 1 - Mathf.Pow(1 - s.Progress, 4);
-            // Native easing uses double time; public progress is float. Allow sub-pixel rounding, not a different curve.
-            Check(control.Position.DistanceTo(position + new Vector2(100 * (1 - factor), 0)) < .001f,
-                $"Selected easing mismatch: progress={s.Progress}, actual={control.Position}, expected={position + new Vector2(100 * (1 - factor), 0)}.");
-            easingChecks++;
-        }
-        audio.TransitionChanged += VerifyEase; await preferences.SelectAsync("Graphics");
-        audio.TransitionChanged -= VerifyEase; audio.Transition = null; Check(easingChecks > 0, "No native intermediate easing samples.");
-        GD.Print("PASS animation frames: relative endpoints, zero duration, Quart Out easing and independent runs");
-
-        var graphics = preferences.Tabs.Items["Graphics"]; var player = new AnimationPlayer { Name = "CapabilityAnimator" };
-        graphics.GetControl().AddChild(player); var library = new AnimationLibrary();
-        library.AddAnimation("enter", new Animation { Length = .12 }); library.AddAnimation("exit", new Animation { Length = .12 });
-        player.AddAnimationLibrary("", library);
-        graphics.Transition = GodotTransitions.Animation("CapabilityAnimator", "enter", "exit", _ => { });
-        var clipStates = new List<TransitionState>(); graphics.TransitionChanged += clipStates.Add;
-        await preferences.SelectAsync("Audio");
-        Check(clipStates.Any(s => s.Stage == TransitionStage.Playing && s.Progress > 0 && s.Progress < 1)
-            && graphics.TransitionState!.Stage == TransitionStage.Completed && !player.IsPlaying(), "AnimationPlayer progress/completion.");
-        graphics.TransitionChanged -= clipStates.Add; graphics.Transition = null; player.QueueFree();
-        var graphicsControl = graphics.GetControl(); var graphicsPosition = graphicsControl.Position;
-        graphics.Transition = GodotTransitions.Simple(neutral with { Offset = new Vector2(0, 30), Alpha = 0 }, neutral, duration: .2, delay: 1);
-        using (var cancel = new CancellationTokenSource())
-        {
-            var pending = preferences.SelectAsync("Graphics", token: cancel.Token); cancel.Cancel();
-            await ExpectCancellationAsync(pending);
-            Check(graphics.TransitionState!.Stage == TransitionStage.Canceled && !graphics.IsTransitioning
-                && preferences.Tabs.CurrentName == "Audio" && audio.IsInteractive && graphicsControl.Position == graphicsPosition,
-                "Canceled delayed animation leaked state, position or changed selection.");
-        }
-        graphics.Transition = null;
-        GD.Print("PASS animation clips: native AnimationPlayer progress and observed completion");
-
-        await OpenInventoryAsync(); var stack = ((InventoryWindowView)_scenario!).Body;
-        var details = await stack.PushDetailsViewAsync(); var sorted = false;
-        void VerifyOrder(TransitionState s)
-        {
-            if (s.Stage != TransitionStage.Playing || s.Context.Target is not ProvenanceView notes) return;
-            Check(details.GetControl().GetIndex() > notes.GetControl().GetIndex(), "Detail page did not remain above entering field notes.");
-            sorted = true;
-        }
-        details.TransitionChanged += VerifyOrder; var notesPage = await stack.PushProvenanceViewAsync();
-        details.TransitionChanged -= VerifyOrder;
-        Check(sorted && notesPage.GetControl().GetIndex() > details.GetControl().GetIndex(), "Temporary drawing order was not restored.");
-        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var noteControl = notesPage.GetControl(); var noteMount = noteControl.GetParent<Control>();
-        Check(noteControl.Visible && noteControl.Modulate.A == 1 && noteControl.Position.IsEqualApprox(Vector2.Zero)
-            && noteControl.Size.IsEqualApprox(noteMount.Size), "Anchored field notes drifted or expanded after animation.");
-        Check(Mathf.IsEqualApprox(((InventoryWindowView)_scenario!).GetControl<Label>("Actions/Hint").Modulate.A, 1), "Exterior caption did not restore after progress animation.");
-        await stack.PopToAsync(stack.History[0]);
-        GD.Print("PASS animation drawing: detail reveals notes beneath, sibling and exterior caption restoration");
-    }
-
-    private async Task RunPartnerSelfTestAsync()
-    {
-        await OpenInventoryAsync();
-        var stack = ((InventoryWindowView)_scenario!).Body;
-        var inventory = (InventoryView)stack.Current!;
-        var mount = stack.GetControl();
-        foreach (var pair in new[] { ("Equipment", "Oakheart Bow"), ("Materials", "Iron Ore") })
-        {
-            await inventory.SelectAsync(pair.Item1);
-            var samples = 0;
-            void Verify(TransitionState state)
-            {
-                if (state.Stage != TransitionStage.Playing || state.Progress <= 0 || state.Progress >= 1) return;
-                var details = (DetailsView)state.Context.Node;
-                var small = inventory.SelectedIcon; var large = details.GetControl<TextureRect>("Artwork/Icon");
-                var flying = mount.GetNode<TextureRect>("FlyingItemPortrait");
-                Rect2 Rect(Control c)
-                {
-                    var t = mount.GetGlobalTransformWithCanvas().AffineInverse() * c.GetGlobalTransformWithCanvas();
-                    return new Rect2(t * Vector2.Zero, t * c.Size - t * Vector2.Zero);
-                }
-                var start = Rect(state.Context.Entering ? small : large);
-                var end = Rect(state.Context.Entering ? large : small);
-                var eased = 1 - Mathf.Pow(1 - state.Progress, 3);
-                Check(flying.Position.DistanceTo(start.Position.Lerp(end.Position, eased)) < .01f &&
-                    flying.Size.DistanceTo(start.Size.Lerp(end.Size, eased)) < .01f, "Partner image did not interpolate the actual rectangles.");
-                Check(small.SelfModulate.A == 0 && large.SelfModulate.A == 0 && ReferenceEquals(flying.Texture, small.Texture),
-                    "Partner animation duplicated a portrait or changed its texture.");
-                Check(flying.MouseFilter == MouseFilterEnum.Ignore && mount.GetChildren().Count(n => n.Name == "FlyingItemPortrait") == 1,
-                    "Flying portrait intercepted input or was duplicated.");
-                samples++;
-            }
-            void Hook(TransitionState state)
-            {
-                if (state.Stage == TransitionStage.Preparing && state.Context.Target is DetailsView details)
-                    details.TransitionChanged += Verify;
-            }
-            inventory.TransitionChanged += Hook;
-            await inventory.InspectAsync(pair.Item2);
-            inventory.TransitionChanged -= Hook;
-            var current = (DetailsView)stack.Current!;
-            Check(samples > 0 && current.GetControl<TextureRect>("Artwork/Icon").SelfModulate.A == 1 &&
-                inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
-                "Completed partner entry leaked temporary presentation.");
-            samples = 0;
-            await stack.PopAsync();
-            Check(samples > 0 && ReferenceEquals(stack.Current, inventory) && inventory.SelectedIcon.SelfModulate.A == 1 &&
-                mount.GetNodeOrNull("FlyingItemPortrait") == null, "Partner return did not shrink/restore to the retained item.");
-            current.TransitionChanged -= Verify;
-        }
-        GD.Print("PASS partner portraits: equipment/material textures, live rectangle expansion and reverse return, no duplicates");
-
-        using var cancel = new CancellationTokenSource();
-        DetailsView? canceledDetails = null;
-        void CancelHook(TransitionState state)
-        {
-            if (state.Stage != TransitionStage.Preparing || state.Context.Target is not DetailsView details) return;
-            canceledDetails = details;
-            details.TransitionChanged += s => { if (s.Stage == TransitionStage.Playing && s.Progress > .2f) cancel.Cancel(); };
-        }
-        inventory.TransitionChanged += CancelHook;
-        await ExpectCancellationAsync(inventory.InspectAsync("Iron Ore", token: cancel.Token));
-        inventory.TransitionChanged -= CancelHook;
-        Check(canceledDetails?.State == NodeState.Disposed && ReferenceEquals(stack.Current, inventory) &&
-            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
-            "Canceled partner animation left an overlay, hidden item or history entry.");
-
-        var original = new IOException("Expected partner animation observer failure.");
-        DetailsView? failedDetails = null;
-        void FailHook(TransitionState state)
-        {
-            if (state.Stage != TransitionStage.Preparing || state.Context.Target is not DetailsView details) return;
-            failedDetails = details;
-            details.TransitionChanged += s => { if (s.Stage == TransitionStage.Playing && s.Progress > .2f) throw original; };
-        }
-        inventory.TransitionChanged += FailHook;
-        try { await inventory.InspectAsync("Iron Ore"); throw new InvalidOperationException("Partner fault unexpectedly succeeded."); }
-        catch (IOException ex) { Check(ReferenceEquals(ex, original), "Partner failure replaced the original exception."); }
-        finally { inventory.TransitionChanged -= FailHook; }
-        Check(failedDetails?.State == NodeState.Disposed && ReferenceEquals(stack.Current, inventory) &&
-            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
-            "Failed partner animation did not restore the retained inventory.");
-        await inventory.InspectAsync("Iron Ore");
-        var returningDetails = (DetailsView)stack.Current!;
-        using var cancelReturn = new CancellationTokenSource();
-        void CancelReturn(TransitionState state)
-        { if (state.Stage == TransitionStage.Playing && state.Progress > .2f) cancelReturn.Cancel(); }
-        returningDetails.TransitionChanged += CancelReturn;
-        await ExpectCancellationAsync(stack.PopAsync(cancellationToken: cancelReturn.Token));
-        returningDetails.TransitionChanged -= CancelReturn;
-        Check(ReferenceEquals(stack.Current, returningDetails) && returningDetails.IsVisible && returningDetails.GetControl().Modulate.A == 1 &&
-            returningDetails.GetControl<TextureRect>("Artwork/Icon").SelfModulate.A == 1 &&
-            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
-            "Canceled return lost the open details or leaked a portrait.");
-        await stack.PopAsync();
-        await inventory.InspectAsync("Iron Ore", playAnimation: false);
-        Check(((DetailsView)stack.Current!).GetControl<TextureRect>("Artwork/Icon").Texture == inventory.SelectedIcon.Texture &&
-            mount.GetNodeOrNull("FlyingItemPortrait") == null, "Instant details skipped preparation or created an animation overlay.");
-        await stack.PopAsync(playAnimation: false);
-        GD.Print("PASS partner restoration: entry/return cancellation, original failure rollback and immediate display");
-    }
-
-    private async Task RunAdapterSelfTestAsync()
-    {
-        // Exercise the actual engine API, including borrowed-resource ownership and failures.
-        var mount = new Control { Name = "AdapterTestMount" };
-        var page = new Control { Name = "Page" };
-        AddChild(mount); mount.AddChild(page);
-        var ui = GodotUI.Create(this);
         try
         {
-            Check(ui.Root.Children.Count == 0, "Adapter setup supplied project nodes.");
-            var customLoader = new DelayedLoader(new GodotSceneLoader((GodotUIHost)ui.Host));
-            await using (var custom = GodotUI.Create(this, loader: customLoader, logger: (IUILog)ui.Host))
-                Check(ReferenceEquals(custom.Loader, customLoader) && ReferenceEquals(custom.Log, ui.Host), "Custom services were replaced.");
-            var tabs = await ui.Root.CreateContainerAsync<TabContainerNode>("Tabs", mount);
-            await tabs.BindAsync("Page", page);
-            await tabs.SwitchAsync("Page");
-            Check(tabs.Current!.GetType() == typeof(UINode), "Control-only binding requires a business View.");
-            Check(ReferenceEquals(tabs.Current.GetControl(), page), "Embedded Control was cloned.");
-            Check(ReferenceEquals(tabs.GetControl<Control>("Page"), page), "Typed Control lookup.");
-            await VerifyNativeTransitionsAsync(tabs.Current!, page);
-            await tabs.DisposeAsync();
-            Check(GodotObject.IsInstanceValid(mount) && !mount.IsQueuedForDeletion(), "Borrowed mount was freed.");
-            Check(GodotObject.IsInstanceValid(page) && !page.IsQueuedForDeletion(), "Borrowed page was freed.");
-
-            var customNode = new DemoMenuNode();
-            await customNode.AttachToAsync(ui.Root, "Custom", mount);
-            Check(ReferenceEquals(ui.Root.GetChild("Custom"), customNode), "Attachment replaced the supplied node.");
-            await customNode.DisposeAsync();
-            using var canceled = new CancellationTokenSource(); canceled.Cancel();
-            await ExpectCancellationAsync(ui.Root.CreateContainerAsync<PanelContainerNode>("Canceled", mount, canceled.Token));
-            Check(ui.Root.Children.Count == 0, "Canceled helper left an attached container.");
-
-            var stack = await ui.Root.CreateContainerAsync<StackContainerNode>("TransitionRollback", mount);
-            ui.Register<AdapterFadeNode>("res://Scenes/Settings/Graphics.tscn");
-            var retained = await stack.PushAsync<AdapterFadeNode>();
-            var transitionFailure = new InvalidOperationException("Expected adapter transition rollback failure.");
-            ui.Register(() => new UINode { Transition = new AdapterFailingTransition(transitionFailure) }, "res://Scenes/Settings/Graphics.tscn");
-            try
-            {
-                await stack.PushAsync<UINode>();
-                throw new Exception("Transition should have failed.");
-            }
-            catch (InvalidOperationException ex)
-            {
-                Check(ReferenceEquals(ex, transitionFailure), "Transition replaced the original exception.");
-                Check(ReferenceEquals(stack.Current, retained) && retained.IsVisible && retained.GetControl().Modulate.A == 1,
-                    "Rollback restored visibility but left the previous fade transparent.");
-            }
-            await stack.DisposeAsync();
-            // Godot frees QueueFree-owned scenes at frame end before this borrowed mount is rebound.
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-
-            var original = new InvalidOperationException("Expected adapter attachment initialization failure.");
-            var failing = new AdapterFailureNode(original);
-            try
-            {
-                await failing.AttachToAsync(ui.Root, "Failing", mount);
-                throw new Exception("Adapter initialization should have failed.");
-            }
-            catch (InvalidOperationException ex)
-            {
-                Check(ReferenceEquals(ex, original), "Adapter replaced the original initialization exception.");
-                Check(failing.State == NodeState.Disposed && ui.Root.Children.Count == 0, "Failed attachment was not cleaned.");
-                Check(!mount.IsQueuedForDeletion(), "Failed attachment destroyed its borrowed Control.");
-            }
+            action();
         }
-        finally { await ui.DisposeAsync(); mount.QueueFree(); }
-        GD.Print("GODOT ADAPTER SELF-TEST PASSED (setup, custom services, binding, ownership, cancellation, original failure)");
-    }
-
-    private async Task VerifyNativeTransitionsAsync(UINode node, Control page)
-    {
-        page.Size = new Vector2(100, 70); page.Position = new Vector2(5, 7);
-        var tint = new Color(0.7f, 0.8f, 0.9f, 0.6f); page.Modulate = tint;
-        var position = page.Position; var scale = new Vector2(1.1f, 0.9f); page.Scale = scale;
-        var pivot = new Vector2(3, 4); page.PivotOffset = pivot;
-        var lifecycle = new LifecycleContext(node, node.Parent as ContainerNode, LifecycleReason.Push, null, node);
-        foreach (var direction in new[] { TransitionDirection.Forward, TransitionDirection.Backward })
+        catch (T)
         {
-            var run = GodotTransitions.SlideHorizontal(0.02).Create(new(lifecycle, true, direction));
-            var playing = run.PlayAsync(CancellationToken.None);
-            var sign = direction == TransitionDirection.Forward ? 1 : -1;
-            Check(page.Position.IsEqualApprox(position + new Vector2(sign * page.Size.X, 0)), "Slide did not honor the operation direction.");
-            await playing; run.Restore(); Check(page.Position.IsEqualApprox(position), "Slide drifted after restoration.");
+            return;
         }
-        var fade = GodotTransitions.Fade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
-        await fade.PlayAsync(CancellationToken.None); fade.Restore(); Check(page.Modulate == tint, "Fade overwrote authored tint/alpha.");
-        var zoom = GodotTransitions.ScaleFade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
-        await zoom.PlayAsync(CancellationToken.None); zoom.Restore();
-        Check(page.Scale == scale && page.PivotOffset == pivot && page.Modulate == tint, "ScaleFade did not restore authored presentation.");
-        using var canceled = new CancellationTokenSource();
-        var rollback = GodotTransitions.ScaleFade(0.2).Create(new(lifecycle, false, TransitionDirection.None));
-        var pending = rollback.PlayAsync(canceled.Token); canceled.Cancel();
-        await ExpectCancellationAsync(pending); rollback.Restore(); Check(page.Scale == scale && page.Modulate == tint, "Canceled scale animation leaked state.");
 
-        var player = new AnimationPlayer { Name = "Animator" }; page.AddChild(player);
-        var library = new AnimationLibrary();
-        library.AddAnimation("enter", new Animation { Length = 0.02 }); library.AddAnimation("exit", new Animation { Length = 0.02 });
-        player.AddAnimationLibrary("", library);
-        var restored = false;
-        var authored = GodotTransitions.Animation("Animator", "enter", "exit", c => { c.Modulate = tint; restored = true; });
-        var animation = authored.Create(new(lifecycle, true, TransitionDirection.None));
-        await animation.PlayAsync(CancellationToken.None); animation.Restore(); Check(restored && !player.IsPlaying(), "AnimationPlayer restoration was not invoked.");
-        GD.Print("PASS V4 native animations: slide directions, tint/position/scale restoration, cancellation, AnimationPlayer");
+        throw new InvalidOperationException("Expected " + typeof(T).Name);
     }
 
-    private sealed class AdapterFadeNode : UINode
+    private async Task RunClientTestsAsync()
     {
-        protected override Task OnInitializeAsync(CancellationToken token)
-        { Transition = GodotTransitions.Fade(0.02); return Task.CompletedTask; }
-    }
-    private sealed class AdapterFailingTransition(Exception original) : IUITransition, IUITransitionRun
-    {
-        public Task PlayAsync(CancellationToken token) => Task.FromException(original);
-        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
-    }
-
-    private sealed class AdapterFailureNode(Exception original) : UINode
-    {
-        protected override Task OnInitializeAsync(CancellationToken token) => Task.FromException(original);
-    }
-
-    private async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var attempts = 0;
-        while (!condition())
+        int checks = 0;
+        void Pass(bool b, string s)
         {
-            if (++attempts > 300) throw new TimeoutException("Demo operation did not reach its expected state.");
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(b, s);
+            checks++;
+            GD.Print("PASS " + s);
         }
+
+        var directory = ProjectSettings.GlobalizePath("user://client-test");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "model.json");
+        if (File.Exists(path))
+            File.Delete(path);
+        var model = new ClientStore(path);
+        int gold = model.State.Gold;
+        model.Buy("eq0", 2);
+        Pass(model.State.Gold == gold - Catalog.Item("eq0").Price * 2 && model.State.Inventory["eq0"] == 4, "purchase state");
+        var previous = model.State;
+        Throws<ArgumentOutOfRangeException>(() => model.Buy("eq11", 100));
+        Pass(ReferenceEquals(previous, model.State), "invalid purchase unchanged");
+        model.Train(0);
+        model.Equip(0, "eq2");
+        model.SetTeam(2, 2);
+        Pass(model.State.Levels[0] == 13 && model.State.Equipment[0] == "eq2" && model.State.Team[2] == 2, "train equip team");
+        var equipped = model.State;
+        Throws<InvalidOperationException>(() => model.Equip(0, "eq2"));
+        Pass(ReferenceEquals(equipped, model.State), "same equipment cannot advance goals");
+        model.Equip(0, "");
+        Pass(model.State.Equipment[0] == "", "unequip persists");
+        model.Equip(0, "eq2");
+        Throws<InvalidOperationException>(() => model.SetTeam(3, 2));
+        checks++;
+        model.Count("login");
+        model.ClaimGoal(false, 0);
+        Throws<InvalidOperationException>(() => model.ClaimGoal(false, 0));
+        checks++;
+        model.ClaimMail(new[] { 0, 1, 1 });
+        Pass(model.State.Counts["mail"] == 2, "mail deduplication");
+        Throws<InvalidOperationException>(() => model.ClaimMail(new[] { 0, 1 }));
+        checks++;
+        model.ClaimEvent(1);
+        Throws<InvalidOperationException>(() => model.ClaimEvent(1));
+        checks++;
+        var loaded = new ClientStore(path);
+        Pass(loaded.State.Gold == model.State.Gold && loaded.State.Equipment[0] == "eq2" && loaded.State.Claimed.SetEquals(model.State.Claimed), "reload state");
+        File.WriteAllText(Path.Combine(directory, "broken.json"), "{bad");
+        Throws<System.Text.Json.JsonException>(() => new ClientStore(Path.Combine(directory, "broken.json")));
+        checks++;
+        File.WriteAllText(Path.Combine(directory, "incomplete.json"), "{}");
+        Throws<System.Text.Json.JsonException>(() => new ClientStore(Path.Combine(directory, "incomplete.json")));
+        checks++;
+        var corrupt = System.Text.Json.JsonSerializer.SerializeToNode(model.State)!;
+        corrupt["Inventory"]!["unknown"] = 1;
+        File.WriteAllText(Path.Combine(directory, "unknown-item.json"), corrupt.ToJsonString());
+        Throws<InvalidDataException>(() => new ClientStore(Path.Combine(directory, "unknown-item.json")));
+        checks++;
+        var failurePath = Path.Combine(directory, "write-failure");
+        var failed = new ClientStore(failurePath);
+        Directory.CreateDirectory(failurePath);
+        var old = failed.State;
+        Throws<UnauthorizedAccessException>(() => failed.Count("login"));
+        Pass(ReferenceEquals(old, failed.State), "failed save not published");
+        var balance = model.State.Gold;
+        model.Change(s => s.Gold = 0);
+        var broke = model.State;
+        Throws<InvalidOperationException>(() => model.Buy("eq0", 1));
+        Pass(ReferenceEquals(broke, model.State), "insufficient balance changes nothing");
+        model.Change(s => s.Gold = balance);
+        var purchases = model.State.Counts["purchase"];
+        var materials = model.State.Inventory["mat6"];
+        model.Buy("mat0", 2, true);
+        Pass(model.State.Counts["purchase"] == purchases + 1 && model.State.Inventory["mat6"] == materials + 6, "bundle is one committed purchase");
+        Store.Change(s => s.FullMotion = false);
+        await EnterAsync();
+        Pass(Shell.Pages.Current == Shell.Home && Shell.Home.IsInteractive, "client entry");
+        foreach (var module in new[]
+        {
+            "Characters",
+            "Inventory",
+            "Team",
+            "Stages",
+            "Shop",
+            "Tasks",
+            "Achievements",
+            "Mail",
+            "Friends",
+            "Events"
+        })
+        {
+            await OpenAsync(module);
+            Pass(Shell.Pages.Current!.IsInteractive, "module " + module);
+            await OpenAsync("Home");
+            Pass(Shell.Pages.Current == Shell.Home, "return " + module);
+        }
+
+        await OpenAsync("Inventory");
+        var inventory = (InventoryView)Shell.Pages.Current!;
+        await inventory.SelectTabAsync("材料");
+        await BackAsync();
+        await Shell.Pages.PushAsync<InventoryView>();
+        await OpenAsync("Home");
+        await OpenAsync("Inventory");
+        inventory = (InventoryView)Shell.Pages.Current!;
+        await PressAsync(inventory.GetControl().GetNode<Button>("Pages/装备/C0"));
+        var item = (ItemDetailsView)Shell.Pages.Current!;
+        Pass(!inventory.IsInteractive && item.IsInteractive, "partner activation");
+        Pass(!ClientView.Descendants(GetNode<Control>("ShellMount")).Any(n => n.Name == "FlyingItemPortrait"), "partner cleanup");
+        await item.CompareAsync();
+        await item.CompareAsync();
+        await ((ClientModalView)Modals.Current!).PickAsync(3);
+        Pass(Floating.Children.Count == 2, "multi instance comparison");
+        await BackAsync();
+        Pass(Floating.Children.Count == 0, "comparison back priority");
+        await Shell.Pages.PopAsync();
+        Pass(ReferenceEquals(Shell.Pages.Current, inventory), "original inventory returned");
+        await OpenAsync("Shop");
+        await ModalAsync(new ModalArgs("Shop", 0));
+        var detail = (ClientModalView)Modals.Current!;
+        await detail.ConfirmAsync();
+        var confirmation = (ClientModalView)Modals.Current!;
+        int owned = Store.State.Inventory["eq0"];
+        await confirmation.ConfirmAsync();
+        Pass(Store.State.Inventory["eq0"] == owned + 1 && Modals.Current is RewardView, "purchase reward");
+        Pass(confirmation.State == NodeState.Disposed && detail.State == NodeState.Ready && !detail.IsInteractive, "close to target");
+        await BackAsync();
+        Pass(ReferenceEquals(Modals.Current, detail) && detail.IsInteractive, "detail restored");
+        await BackAsync();
+        await ModalAsync(new ModalArgs("Shop", 1));
+        await ((ClientModalView)Modals.Current!).ConfirmAsync();
+        owned = Store.State.Inventory["eq1"];
+        await BackAsync();
+        Pass(Store.State.Inventory["eq1"] == owned, "cancel purchase");
+        await BackAsync();
+        await OpenAsync("Characters");
+        var equippedHero = await Shell.Pages.PushAsync<HeroDetailsView>(2);
+        await ModalAsync(new ModalArgs("Equip", 2));
+        await ((ClientModalView)Modals.Current!).PickAsync(0);
+        Pass(Store.State.Equipment[2] == "eq0" && equippedHero.GetControl<Label>("Stats").Text.Contains("280"), "purchased equipment updates visible attributes");
+        await ModalAsync(new ModalArgs("Equip", 3));
+        await ((ClientModalView)Modals.Current!).PickAsync(0);
+        await OpenAsync("Tasks");
+        await ModalAsync(new ModalArgs("Tasks", 2));
+        await ((ClientModalView)Modals.Current!).ConfirmAsync();
+        Pass(Store.State.Claimed.Contains("t2") && Modals.Current is RewardView, "equipment task reward closes loop");
+        await BackAsync();
+        await OpenAsync("Achievements");
+        await ModalAsync(new ModalArgs("Achievements", 2));
+        await ((ClientModalView)Modals.Current!).ConfirmAsync();
+        Pass(Store.State.Claimed.Contains("a2") && Modals.Current is RewardView, "equipment achievement reward closes loop");
+        await BackAsync();
+        await ModalAsync(new ModalArgs("Settings"));
+        Pass(!Shell.Pages.Current!.IsInteractive && Modals.Current!.IsInteractive, "modal input ownership");
+        var settingsView = (ClientModalView)Modals.Current;
+        settingsView.GetControl<HSlider>("Center/Pages/Settings/SettingPages/声音/Volume").Value = 15;
+        await PressAsync(settingsView.GetControl<Button>("Center/Pages/Settings/Tab1"));
+        var quality = settingsView.GetControl<OptionButton>("Center/Pages/Settings/SettingPages/画面/Quality");
+        quality.Select(1);
+        quality.EmitSignal(OptionButton.SignalName.ItemSelected, 1L);
+        settingsView.GetControl<CheckButton>("Center/Pages/Settings/SettingPages/画面/Fullscreen").ButtonPressed = true;
+        await PressAsync(settingsView.GetControl<Button>("Center/Pages/Settings/Tab2"));
+        settingsView.GetControl<CheckButton>("Center/Pages/Settings/SettingPages/演出/FullMotion").ButtonPressed = false;
+        Pass(Store.State.Volume == 15 && Store.State.Quality == 1 && Store.State.Fullscreen && !Store.State.FullMotion, "settings controls commit state");
+        var reset = settingsView.ConfirmAsync();
+        while (Modals.Current is not ConfirmView || !Modals.Current.IsInteractive)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        ((ConfirmView)Modals.Current).Complete(true);
+        await reset;
+        Pass(Store.State.Volume == 70 && Store.State.Quality == 2 && !Store.State.Fullscreen && Store.State.FullMotion, "settings restore defaults");
+        await BackAsync();
+        Store.Change(s => s.FullMotion = false);
+        Pass(Shell.Pages.Current.IsInteractive, "modal input restored");
+        await OpenAsync("Mail");
+        await PressAsync(Shell.Pages.Current!.GetControl<Button>("ClaimAll"));
+        Pass(Store.State.Counts["mail"] == 8 && Modals.Current is RewardView, "batch mail grants all once");
+        await BackAsync();
+        Pass(Shell.Pages.Current!.GetControl<Button>("ClaimAll").Disabled, "batch mail cannot repeat");
+        await OpenAsync("Events");
+        var events = (EventsView)Shell.Pages.Current!;
+        await events.Tabs.HideAsync();
+        Pass(events.Tabs.Current == null, "embedded hide");
+        await events.SelectAsync("签到");
+        await events.ClaimAsync(1);
+        Pass(Store.State.Claimed.Contains("e1"), "event reward persisted");
+        await BackAsync();
+        await OpenAsync("Home");
+        await OpenAsync("Characters");
+        var hero = await Shell.Pages.PushAsync<HeroDetailsView>(0);
+        int level = Store.State.Levels[0];
+        await hero.TrainAsync();
+        Pass(Store.State.Levels[0] == level + 1 && Modals.Current is TrainingView, "training timeline");
+        await BackAsync();
+        var question = AskAsync("测试确认");
+        while (Modals.Current is not ConfirmView || !Modals.Current.IsInteractive)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        ((ConfirmView)Modals.Current).Complete(true);
+        Pass(await question, "dialog result");
+        // Actual AnimationPlayer skip must finish the framework wait and leave no gate.
+        Store.Change(s => s.FullMotion = true);
+        var reward = RewardAsync("跳过时间轴");
+        while (SkipCinematic == null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        int modalCount = Modals.Children.Count;
+        _Notification((int)NotificationWMCloseRequest);
+        Pass(Modals.Children.Count == modalCount, "cinematic admits only skip");
+        SkipCinematic();
+        await reward;
+        Pass(SkipCinematic == null && Modals.Current!.IsInteractive, "animation skip");
+        await BackAsync();
+        var saved = new ClientStore(ProjectSettings.GlobalizePath("user://client-test/save.json"));
+        Pass(saved.State.Gold == Store.State.Gold && saved.State.Levels[0] == Store.State.Levels[0], "client persisted");
+        await RunAnimationBoundaryTestsAsync(Pass);
+        await RunAdapterSelfTestAsync();
+        Pass(true, "retained native adapter and transition coverage");
+        await RunResourceSelfTestAsync();
+        Pass(true, "retained native resource ownership coverage");
+        await RunRetainedPartnerTestsAsync(Pass);
+        await OpenAsync("Home");
+        int showcase = Store.State.Showcase;
+        var switchHero = Shell.Home.SwitchHeroAsync();
+        Pass(Busy && Shell.Home.GetControl<Button>("Welcome/NextHero").Disabled, "portrait switch disables repeated input");
+        await switchHero;
+        Pass(Store.State.Showcase == (showcase + 1) % 6 && !Busy && !Shell.Home.GetControl<Button>("Welcome/NextHero").Disabled, "portrait switch restores input");
+        GD.Print($"CLIENT TESTS PASSED: {checks}");
+        await _ui.DisposeAsync();
+        GetTree().Quit();
     }
 
+    private async Task VerifyClientSaveAsync()
+    {
+        // Separate process, same isolated file; never recreates a preset archive.
+        Check(Store.State.Gold == 14520 && Store.State.Gems == 650 && Store.State.Inventory["eq0"] == 3, "restart currencies and inventory");
+        Check(Store.State.Levels[0] == 13 && Store.State.Equipment[2] == "eq0" && Store.State.Showcase == 1, "restart heroes and profile");
+        Check(Store.State.Counts["mail"] == 8 && Store.State.Claimed.Contains("t2") && Store.State.Claimed.Contains("a2") && Store.State.Claimed.Contains("e1"), "restart rewards cannot repeat");
+        await EnterAsync();
+        Check(Shell.GetControl<Label>("Top/Wallet").Text.Contains("14,520"), "restart visible wallet");
+        GD.Print("CLIENT RESTART TESTS PASSED: 4");
+        await _ui.DisposeAsync();
+        GetTree().Quit();
+    }
+
+    private sealed class TestLog : IUILog
+    {
+        public readonly List<Exception> Errors = new();
+        public void Error(Exception exception, string context) => Errors.Add(exception);
+    }
+
+    private async Task RunAnimationBoundaryTestsAsync(Action<bool, string> pass)
+    {
+        var mount = new Control();
+        AddChild(mount);
+        mount.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        var log = new TestLog();
+        var fixture = GodotUI.Create(this, logger: log);
+        fixture.Register<RewardView>("res://Scenes/Client/Reward.tscn");
+        var windows = await fixture.Root.CreateContainerAsync<PanelContainerNode>("AnimationTests", mount);
+        using var cancel = new CancellationTokenSource();
+        var pending = windows.OpenAsync<RewardView>(new PresentationArgs("取消动画"), cancellationToken: cancel.Token);
+        while (SkipCinematic == null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        cancel.Cancel();
+        try
+        {
+            await pending;
+            throw new InvalidOperationException("Expected cancellation.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        pass(SkipCinematic == null && windows.Children.Count == 0 && mount.GetChildCount() == 0, "cancel timeline cleans display and gate");
+        pending = windows.OpenAsync<RewardView>(new PresentationArgs("原始动画错误"));
+        while (SkipCinematic == null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        windows.Children.Single().GetControl().GetNode<AnimationPlayer>("AnimationPlayer").Stop();
+        Exception original;
+        try
+        {
+            await pending;
+            throw new IOException("Expected AnimationPlayer error.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            original = ex;
+        }
+
+        pass(log.Errors.Contains(original) && SkipCinematic == null && mount.GetChildCount() == 0, "raw animation failure cleanup");
+        pending = windows.OpenAsync<RewardView>(new PresentationArgs("销毁中的动画"));
+        while (SkipCinematic == null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await fixture.DisposeAsync();
+        try
+        {
+            await pending;
+            throw new InvalidOperationException("Expected disposal cancellation.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        pass(SkipCinematic == null && mount.GetChildCount() == 0, "dispose during timeline");
+        RemoveChild(mount);
+        mount.QueueFree();
+        await OpenAsync("Home");
+        var settings = Shell.GetControl<Button>("Top/Settings");
+        settings.GrabFocus();
+        await ModalAsync(new ModalArgs("Settings"));
+        pass(GetViewport().GuiGetFocusOwner() != settings, "modal captures focus");
+        await BackAsync();
+        pass(GetViewport().GuiGetFocusOwner() == settings, "modal restores original focus");
+        await OpenAsync("Inventory");
+        var inventory = (InventoryView)Shell.Pages.Current!;
+        await PressAsync(inventory.GetControl<Button>("Pages/装备/C0"));
+        await OpenAsync("Home");
+        pass(Shell.Pages.Current == Shell.Home && !ClientView.Descendants(GetNode<Control>("ShellMount")).Any(n => n.Name == "FlyingItemPortrait"), "item detail direct home uses explicit transition");
+    }
 }

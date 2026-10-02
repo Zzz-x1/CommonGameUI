@@ -1,0 +1,128 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero0.png" id="1"]
+[node name="HeroDetails" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Paper" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.025
+anchor_top = 0.035
+anchor_right = 0.975
+anchor_bottom = 0.975
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Heading" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.055
+anchor_right = 0.7
+anchor_bottom = 0.14
+grow_horizontal = 2
+grow_vertical = 2
+text = "角色档案"
+theme_override_font_sizes/font_size = 34
+mouse_filter = 2
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.055
+anchor_top = 0.145
+anchor_right = 0.89
+anchor_bottom = 0.2
+grow_horizontal = 2
+grow_vertical = 2
+text = "装备与培养结果会同步保存到本地档案。"
+theme_override_font_sizes/font_size = 18
+mouse_filter = 2
+[node name="Portrait" type="TextureRect" parent="."]
+layout_mode = 1
+anchor_left = 0.05
+anchor_top = 0.2
+anchor_right = 0.48
+anchor_bottom = 0.95
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Name" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.25
+anchor_right = 0.9
+anchor_bottom = 0.34
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 40
+mouse_filter = 2
+[node name="Story" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.36
+anchor_right = 0.91
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 22
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Stats" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.54
+anchor_right = 0.9
+anchor_bottom = 0.64
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 28
+mouse_filter = 2
+[node name="Equipment" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.67
+anchor_right = 0.91
+anchor_bottom = 0.74
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 21
+mouse_filter = 2
+[node name="Equip" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.77
+anchor_right = 0.7
+anchor_bottom = 0.86
+grow_horizontal = 2
+grow_vertical = 2
+text = "更换装备"
+focus_mode = 2
+[node name="Unequip" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.72
+anchor_top = 0.77
+anchor_right = 0.91
+anchor_bottom = 0.86
+grow_horizontal = 2
+grow_vertical = 2
+text = "卸下装备"
+focus_mode = 2
+[node name="Train" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.52
+anchor_top = 0.89
+anchor_right = 0.91
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = "培养 · 100 金币 / 手记 × 1"
+focus_mode = 2

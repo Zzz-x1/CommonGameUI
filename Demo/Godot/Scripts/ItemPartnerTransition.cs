@@ -10,11 +10,11 @@ public sealed class ItemPartnerTransition : IUITransition
     public const double Duration = .48;
     public IUITransitionRun Create(TransitionContext context)
     {
-        var details = (DetailsView)context.Node;
+        var details = (ItemDetailsView)context.Node;
         var partner = ReferenceEquals(context.Node, context.Source) ? context.Target : context.Source;
         var inventory = (InventoryView)partner!;
         return new Run(context, details.GetControl(), inventory.SelectedIcon,
-            details.GetControl<TextureRect>("Artwork/Icon"), context.Container!.GetControl());
+            details.GetControl<TextureRect>("Icon"), context.Container!.GetControl());
     }
 
     private sealed class Run : IUITransitionRun

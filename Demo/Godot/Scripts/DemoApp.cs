@@ -4,149 +4,238 @@ using UIFramework.Godot;
 using UIFramework.Generated;
 
 namespace HierarchyDemo;
-
 public partial class DemoApp : Control
 {
     public static DemoApp Instance { get; private set; } = null!;
-    private readonly List<Task> _tasks = new();
-    private readonly List<Action> _disconnect = new();
-    private UIContext _ui = null!;
-    private Task<UIResourceLease> _backpackResources = null!;
-    private PanelContainerNode _stage = null!;
-    private PanelContainerNode _cards = null!;
-    private StackContainerNode? _inventoryStack;
-    private DemoMenuNode _menu = null!;
-    private UINode? _scenario;
-    private Control _content = null!;
-    private bool _switching;
-    private bool _exiting;
-    public GameUiState GameState { get; } = new();
-    public ModalContainerNode Modals { get; private set; } = null!;
 
+    private readonly List<Task> _tasks = new();
+    private UIContext _ui = null!;
+    private PanelContainerNode _shells = null!;
+    private LoginView? _login;
+    public ClientStore Store { get; private set; } = null!;
+    public ShellView Shell { get; private set; } = null!;
+    public ModalContainerNode Modals { get; private set; } = null!;
+    public PanelContainerNode Floating { get; private set; } = null!;
+    public bool Busy { get; private set; }
+    public Action? SkipCinematic { get; private set; }
+
+    internal string Confirmation = "";
+    private bool _exiting;
     public override void _Ready()
     {
         Instance = this;
-        ApplyTheme();
-        _content = GetNode<Control>("Frame/Layout/Workspace/Stage/Margin/Content");
+        GetTree().AutoAcceptQuit = false;
+        var args = OS.GetCmdlineUserArgs();
+        var selfTest = args.Contains("--self-test");
+        var verifySave = args.Contains("--verify-client-save");
+        var capture = args.Contains("--capture-client");
+        var path = ProjectSettings.GlobalizePath(selfTest || verifySave ? "user://client-test/save.json" : capture ? "user://client-capture/save.json" : "user://client-save.json");
+        if ((selfTest || capture) && File.Exists(path))
+            File.Delete(path);
+        Store = new ClientStore(path);
+        ApplySettings();
+        GetNode<Button>("CinematicGate/Skip").Pressed += () => SkipCinematic!();
         Track(StartAsync());
     }
 
     private async Task StartAsync()
     {
         _ui = GodotUI.Create(this);
-        _ui.DefaultTransition = GodotTransitions.Fade(0.12);
         _ui.RegisterGeneratedUI();
-        _backpackResources = _ui.PreloadAsync<InventoryWindowView>();
-        _menu = new DemoMenuNode();
-        await _menu.AttachToAsync(_ui.Root, "DemoMenu", GetNode<Control>("Frame/Layout/Workspace/Sidebar"));
-        _stage = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoStage", _content);
-        _cards = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoCards", GetNode<Control>("FloatingMount"));
-        Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("DemoDialogs", GetNode<Control>("ModalMount"));
+        _ui.Register(() => new ConfirmView(Confirmation), "res://Scenes/Client/Modal.tscn");
+        _ui.DefaultTransition = GodotTransitions.Fade(.18);
+        _shells = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Client", GetNode<Control>("ShellMount"));
+        Floating = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Comparison", GetNode<Control>("FloatingMount"));
+        Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("ModalMount"));
         Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
-        Wire("Tabs", OpenPreferencesAsync);
-        Wire("Inventory", OpenInventoryAsync);
-        Wire("Settings", () => Modals.OpenSettingsWindowViewAsync());
-        Wire("Destinations/Shop", () => Modals.OpenShopViewAsync());
-        Wire("Destinations/Journal", OpenJournalAsync);
-        Wire("Instances", OpenCardsAsync);
-        Wire("Confirm", ConfirmAsync);
-        Wire("Cancel", OpenHomeAsync);
-        await _backpackResources;
-        await RunDevelopmentModeAsync();
+        _login = await _shells.OpenAsync<LoginView>();
+        await RunDevelopmentAsync();
     }
 
-    public Task OpenHomeAsync() => ChangeScenarioAsync(() =>
+    public async Task EnterAsync()
     {
-        _content.GetNode<Control>("Welcome").Show();
-        Status("Camp / Choose your next destination.");
-        return Task.CompletedTask;
-    });
-
-    public void Track(Task task) => _tasks.Add(task);
-    public override void _Process(double delta)
-    {
-        if (_inventoryStack?.Current is InventoryView inventory) inventory.Tick(delta);
-        foreach (var task in _tasks.ToArray())
+        await RunAsync(async () =>
         {
-            if (!task.IsCompleted) continue;
-            _tasks.Remove(task);
-            task.GetAwaiter().GetResult();
+            _login!.Text("Account", "正在准备星庭资源…");
+            using var lobby = await _ui.PreloadAsync<LobbyView>();
+            using var shell = await _ui.PreloadAsync<ShellView>();
+            Store.Count("login");
+            await _shells.HideAsync(_login);
+            Shell = await _shells.OpenAsync<ShellView>();
+        });
+    }
+
+    public Task OpenAsync(string destination) => RunAsync(async () =>
+    {
+        await CloseComparisonsAsync();
+        if (destination == "Home")
+        {
+            if (Shell.Pages.Current != Shell.Home)
+                await Shell.Pages.PopToAsync(Shell.Home);
+            return;
         }
-    }
 
-    private void Wire(string name, Func<Task> action)
+        // A repeated current destination is a normal navigation selection.
+        if (Shell.Pages.Current is ClientPage page && page.Module == destination)
+            return;
+        switch (destination)
+        {
+            case "Characters":
+                await Shell.Pages.PushAsync<CharactersView>();
+                break;
+            case "Inventory":
+                await Shell.Pages.PushAsync<InventoryView>();
+                break;
+            case "Team":
+                await Shell.Pages.PushAsync<TeamView>();
+                break;
+            case "Stages":
+                await Shell.Pages.PushAsync<StagesView>();
+                break;
+            case "Shop":
+                await Shell.Pages.PushAsync<ShopView>();
+                break;
+            case "Tasks":
+                await Shell.Pages.PushAsync<TasksView>();
+                break;
+            case "Achievements":
+                await Shell.Pages.PushAsync<AchievementsView>();
+                break;
+            case "Mail":
+                await Shell.Pages.PushAsync<MailView>();
+                break;
+            case "Friends":
+                await Shell.Pages.PushAsync<FriendsView>();
+                break;
+            case "Events":
+                await Shell.Pages.PushAsync<EventsView>();
+                break;
+            default:
+                throw new ArgumentException(destination);
+        }
+    });
+    public async Task RunAsync(Func<Task> action)
     {
-        var button = GetNode<Button>($"Frame/Layout/Workspace/Sidebar/{name}");
-        void Handler() => Track(action());
-        button.Pressed += Handler; _disconnect.Add(() => button.Pressed -= Handler);
-    }
-
-    public void Status(string text) => GetNode<Label>("Frame/Layout/Status").Text = text;
-
-    private async Task ChangeScenarioAsync(Func<Task> action, UINode? target = null)
-    {
-        if (_switching) throw new InvalidOperationException("A scenario change is already running.");
-        _switching = true;
+        if (Busy)
+            throw new InvalidOperationException("客户端操作尚未完成。");
+        Busy = true;
+        if (Shell != null)
+            Shell.SetNavigation(false);
         try
         {
-            if (_scenario != null && !ReferenceEquals(_scenario, target))
-            {
-                if (_scenario is InventoryWindowView) await _stage.HideAsync(_scenario);
-                else await _stage.CloseAsync(_scenario);
-                _scenario = null;
-            }
-            _content.GetNode<Control>("Welcome").Hide();
             await action();
         }
-        finally { _switching = false; }
+        finally
+        {
+            Busy = false;
+            if (Shell != null && Shell.State == NodeState.Ready)
+                Shell.SetNavigation(true);
+        }
     }
 
-    public Task OpenPreferencesAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenPreferencesViewAsync());
-    public Task OpenJournalAsync() => ChangeScenarioAsync(async () => _scenario = await _stage.OpenJournalViewAsync());
-
-    public Task OpenInventoryAsync() => ChangeScenarioAsync(async () =>
+    public async Task BackAsync()
     {
-        var resources = await _backpackResources;
-        var window = await _stage.OpenInventoryWindowViewAsync();
-        resources.Dispose(); // The opened window now owns its independent resource hold.
-        _scenario = window;
-        _inventoryStack = window.Body;
-        Status($"Backpack / {window.Inventory.Tabs.CurrentName} / Pick up where you left off.");
-    }, _stage.TryGet<InventoryWindowView>(out var existing) ? existing : null);
+        if (Modals.Current != null)
+        {
+            await Modals.RequestDismissAsync();
+            return;
+        }
 
-    public async Task OpenCardsAsync()
-    {
-        await _cards.OpenCardViewAsync(new CardArgs("CRYSTAL SHARD", new Vector2(520, 180)));
-        await _cards.OpenCardViewAsync(new CardArgs("ANCIENT RELIC", new Vector2(890, 340)));
-        Status("Collection / Compare relics side by side.");
+        if (Floating.Children.Count > 0)
+        {
+            await CloseComparisonsAsync();
+            return;
+        }
+
+        if (Shell != null && Shell.Pages.Current != Shell.Home)
+        {
+            await RunAsync(() => Shell.Pages.PopAsync());
+            return;
+        }
+
+        if (Shell != null && await AskAsync("返回标题？\n当前档案已保存。"))
+        {
+            await RunAsync(async () =>
+            {
+                await _shells.CloseAsync(Shell);
+                Shell = null!;
+                await _shells.ShowAsync(_login!);
+            });
+        }
     }
 
-    public async Task ConfirmAsync()
+    public async Task<bool> AskAsync(string message)
     {
-        var result = await Modals.ShowConfirmViewAsync();
-        if (result && Modals.Current == null) await OpenHomeAsync();
-        Status(result ? "Return to camp confirmed." : "Return canceled. Stay on this screen.");
+        Confirmation = message;
+        return await Modals.ShowDialogAsync<ConfirmView, bool>();
+    }
+
+    public async Task ShutdownAsync()
+    {
+        if (_exiting)
+            throw new InvalidOperationException("退出已在进行中。");
+        _exiting = true;
+        await _ui.DisposeAsync();
+        GetTree().Quit();
     }
 
     public override void _Notification(int what)
     {
-        if (what != NotificationWMCloseRequest || _exiting) return;
-        _exiting = true;
-        Track(ShutdownAsync());
-    }
-    private async Task ShutdownAsync()
-    {
-        await _ui.DisposeAsync(); GetTree().Quit();
-    }
-    public override void _ExitTree()
-    {
-        foreach (var disconnect in _disconnect) disconnect();
-        _disconnect.Clear();
+        if (what == NotificationWMCloseRequest && !_exiting && !Busy && SkipCinematic == null)
+            Track(RequestQuitAsync());
     }
 
-    private void ApplyTheme()
+    private async Task RequestQuitAsync()
     {
-        Theme = GD.Load<Theme>("res://Themes/Adventure.tres");
-        GetTree().AutoAcceptQuit = false;
+        if (await AskAsync("退出星庭远征？\n档案将在下次启程时继续。"))
+            await ShutdownAsync();
     }
+
+    public override void _UnhandledKeyInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && !Busy && SkipCinematic == null)
+        {
+            Track(BackAsync());
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    public void Track(Task task) => _tasks.Add(task);
+    public override void _Process(double delta)
+    {
+        foreach (var task in _tasks.ToArray())
+        {
+            if (!task.IsCompleted)
+                continue;
+            _tasks.Remove(task);
+            task.GetAwaiter().GetResult();
+        }
+
+        if (Shell != null && Shell.State == NodeState.Ready && Shell.Pages.Current is LobbyView lobby)
+            lobby.Tick(delta);
+    }
+
+    public void Gate(Action? skip)
+    {
+        SkipCinematic = skip;
+        GetNode<Control>("CinematicGate").Visible = skip != null;
+        if (skip != null)
+            GetNode<Button>("CinematicGate/Skip").GrabFocus();
+    }
+
+    public void ApplySettings()
+    {
+        AudioServer.SetBusVolumeDb(0, Store.State.Volume == 0 ? -80 : Mathf.LinearToDb((float)Store.State.Volume / 100));
+        if (!OS.GetCmdlineUserArgs().Contains("--self-test") && !OS.GetCmdlineUserArgs().Contains("--capture-client") && !OS.GetCmdlineUserArgs().Contains("--verify-client-save"))
+            DisplayServer.WindowSetMode(Store.State.Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
+    }
+
+    public async Task CloseComparisonsAsync()
+    {
+        foreach (var node in Floating.Children.ToArray().Reverse())
+            await Floating.CloseAsync(node);
+    }
+
+    public Task RewardAsync(string text, params RewardEntry[] rewards) => Modals.OpenAsync<RewardView>(new PresentationArgs(text, Rewards: rewards));
+    public Task ModalAsync(ModalArgs args) => Modals.OpenAsync<ClientModalView>(args);
 }

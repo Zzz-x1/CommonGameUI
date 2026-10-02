@@ -1,0 +1,236 @@
+[gd_scene load_steps=7 format=3]
+[ext_resource type="Texture2D" path="res://Assets/Client/lobby.png" id="1"]
+[ext_resource type="Texture2D" path="res://Assets/Client/hero0.png" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Client/event.png" id="3"]
+[sub_resource type="Animation" id="Enter"]
+resource_name = "enter"
+length = 1.2
+tracks/0/type = "value"
+tracks/0/path = NodePath("Welcome:modulate")
+tracks/0/interp = 1
+tracks/0/enabled = true
+tracks/0/keys = { "times": PackedFloat32Array(0, 0.2, 0.8), "transitions": PackedFloat32Array(1, 1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,0), Color(1,1,1,1)] }
+tracks/1/type = "value"
+tracks/1/path = NodePath("Hero:modulate")
+tracks/1/interp = 1
+tracks/1/enabled = true
+tracks/1/keys = { "times": PackedFloat32Array(0, 0.8), "transitions": PackedFloat32Array(1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,1)] }
+tracks/2/type = "value"
+tracks/2/path = NodePath("Event:modulate")
+tracks/2/interp = 1
+tracks/2/enabled = true
+tracks/2/keys = { "times": PackedFloat32Array(0, 0.6, 1.2), "transitions": PackedFloat32Array(1, 1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,0), Color(1,1,1,1)] }
+tracks/3/type = "value"
+tracks/3/path = NodePath("Quest:modulate")
+tracks/3/interp = 1
+tracks/3/enabled = true
+tracks/3/keys = { "times": PackedFloat32Array(0, 0.5, 1.0), "transitions": PackedFloat32Array(1, 1, 1), "update": 0, "values": [Color(1,1,1,0), Color(1,1,1,0), Color(1,1,1,1)] }
+[sub_resource type="Animation" id="Exit"]
+resource_name = "exit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/path = NodePath(".:modulate")
+tracks/0/keys = { "times": PackedFloat32Array(0, 0.2), "transitions": PackedFloat32Array(1, 1), "update": 0, "values": [Color(1,1,1,1), Color(1,1,1,0)] }
+[sub_resource type="AnimationLibrary" id="Library"]
+_data = { &"enter": SubResource("Enter"), &"exit": SubResource("Exit") }
+[node name="Lobby" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1")
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+[node name="Hero" type="TextureRect" parent="."]
+layout_mode = 1
+anchor_left = 0.27
+anchor_top = 0.02
+anchor_right = 0.73
+anchor_bottom = 1
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Welcome" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.035
+anchor_top = 0.08
+anchor_right = 0.29
+anchor_bottom = 0.38
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Greeting" type="Label" parent="Welcome"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.06
+anchor_right = 0.92
+anchor_bottom = 0.25
+grow_horizontal = 2
+grow_vertical = 2
+text = "晨光已至，旅行者"
+theme_override_font_sizes/font_size = 25
+mouse_filter = 2
+[node name="HeroName" type="Label" parent="Welcome"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.29
+anchor_right = 0.92
+anchor_bottom = 0.48
+grow_horizontal = 2
+grow_vertical = 2
+text = "艾琳 · 晨光骑士"
+theme_override_font_sizes/font_size = 22
+mouse_filter = 2
+[node name="HeroStory" type="Label" parent="Welcome"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.5
+anchor_right = 0.92
+anchor_bottom = 0.82
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+autowrap_mode = 2
+[node name="NextHero" type="Button" parent="Welcome"]
+layout_mode = 1
+anchor_left = 0.55
+anchor_top = 0.81
+anchor_right = 0.92
+anchor_bottom = 0.97
+grow_horizontal = 2
+grow_vertical = 2
+text = "更换看板  ›"
+focus_mode = 2
+[node name="Quest" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.035
+anchor_top = 0.55
+anchor_right = 0.29
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="QuestTitle" type="Label" parent="Quest"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.08
+anchor_right = 0.9
+anchor_bottom = 0.27
+grow_horizontal = 2
+grow_vertical = 2
+text = "今日旅途"
+theme_override_font_sizes/font_size = 24
+mouse_filter = 2
+[node name="QuestInfo" type="Label" parent="Quest"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.3
+anchor_right = 0.92
+anchor_bottom = 0.67
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+theme_override_font_sizes/font_size = 18
+mouse_filter = 2
+autowrap_mode = 2
+[node name="Tasks" type="Button" parent="Quest"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.72
+anchor_right = 0.92
+anchor_bottom = 0.93
+grow_horizontal = 2
+grow_vertical = 2
+text = "查看任务  →"
+focus_mode = 2
+[node name="Event" type="Panel" parent="."]
+layout_mode = 1
+anchor_left = 0.72
+anchor_top = 0.07
+anchor_right = 0.965
+anchor_bottom = 0.56
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+[node name="Art" type="TextureRect" parent="Event"]
+layout_mode = 1
+anchor_left = 0.03
+anchor_top = 0.025
+anchor_right = 0.97
+anchor_bottom = 0.6
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3")
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+[node name="EventName" type="Label" parent="Event"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.63
+anchor_right = 0.92
+anchor_bottom = 0.78
+grow_horizontal = 2
+grow_vertical = 2
+text = "花园庆典"
+theme_override_font_sizes/font_size = 24
+mouse_filter = 2
+[node name="Events" type="Button" parent="Event"]
+layout_mode = 1
+anchor_left = 0.08
+anchor_top = 0.81
+anchor_right = 0.92
+anchor_bottom = 0.96
+grow_horizontal = 2
+grow_vertical = 2
+text = "前往活动  →"
+focus_mode = 2
+[node name="Friends" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.72
+anchor_top = 0.62
+anchor_right = 0.965
+anchor_bottom = 0.7
+grow_horizontal = 2
+grow_vertical = 2
+text = "好友"
+focus_mode = 2
+[node name="Achievements" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.72
+anchor_top = 0.72
+anchor_right = 0.965
+anchor_bottom = 0.7999999999999999
+grow_horizontal = 2
+grow_vertical = 2
+text = "成就"
+focus_mode = 2
+[node name="Mail" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.72
+anchor_top = 0.8200000000000001
+anchor_right = 0.965
+anchor_bottom = 0.8999999999999999
+grow_horizontal = 2
+grow_vertical = 2
+text = "邮件"
+focus_mode = 2
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = { &"": SubResource("Library") }
