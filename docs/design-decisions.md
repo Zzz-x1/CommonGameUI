@@ -1119,7 +1119,7 @@ USN README 的生命周期章节为 Page/Modal/Sheet 提供容器 Before/After �
 
 ### 10.6 先行设计：6、7、8 转场 API（候选，未实施）
 
-用户要求先处理 6、7、8 并设计 API。下面是建议契约及审阅示例，不代表公共类型已实现或全部细节获用户确认。用户进一步提出第 8 项采用自由编程；候选方案据此改为“单次操作开关 + 可复用阶段配方 + 同步选择函数”，移除先前 When/首条匹配规则。调用仍直接位于对应容器，配置同步，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
+用户要求先处理 6、7、8 并设计 API。下面是建议契约及审阅示例，不代表公共类型已实现或全部细节获用户确认。用户进一步提出第 8 项采用自由编程，并明确 With 的函数入口只接收一个 Func 参数，Phase 放进 context；候选方案据此改为“单次操作开关 + 可复用阶段配方 + 同步选择函数”，移除先前 When/首条匹配规则。调用仍直接位于对应容器，配置同步，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
 
 #### 6. 单次操作动画开关
 
@@ -1198,13 +1198,12 @@ public sealed class TransitionSet : IUITransition
 {
     public static TransitionSet Create(IUITransition defaultTransition);
     public TransitionSet With(TransitionPhase phase, IUITransition transition);
-    public TransitionSet With(TransitionPhase phase,
-        Func<TransitionContext, IUITransition> select);
+    public TransitionSet With(Func<TransitionContext, IUITransition> select);
     public IUITransitionRun Create(TransitionContext context);
 }
 ```
 
-Create/With 均同步；With 的两个重载返回新值，不修改已有 Set，多个节点/容器可安全共享配置。Create 明确要求一个默认配方，避免没有配置的阶段偷偷使用 Fade；需要无动画默认就显式传 InstantTransition。With 为一个阶段配置基础配方；对同一阶段再次 With 明确替换返回的新 Set 中该槽，原 Set 不变，便于项目基于共享模板定制。参数 null、无效枚举等配置错误直接暴露；配方必须延续现有可复用配方/逐次执行对象的职责分离。
+Create/With 均同步；With 的两个重载返回新值，不修改已有 Set，多个节点/容器可安全共享配置。Create 明确要求一个默认配方，避免没有配置的阶段偷偷使用 Fade；需要无动画默认就显式传 InstantTransition。固定配方重载配置一个阶段；再次配置同一阶段替换返回的新 Set 中该槽。单参数函数重载配置该 Set 的一个选择函数；再次 With(func) 替换返回的新 Set 中的函数，不构建函数列表或匹配链。两者均不修改原 Set，便于基于共享模板定制。参数 null、无效枚举等配置错误直接暴露；配方必须延续现有可复用配方/逐次执行对象的职责分离。
 
 阶段由容器提供的 Direction 与进入/退出信息计算，TransitionContext 增加只读 Phase，保留 Source/Target 等现有上下文；不根据节点名称猜测动作，不新增独立历史。
 
@@ -1224,7 +1223,7 @@ Create/With 均同步；With 的两个重载返回新值，不修改已有 Set�
 
 #### 8. 自由编程选择动画
 
-用户认为 When 条件规则不够好，倾向自由编程。建议取消该匹配 API，改为 With 的同步函数重载，返回本次应执行的 IUITransition。框架不解释业务条件、首条匹配优先级、类型权重或正则规则；分支与缺省行为由普通 C# 函数明确表达。
+用户明确要求函数入口只包含一个 Func 参数，Phase 放进 context。入口为 `With(Func<TransitionContext, IUITransition> select)`，不提供 When 或 With(phase, func)，不维护函数优先级/匹配链。项目使用普通 C# 判断阶段、来源/目标和业务状态。
 
 ```csharp
 var fade = GodotTransitions.Fade();
@@ -1232,40 +1231,39 @@ var slide = GodotTransitions.SlideHorizontal();
 var scale = GodotTransitions.ScaleFade();
 
 Transition = TransitionSet.Create(fade)
-    .With(TransitionPhase.PushEnter, context =>
+    .With(context => context.Phase switch
     {
-        if (context.Source is ItemListView)
-            return slide;
-
-        if (context.Source is CodexView)
-            return scale;
-
-        return fade;
-    })
-    .With(TransitionPhase.PopExit, fade);
+        TransitionPhase.PushEnter when context.Source is ItemListView => slide,
+        TransitionPhase.PushEnter when context.Source is CodexView => scale,
+        TransitionPhase.PopExit => fade,
+        _ => fade
+    });
 ```
 
-这段代码放在详情页构造或 OnInitializeAsync 中，初次 Push 即生效。ItemListView/CodexView 是示例业务类型，不是框架内置节点。简单使用固定动画重载，复杂选择使用函数重载；也可以传普通方法，例如 `.With(TransitionPhase.PushEnter, ChooseEnterTransition)`，方法签名为 `IUITransition ChooseEnterTransition(TransitionContext context)`。无需为了一个条件实现完整 IUITransition 配方与执行对象；真正自定义动画行为仍使用既有接口。
+Phase 提供该动画项的实际阶段，例如 PushEnter/PopExit，不因为采用通用 Enter/Exit 配置就改写实际阶段。选择函数还可读取 Node、Container、Source、Target、Direction、Reason 等已有上下文；复杂代码可直接使用 if/switch 和项目纯查询方法。
 
-基础 Node 不需要增加业务 View；项目可以直接按名称、实例、类型、参数和业务状态判断：
+配置放在详情页构造或 OnInitializeAsync 中，初次 Push 即生效。ItemListView/CodexView 是示例业务类型，不是内置节点。函数也可以是普通方法：`.With(ChooseTransition)`，签名 `IUITransition ChooseTransition(TransitionContext context)`；不要求为动画选择实现完整配方与执行对象。
+
+简单阶段固定配置仍使用 `.With(TransitionPhase.PopExit, fade)`。两种重载有明确组合规则：先找实际阶段的固定槽，再找 Push/Pop 对应的通用 Enter/Exit 固定槽；没有固定配置时调用该 Set 的选择函数；没有函数时使用 Create 明确传入的默认配方。固定槽表达项目已确定的阶段配置，函数负责其余阶段。全部阶段都由代码控制时只配置 With(func)，不设置固定槽；不按 With 调用先后猜测两种形式的优先级。
+
+基础 Node 不需要业务 View，可以按名称判断：
 
 ```csharp
 tabs.ChildTransition = TransitionSet.Create(fade)
-    .With(TransitionPhase.Enter, context =>
+    .With(context =>
+        context.Phase == TransitionPhase.Enter &&
         context.Source?.Name == "General" && context.Target?.Name == "Graphics"
             ? scale
             : fade);
 ```
 
-条件可以包含 switch、模式匹配或调用项目纯查询方法，框架不增加对应 DSL。业务按钮仍只调用 `PushAsync<ItemDetailsView>(args)` / `SwitchAsync("Graphics")`。预设配方可在配置时创建并复用，函数只返回选中的配方，不持有本次动画运行对象，也不在每次分支里重复建立相同配置。
+业务按钮仍只调用 Push/Switch 等容器操作，不参与选择逻辑。配方在配置时创建并共享，函数只返回选中的配方，不持有本次运行对象，也无需反复创建相同预设。
 
-Source 是操作切换的起点，Target 是将显示/恢复的项；两侧动画取得相同的 Source/Target，Node 表示当前动画所属项。无源/目标时保持 null。例如 Modal Close 的 Target 可以是下层弹窗，但该上下文信息不意味着框架要为下层重播进入动画。
+Source 是操作切换的起点，Target 是将显示/恢复的项；两侧动画取得相同的 Source/Target，Node 是当前动画所属项。无源/目标时保持 null；Modal Close 的 Target 可以是下层弹窗，但不因此为下层重播入场。
 
-框架仅确定阶段配置槽：实际阶段已配置则使用该槽；Push/Pop 的实际阶段未配置时查一般 Enter/Exit；均未配置时使用 Set 明确指定的默认配方。固定槽直接使用配方，函数槽同步调用一次取得配方；函数没有“未命中”返回值。需要某场景无动画就明确返回 InstantTransition，普通分支的默认返回由项目函数书写。
+所选函数每个实际动画项只调用一次。函数没有“未命中”返回值；它必须返回配方，普通分支的默认返回由项目书写，无动画场景明确返回 InstantTransition。函数异常或返回 null 直接记录并传播，不再尝试默认配方或其他阶段；Create/播放/恢复失败继续原样暴露。playAnimation 为 false 时不调用函数。
 
-函数抛出异常或返回 null 都是错误，记录并传播，不能改用通用阶段或默认配方。函数选择完成后才进入原动画执行流程；Create/播放/恢复失败仍原样暴露。playAnimation 为 false 时不调用选择函数，属于调用方明确关闭动画，不属于错误后的跳过。
-
-函数应只读、同步，不负责加载资源、等待业务或执行动画；需要等待的准备继续放在生命周期里。禁止在选择函数中操作容器、修改框架配置或发起嵌套变更，现有修改守卫需覆盖解析阶段。不可变的是配置结构，函数捕获的业务对象可能变化，因此本次选择必须冻结；配置不会自动复制闭包或业务状态。
+函数应同步、只读，不负责资源加载、等待或播放；需要等待的准备继续使用生命周期。禁止在函数内改变框架配置、操作容器或发起嵌套变更，修改守卫需覆盖解析阶段。不可变的是配置结构，闭包业务对象可能变化，所以本次返回配方需要冻结，框架不复制闭包或业务状态。
 
 #### 流程、验收和 Demo
 
@@ -1273,7 +1271,7 @@ playAnimation 和方向/阶段在操作开始时固定；新实例完成初始�
 
 源/目标分别解析和播放，保持 V4 并行播放、一次提交、失败取消伙伴并观察全部原异常、成功/失败恢复表现的契约。关闭动画也保留生命周期的异步等待与失败恢复；配置非法不被当作“无动画”处理。只有用户显式选择 false 时正常略过选择函数与动画执行，这与失败后的自动降级不同。
 
-实施验收至少包括：默认参数与单次 false 不污染其他调用；false 同时即时处理遮罩；生命周期在 false 下仍等待且报错；四种 Stack 阶段与首次/末次/PopTo；Panel/Tab/Modal 通用阶段；固定/函数重载、阶段槽顺序、null 源/目标、类型/名称/业务状态选择；函数每项只调用一次，异常/null 不尝试其他配置；解析发生在准备前；不可变共享配置；取消/动画失败恢复；生成器完整透传。
+实施验收至少包括：默认参数与单次 false 不污染其他调用；false 同时即时处理遮罩；生命周期在 false 下仍等待且报错；四种 Stack 阶段与首次/末次/PopTo；Panel/Tab/Modal 通用阶段；固定/单参数函数重载、实际 Phase 上下文、固定阶段与函数的选择顺序、重复 With(func) 替换、null 源/目标、类型/名称/业务状态选择；函数每项只调用一次，异常/null 不尝试其他配置；解析发生在准备前；不可变共享配置；取消/动画失败恢复；生成器完整透传。
 
 Demo 使用已有设置内嵌 General/Graphics 页面验证名称选择函数与单次即时切换，背包列表/详情/手记验证推进/返回阶段及来源选择函数；普通打开保持自然动画，不增加技术展台。具体业务路径与资源布局按现有 Demo 核对，不能用不存在的图鉴页面宣称已验证。未实施前不修改 Demo 操作说明为已提供，也不把历史 V4 验收当作这些能力的测试结果。
 
