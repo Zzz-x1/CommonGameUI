@@ -982,9 +982,9 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 ## 10. V5 迭代计划候选
 
-### 10.1 方向与依据（2026-10-02，尚待选择）
+### 10.1 方向与依据（2026-10-02）
 
-用户确认优先覆盖 UnityScreenNavigator（USN）的能力。本节取代此前以焦点和返回请求为主的 V5 建议，按现有实现与 USN 的实际差距安排。用户尚未选择具体范围或授权实现；本轮只修改计划，不新建未指定的 V5 开发文档。
+用户确认优先覆盖 UnityScreenNavigator（USN）的能力，并选择先处理能力清单中的 6、7、8：单次动画开关、分阶段配置、按来源/目标选择。本轮授权为设计 API，尚未授权实现；候选方案见 10.6。此前以焦点/返回请求为主、以及优先做 1/2/3 的建议均被此顺序取代，不新建未指定的 V5 开发文档。
 
 覆盖指解决相同游戏 UI 需求，不要求照搬 Page/Sheet/Modal 基类、Unity 组件或全部方法重载。Node 模型、直接容器 API、内嵌 Tab、无历史兼容、原异常传播和同步/异步边界继续有效；不因参考 USN 而引入 Replace。
 
@@ -1053,7 +1053,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 所以不能概括为“仅剩五项”。后续规划同时保留完整差距清单与每版优先范围；不把所有差异都认定为必须照搬的设计。
 
-### 10.3 可选择清单
+### 10.3 当前范围与其他候选
 
 | 编号 | 功能 | 实际游戏场景 | 建议 |
 | --- | --- | --- | --- |
@@ -1063,7 +1063,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 4 | 临时栈页面不保留历史 | 菜单→资源准备页→目标页面，返回时跳过准备页 | 次优先，可选 |
 | 5 | 容器整体操作回调 | 背包外壳统一更新详情/手记标题与返回按钮，子页面不重复通知 | 次优先，可选 |
 
-建议 V5 先选择 **1、2、3**。1、2 构成完整资源流程；3 补齐已有弹窗体系。4、5 有 USN 对应能力，但仍由用户决定追加本版或后续实施。
+上表保留此前 1—5 的候选用途，不代表当前执行顺序。用户现已指定先设计 **6、7、8**，具体方案见 10.6；1—5 尚未授权实施。
 
 ### 10.4 实现与 API 方向
 
@@ -1111,8 +1111,162 @@ USN README 的生命周期章节为 Page/Modal/Sheet 提供容器 Before/After �
 
 ### 10.5 边界与交付
 
-焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab 与更多动画配置保留为后续差距，内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
+焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab 与 9—13 的其他转场配置仍保留为后续差距；6—8 已进入本轮 API 设计。内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
 
 用户选择后：定稿选中契约 → 重构核心与 Godot → 迁移受影响的生成器入口 → 更新游戏 UI Demo/操作说明 → 核心行为与故障测试、引擎验证 → 更新本文并自动本地提交。不保留旧加载接口转发兼容层。
 
 本轮仅修订计划和审计 USN 文档/源码，未改核心、生成器或 Demo，未运行新功能测试。V4 的 86 项测试与 12 场景属于此前验收，不代表 V5 完成。
+
+### 10.6 先行设计：6、7、8 转场 API（候选，未实施）
+
+用户要求先处理 6、7、8 并设计 API。下面是建议契约及审阅示例，不代表公共类型已实现或全部细节获用户确认。以“单次操作开关 + 可复用阶段配方 + 条件选择”覆盖需求；调用仍直接位于对应容器，规则配置同步，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
+
+#### 6. 单次操作动画开关
+
+所有实际执行进入/退出的容器操作增加 `bool playAnimation = true`，放在业务参数之后、CancellationToken 之前。平常调用不增加编码；需要瞬间显示时使用命名参数。
+
+```csharp
+await pages.PushAsync<ItemDetailsView>(args, playAnimation: false);
+await pages.PopAsync(playAnimation: false);
+await pages.PopToAsync(itemList, playAnimation: false);
+await tabs.SwitchAsync("Graphics", playAnimation: false);
+await windows.OpenAsync<InventoryWindow>(playAnimation: false);
+await windows.HideAsync(inventory, playAnimation: false);
+await modals.OpenAsync<SettingsView>(playAnimation: false);
+await modals.CloseAsync(settings, playAnimation: false);
+```
+
+影响 Panel Open/Show/Hide/Close、Stack Push/Pop/PopTo、Tab Switch（名称和类型入口）、Modal Open/Close/ShowDialog。构造/注册/Attach/Bind/Dispose 不新增动画开关；显式销毁保持清理语义，不变成自动播放退出动画。未来新增操作若包含转场再遵循相同约定。
+
+候选主要签名：
+
+```csharp
+// Panel 与 Modal 的 Open 统一形状，各自在自己的容器类型上声明。
+Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true,
+    CancellationToken cancellationToken = default) where T : UINode;
+Task<T> PushAsync<T>(object? args = null, bool playAnimation = true,
+    CancellationToken cancellationToken = default) where T : UINode;
+Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default);
+Task PopToAsync(UINode target, bool playAnimation = true,
+    CancellationToken cancellationToken = default);
+Task SwitchAsync(string name, bool playAnimation = true,
+    CancellationToken cancellationToken = default);
+Task SwitchAsync<T>(bool playAnimation = true,
+    CancellationToken cancellationToken = default) where T : UINode;
+// Show/Hide/Close 同样采用 (node, playAnimation = true, cancellationToken = default)。
+```
+
+`false` 仅取消该次操作的框架转场表现：不解析动画选择规则、不创建/播放节点动画执行对象、不进行只为动画服务的临时排序。模态遮罩同样即时达到所需显隐状态；必要创建/重排/释放仍执行。IUIBackdrop 的 ShowAsync/HideAsync 也接收相同开关，由后端显式即时设置最终表现，不利用 Restore 冒充正常进入/退出，Restore 继续表达失败恢复。
+
+资源等待、初始化、Entering/Exiting、提交、Entered/Exited、输入/焦点交接及清理完整执行，失败继续传播。调用仍可能需要等待，保留 Async；不能提供阻塞式同步 Open。业务自己在生命周期内执行的动画不受此开关自动控制，也不尝试暂停任意引擎动画。
+
+`true` 采用已配置的配方，其中明确配置的 InstantTransition 仍是即时表现；该参数不是强制所有项必有动画。Panel 已显示 Single 的重复 Open 仍返回现有实例，不因 true 重播。ShowDialog 的该参数覆盖它所管理的开场和最终关闭；Complete(result) 保持同步结果提交，不新增动画控制。等待取消后的必要关闭也沿用这次调用的开关并继续观察异常。
+
+Source Generator 类型化入口同步增加并传递 `playAnimation`，包括自动对话框调用；业务参数仍保持生成的具体类型。旧签名调用点、Demo 和测试同步迁移，不留兼容转发重载。此次只有一个操作选项，不预建装满未来字段的 Options 类型，也不增加逐次传入源/目标配方的第二套配置。
+
+#### 7. 分阶段长期配置
+
+保留目前三层配置入口：`ui.DefaultTransition`、`container.ChildTransition`、`node.Transition`，值仍为 IUITransition。增加可复用、不可变的 `TransitionSet : IUITransition`，把阶段和条件选择组合成普通配方；现有单一 Fade 等配方仍可直接赋值。
+
+```csharp
+ui.DefaultTransition = GodotTransitions.Fade();
+
+pages.ChildTransition = TransitionSet.Create(GodotTransitions.Fade())
+    .With(TransitionPhase.PushEnter, GodotTransitions.SlideHorizontal())
+    .With(TransitionPhase.PushExit, GodotTransitions.Fade())
+    .With(TransitionPhase.PopEnter, GodotTransitions.Fade())
+    .With(TransitionPhase.PopExit, GodotTransitions.SlideHorizontal());
+
+settings.Transition = TransitionSet.Create(new InstantTransition())
+    .With(TransitionPhase.Enter,
+        GodotTransitions.ScaleFade(targetPath: "Center"))
+    .With(TransitionPhase.Exit,
+        GodotTransitions.Fade(targetPath: "Center"));
+```
+
+候选公共形状：
+
+```csharp
+public enum TransitionPhase
+{
+    Enter, Exit,
+    PushEnter, PushExit,
+    PopEnter, PopExit
+}
+
+public sealed class TransitionSet : IUITransition
+{
+    public static TransitionSet Create(IUITransition defaultTransition);
+    public TransitionSet With(TransitionPhase phase, IUITransition transition);
+    public TransitionSet When(TransitionPhase phase,
+        Func<TransitionContext, bool> condition, IUITransition transition);
+    public IUITransitionRun Create(TransitionContext context);
+}
+```
+
+Create/With/When 均同步；With/When 返回新值，不修改已有 Set，多个节点/容器可安全共享配置。Create 明确要求一个默认配方，避免没有命中时偷偷提供 Fade；需要无动画默认就显式传 InstantTransition。With 为一个阶段配置基础配方；对同一阶段再次 With 明确替换返回的新 Set 中该槽，原 Set 不变，便于项目基于共享模板定制。参数 null、无效枚举等配置错误直接暴露；配方必须延续现有可复用配方/逐次执行对象的职责分离。
+
+阶段由容器提供的 Direction 与进入/退出信息计算，TransitionContext 增加只读 Phase，保留 Source/Target 等现有上下文；不根据节点名称猜测动作，不新增独立历史。
+
+| 操作 | 退出项阶段 | 进入项阶段 |
+| --- | --- | --- |
+| Stack Push | 原当前页 PushExit | 新页 PushEnter |
+| Stack Pop/PopTo | 原当前页 PopExit | 恢复页 PopEnter |
+| Tab Switch | 旧项 Exit | 新项 Enter |
+| Panel Open/Show | 无 | 目标 Enter |
+| Panel Hide/Close | 目标 Exit | 无 |
+| Modal Open | 无（底层只失活） | 新弹窗 Enter |
+| Modal Close | 顶层 Exit | 无（下层恢复输入，不重播入场） |
+
+初次 Push 只有进入项，最后 Pop 只有退出项；PopTo 中间项沿用仅清理语义。Enter/Exit 同时是一般进入/退出阶段的配置槽：PushEnter/PopEnter 没有专用匹配时可使用 Enter，退出对应 Exit。返回恢复与新建进入可以不同动画，但不因此增加新的生命周期回调。
+
+三层继承继续按整个配方选择：Node 非 null → 直接管理 Container.ChildTransition 非 null → Context.DefaultTransition；不逐阶段把不同层的规则隐式混合。Node 配置一个 TransitionSet 后，该 Set 的默认配方负责未特别配置的阶段。Root 及无关祖先不自动参与查找；与 V4 相同，配置变化只影响后续操作。
+
+#### 8. 根据来源/目标配置条件规则
+
+在同一 Set 上使用 When；典型业务不需要自己实现 IUITransition。规则使用已有 Source/Target 和业务类型或名称，基础 Node 也可以参与。
+
+```csharp
+// 示例业务类型：同一物品详情页来自物品列表或图鉴时，使用不同动画。
+details.Transition = TransitionSet.Create(GodotTransitions.Fade())
+    .When(TransitionPhase.PushEnter,
+        c => c.Source is ItemListView,
+        GodotTransitions.SlideHorizontal())
+    .When(TransitionPhase.PushEnter,
+        c => c.Source is CodexView,
+        GodotTransitions.ScaleFade())
+    .With(TransitionPhase.PopExit, GodotTransitions.Fade());
+
+// Tab 项可以只是 UINode；名称在容器中定义，不强制增加业务 View。
+tabs.ChildTransition = TransitionSet.Create(GodotTransitions.Fade())
+    .When(TransitionPhase.Enter,
+        c => c.Source?.Name == "General" && c.Target?.Name == "Graphics",
+        GodotTransitions.ScaleFade());
+```
+
+示例的 ItemListView/CodexView 为项目业务类型，不是框架内置节点。新创建详情页需在构造或 OnInitializeAsync 配置自己的 Transition，不能等 Push 完成拿到返回值才配置首次动画。业务调用仍是 `PushAsync<ItemDetailsView>(args)` / `SwitchAsync("Graphics")`，不用在按钮事件里判断动画规则。
+
+Source 始终是该操作离开的当前项，Target 是将显示/恢复的项；源和目标动画各自拿到相同的 Source/Target，Node 表示当前正在配置动画的那个项。没有源/目标时保持 null，不造空占位对象；例如 Modal Close 的 Target 可为下层弹窗，但不会因此创建下层进入动画。
+
+解析规则固定为：
+
+1. 实际阶段的 When 条件，按声明顺序选择第一个 true。
+2. 实际阶段的 With 配方。
+3. 如实际阶段为 Push/Pop，则查一般 Enter/Exit 的 When，再查其 With。
+4. 该 Set 显式指定的默认配方。
+
+例如 PushEnter 的基础配置优先于一般 Enter 条件；具体阶段表达更窄的配置范围。同一阶段多项条件同时成立时以书写顺序为明确优先级，不自动猜类型继承深度；项目把更具体条件放前。Source/Target 名称匹配可直接使用普通 C# 条件，当前不预建字符串 ID 系统、正则匹配 DSL 或数值优先级体系。
+
+条件必须同步且只读，不能在解析时开关页面、配置节点或启动嵌套操作；框架配置/状态修改守卫须覆盖该阶段。条件运行最多一次直到首个命中，每个源/目标各自解析。未命中是正常配置路由；条件抛错、配方 Create 返回 null、播放/恢复失败则记录并传播原异常，不能改用默认配方或跳到下一条规则。
+
+#### 流程、验收和 Demo
+
+playAnimation 和方向/阶段在操作开始时固定；新实例完成初始化后，捕获源/目标所用配方及条件结果，再执行 Entering/Exiting 准备；各项的实际执行对象在准备后创建以捕获动画基线。TransitionSet 由框架内部提前解析到具体配方；若选中配方仍是另一个不可变 TransitionSet，则在同一上下文继续解析，直到具体执行配方。可以显式以共享 Set 作为默认配方，不做隐式跨层混合，也不把新的动画解析器对象暴露给用户。条件读取的是解析当时的业务状态，进入/退出准备随后改变业务字段不会重新选择本次动画。
+
+源/目标分别解析和播放，保持 V4 并行播放、一次提交、失败取消伙伴并观察全部原异常、成功/失败恢复表现的契约。关闭动画也保留生命周期的异步等待与失败恢复；配置非法不被当作“无动画”处理。只有用户显式选择 false 时正常略过动画规则与执行，这与失败后的自动降级不同。
+
+实施验收至少包括：默认参数与单次 false 不污染其他调用；false 同时即时处理遮罩；生命周期在 false 下仍等待且报错；四种 Stack 阶段与首次/末次/PopTo；Panel/Tab/Modal 通用阶段；条件首次命中顺序、具体阶段优先、null 源/目标、类型与名称条件；条件异常不尝试下一条；解析发生在准备前；不可变共享配置；取消/动画失败恢复；生成器完整透传。
+
+Demo 使用已有设置内嵌 General/Graphics 页面验证名称条件与单次即时切换，背包列表/详情/手记验证推进/返回阶段及来源条件；普通打开保持自然动画，不增加技术展台。具体业务路径与资源布局按现有 Demo 核对，不能用不存在的图鉴页面宣称已验证。未实施前不修改 Demo 操作说明为已提供，也不把历史 V4 验收当作这些能力的测试结果。
+
+本轮只提交 API 设计文档，功能代码、生成器和 Demo 尚未修改；实现需后续明确授权。
