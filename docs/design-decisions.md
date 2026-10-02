@@ -990,23 +990,68 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 依据：[USN 官方 README](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md) 与 [PageContainer 源码](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)，2026-10-02 核对 master；属于文档/源码审计，未运行 USN 项目。
 
-### 10.2 主要能力覆盖核对
+### 10.2 USN 能力覆盖审计（补充核对）
 
-| USN 能力 | 本工程 V4 现状 | 后续处理 |
+此前五项是 V5 优先候选，不是全部剩余差距。不能把“存在自定义扩展接口”写成“开箱即用能力已经完整覆盖”。本次按 README 功能章节、Page/Sheet 实现与本工程实际代码核对，分为已有对应能力、缺口及实现方式差异；不宣称穷尽 USN 的每个内部 API、发行版本和 Unity 插件组合。
+
+#### 已有主要对应能力
+
+| USN 能力 | 本工程实际对应 | 限制 |
 | --- | --- | --- |
-| Page 历史、逐层返回、返回指定历史项 | Stack Push/Pop/PopTo 已有 | 主要场景已覆盖 |
-| Modal 嵌套、返回、多层一次返回 | Open/Close、结果等待已有；一次返回下层弹窗缺失 | 候选 3 |
-| Sheet 注册、复用、显示/隐藏、互斥切换 | 内嵌 Tab 绑定/切换，Panel 独立显示/隐藏 | 有对应能力；独立资源动态 Tab 尚缺，内嵌优先策略不变 |
-| 节点生命周期、外部生命周期接入 | V2 已有，V4 整合转场准备与提交 | 不重复建设 |
-| 容器级转场前后回调 | 节点事件已有；容器整体观察入口缺失 | 候选 5 |
-| 默认/逐页/自定义转场、源目标关联 | V4 配方继承、上下文、并行播放与 Godot 预设已有 | 主要能力有对应实现；未提供伙伴名称正则配置与动画进度查询 |
-| 模态遮罩替换、外部点击关闭 | V4 工厂、Shared/PerModal、业务关闭请求 | 主要场景已覆盖，不等同全部遮罩时序选项 |
-| 可替换加载器、资源加载/释放、异步加载 | 加载器可替换，但直接返回实例；Godot 实际同步加载 | 候选 1 |
-| 预加载与显式释放预加载 | 缺少独立资源持有协议 | 候选 2 |
-| 临时页面不进入返回历史 | Stack 每次 Push 都保留历史 | 候选 4 |
-| 转场期输入控制、容器查找 | 已有输入锁与层级查找；未提供 USN 全套开关/全局静态查找 | 按项目需求扩展，不推翻 Node 结构 |
+| Page 历史、逐层返回、返回指定历史项 | Stack Push/Pop/PopTo | 使用具体实例，未复制数量/字符串 ID 全部重载 |
+| 基础 Modal 嵌套和关闭 | Modal Open/Close，额外支持结果等待 | 多层一次返回仍缺失 |
+| 页面生命周期及外部处理器 | V2 生命周期、AddLifecycle/RemoveLifecycle | 外部处理器执行顺序仍有差距，见 15 |
+| 通用、逐页和自定义转场 | Context/Container/Node 配方继承及自定义执行对象 | 配置维度及运行信息仍有差距，见 6—11 |
+| 伙伴页面参与动画 | TransitionContext.Source/Target | 自定义代码能实现；条件选择缺少直接配置入口 |
+| 编辑器动画接入 | Godot AnimationPlayer | 属于 Godot 对应方案，未实现 Unity Timeline 适配 |
+| 基础模态遮罩和外部点击 | 工厂、Shared/PerModal、DismissRequested | 不等同 USN 全部策略与时序，见 13 |
+| 内嵌页面复用和互斥切换 | Tab Bind/Switch | 符合已确认默认工作流；隐藏当前项和动态资源项另列 |
+| 页面数据和创建定制 | 创建参数、类型工厂、初始化生命周期 | 没有照搬 onLoad 回调或特定 DI 系统 |
+| 销毁清理、容器子树释放 | Node/Context DisposeAsync | 不复制 USN 后台未等待清理；本工程必须观察失败 |
 
-这是主要能力审计，不宣称逐项 API 等价。动画进度、更多动画选择配置、动态资源 Tab、转场输入策略开关等保留为次级差距，不因缺少配置项就自动纳入 V5。
+#### 剩余能力与配置差距清单
+
+编号 1—5 延续此前候选，6—16 为本轮补充。缺失配置能力不等于完全无法自定义实现；以下明确区分。
+
+| 编号 | 能力 | 当前差距 | 游戏使用场景 |
+| --- | --- | --- | --- |
+| 1 | 资源取得、实例创建分离；异步加载与释放 | 接口直接返回实例；Godot 同步加载 | 大型界面按需加载和关闭后归还资源 |
+| 2 | 预加载与显式释放 | 没有独立资源持有凭据 | 菜单预备背包/商店资源 |
+| 3 | Modal 一次返回指定下层实例 | 只有顶层 Close | 商品确认后直接回商店 |
+| 4 | 临时页不保留历史 | 每次 Push 都保留 | 资源准备页不出现在返回路径 |
+| 5 | 容器整体操作前后回调 | 只有节点生命周期与状态通知 | 外壳统一同步标题/返回按钮 |
+| 6 | 单次操作选择是否播放动画 | Instant 配方可配置，但 Open/Push/Pop/Switch 没有逐次选项 | 首次恢复菜单立即显示，之后操作正常动画；不临时改共享配方 |
+| 7 | 按转场阶段分别配置动画 | 可在自定义配方里分支；没有直接的 PushEnter/PushExit/ReturnEnter/ReturnExit 配置组合 | 进入详情滑入，覆盖旧页淡出；返回使用不同表现 |
+| 8 | 根据来源/目标选择动画 | Source/Target 已有；缺少条件配方选择入口 | 同一详情页从背包进入与从图鉴进入采用不同转场 |
+| 9 | 转场绘制顺序配置 | 支持固定 Push 目标在前、Return 源在前；没有项目覆盖策略 | 旧页覆盖新页退出，而不是始终由新页盖住旧页 |
+| 10 | 动画参数配置 | Godot 预设有时长、部分缩放；没有延迟、缓动选择及通用起止位置/缩放/透明度配置 | 美术调整移动与淡入节奏，不为每套参数写自定义配方 |
+| 11 | 转场状态、类型、进度及变化通知 | 当前没有对应公开运行信息；内部操作守卫不等于公共查询 | 窗口动画期间协调外壳装饰/按钮状态；这是运行能力，不能自动视为诊断系统 |
+| 12 | 转场输入控制策略 | 普通容器锁局部，模态临时锁全局；无法配置全部/局部锁及允许转场期交互 | 主内容换页时允许独立侧栏继续交互 |
+| 13 | 更多遮罩策略及时序 | Shared 会移到顶层下，PerModal 每层创建；没有始终位于首层下及动画前/后重排的全套选项 | 某项目希望嵌套弹窗不再暗化底层弹窗，或旧弹窗退出后才移动遮罩 |
+| 14 | 隐藏当前 Tab 项并进入无选中状态 | Tab 只能 Switch；隐藏整个父容器不会清空 Current | 某互斥侧栏收起当前页面，但保留外壳和全部页面实例 |
+| 15 | 外部生命周期处理器顺序 | 业务虚方法先执行，处理器按注册顺序；不能声明先于业务/后于业务及优先级 | 通用数据准备行为先于 View 进入，另一个行为在业务处理后执行 |
+| 16 | 独立资源动态 Tab 项 | 当前 Bind 采用既有实例，没有从注册资源创建项的直接入口 | 项目扩展页面来自独立资源；内嵌 Tab 仍是默认，不替换已有工作流 |
+
+来源：[USN 转场章节](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#screen-transition-animation) 对应 7—10；[其他功能](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#other-features) 对应 3、4、11—13；[SheetContainer 源码](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Sheet/SheetContainer.cs) 对应 6、14、16；[Page 源码](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs) 对应 7、11、15；资源和回调依据见 10.4。这里只记录差距，不据此授权全部实现。
+
+补充语义：14 是隐藏当前项、Current 变为无选中，区别于父容器整体隐藏。16 指加载资源并实例化后纳入 Tab，不把 USN PreloadedAssetLoader 解释成接管已挂载的场景实例。13 的 USN Only First Backdrop 与本工程 Shared 重排并不相同。12 的允许交互不意味着同一容器允许并发操作，USN 也禁止同一容器转场中再次切换。
+
+#### 配置便利、后端特性和有意采用不同方式的部分
+
+| USN 功能/方式 | 本工程差异 | 处理判断 |
+| --- | --- | --- |
+| 每个容器覆盖资源加载器 | 目前只在 UIContext 配置 Loader | 有需要时纳入 1 的资源来源协议；不默认增加多套资源缓存 |
+| 直接注册已加载 Prefab 引用 | 内嵌 Element 可绑定；资源注册仍使用字符串，Godot 未提供 PackedScene 引用注册便利入口 | 与资源预加载不同，可作为后端便利能力；不要误称已完整提供 |
+| Inspector 配置动画、遮罩、加载器 | 当前以 C# 配置和 Godot 场景资源为主 | 编辑器配置是易用性差距，后续独立规划；不把 Unity Inspector 放进核心 |
+| Container.Of/Find、全局 Instances | Root/Parent/GetChild、项目持有引用 | 层级定位可实现；缺少直接查祖先/深层名称的便利 API，但不因此引入全局静态注册表 |
+| 按数量/ID 返回、指定字符串实例 ID | 当前主要通过具体实例定位 | 功能需求可对应，全部重载不是必须补齐的功能 |
+| 同步资源加载选项 | 后端当前实际同步；公共容器流程可能仍需异步生命周期/转场 | 资源是否同步与整个开窗 API 是否同步是两件事，不能为方法数量而增加同步阻塞入口 |
+| Container 内容裁剪、布局填充 | Godot 资源设置 ClipContents/锚点；Demo 已使用包装层和裁剪 | 引擎适配/资源职责，不新增渲染无关核心的矩形裁剪系统 |
+| Coroutine/Task/完成回调多种等待方式 | C# Task/ValueTask 和应用任务观察 | 当前足以观察结果/异常，不必复制 Unity 协程句柄 |
+| Resources/Addressables、Timeline、ScriptableObject | 目前 Godot 实现；Unity 专用适配未实现 | 不能宣称支持 Unity 后端；属于后续引擎适配交付，不是核心流程缺失 |
+| Pop 后实例复用/实例池 | 本工程 Stack/Modal 关闭后销毁；Panel Hide 和 Tab 保留 | USN 也不复用已 Pop 项；实例池不是 USN 缺口，不自动新增 |
+
+所以不能概括为“仅剩五项”。后续规划同时保留完整差距清单与每版优先范围；不把所有差异都认定为必须照搬的设计。
 
 ### 10.3 可选择清单
 
