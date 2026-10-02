@@ -1390,3 +1390,21 @@ ItemPartnerTransition 从 Source/Target 获取另一侧 InventoryView，详情�
 伙伴动画直接使用既定业务类型和场景引用，去掉类型、同纹理、有限值、正尺寸和旋转的重复检查。临时图像在创建运行实例时就已创建并归属挂载，播放前隐藏；Restore 直接移除、释放并恢复原表现，无空对象跳过、手工异常列表或自定义日志兜底。正常 Demo 同步事件直接调用业务，已完成的异步任务在帧入口直接读取结果；不 catch 后打印、包装或强制退出。取消检测与场景切换并发约束属于真实操作逻辑，继续保留。
 
 验证：构建 0 警告、0 错误，核心/生成器 127 项测试通过；Godot headless 与原生 OpenGL 均通过 22 场景（原 21 + 异步任务原始异常直接从帧入口传播）。正常脚本目录无 catch、诊断断言与生命周期计数；Partner 原生截图已检查，效果与交互保持。未验证全部分辨率、实体输入设备或导出平台；未修改框架核心异常清理契约。
+
+## 12. 下一版候选与当前 USN 覆盖结论（2026-10-02）
+
+本节为用户询问后的建议，尚未确认实施范围，不新建版本文档或开始实现。基于当前 demo/partner-screen-transition 分支代码、USN master README、PageContainer.cs 与 ScreenContainerTransitionHandler.cs 静态核对；未运行 USN。后续以最小场景/API 和代码简洁规范执行，不为填平功能表自动加入全部候选。
+
+结论：常用页面历史、内嵌切换、嵌套弹窗、生命周期和动画主干已有对应能力；尚不能宣称完整覆盖 USN，尤其资源生命周期和容器边界能力仍有缺口。Partner Demo 验证的是现有上下文支持项目自定义伙伴动画，不代表新增自动共享元素系统。Unity Inspector、Timeline、Addressables 没有交付对应 Unity 适配，Godot AnimationPlayer 是不同后端的对应能力；不按方法数量计算覆盖百分比。
+
+当前未完成项继续沿用 10.2 编号：1/2 资源取得与实例创建分离、异步加载、预加载和显式资源释放；3 Modal 一次返回下层实例；4 不保留历史的临时页；5 容器整体操作通知；12 输入策略；13 更多遮罩策略/时序；14 隐藏当前 Tab 并清空选中；15 生命周期处理器顺序；16 独立资源动态 Tab。除此之外还有后端编辑器配置、已加载 PackedScene 引用便利注册等接入差异。6—11 已实现，不再重复列为缺失。
+
+建议下一版以资源流程为主，分为以下优先级：
+
+1. **首选：资源加载与预加载作为同一完整能力交付。** 场景是主菜单提前取得背包/商店资源，玩家打开时再创建页面；加载大资源时主线程 UI 保持响应。当前 LoadAsync 直接返回显示实例且 Godot 使用同步 ResourceLoader.Load，不能靠已有接口简单调用实现纯资源预加载。重构取得资源→创建实例→初始化节点；正常 Open/Push 调用保持简洁，只有主动预加载者持有明确释放凭据。预加载不创建 Node、不执行生命周期，释放预加载不销毁活跃窗口。API 候选沿用 10.4，不新增实例池、LRU、缓存预算或多套策略。
+2. **次选：Modal 返回指定下层实例。** 场景为商店弹窗→商品详情→购买确认，完成后直接回原商店；现有循环 Close 会逐层交接焦点/输入，不能表达一次整体提交。仅保留一个按具体下层实例定位的候选 CloseToAsync，不堆叠数量/索引/字符串等重载；结果弹窗、中间项生命周期与遮罩清理在选定后明确。
+3. **小范围可选：Tab 隐藏当前项。** 场景是互斥侧栏收起内容，但保留外壳与内嵌页面，之后重新选中。隐藏父容器不等于 Current=null；候选 HideAsync 隐藏当前项并清空选中，不销毁页面、不引入历史。没有当前项时的行为须在 API 定稿时明确，不能实现时偷偷保底。
+
+若需要控制版本规模，只选择第 1 项即可。临时历史页、容器通知、输入/遮罩策略、处理器顺序、动态 Tab 与编辑器配置继续待定；不将伙伴动画通用化或 Analyzer/诊断系统作为此次默认范围。
+
+调研来源：[资源加载](https://github.com/Haruma-K/UnityScreenNavigator#loading-screen-resources)、[预加载](https://github.com/Haruma-K/UnityScreenNavigator#preloading)、[多层返回](https://github.com/Haruma-K/UnityScreenNavigator#pop-multiple-screens-at-once)、[Sheet 的隐藏](https://github.com/Haruma-K/UnityScreenNavigator#create-sheet-and-transition)、[其他特性](https://github.com/Haruma-K/UnityScreenNavigator#other-features)、[PageContainer.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)、[ScreenContainerTransitionHandler.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/ScreenContainerTransitionHandler.cs)。本次仅更新候选与调研记录，未修改运行代码，无新增运行验收。
