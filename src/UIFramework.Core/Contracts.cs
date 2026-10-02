@@ -12,7 +12,13 @@ public interface IUIElement : IAsyncDisposable
 
 public interface IUIResourceLoader
 {
-    Task<IUIElement> LoadAsync(string resource, IUIElement? mount, CancellationToken cancellationToken);
+    Task<IUIResource> LoadAsync(string resource, CancellationToken cancellationToken);
+}
+
+/// <summary>An acquired, instantiable resource. Instantiation runs on the UI thread.</summary>
+public interface IUIResource : IDisposable
+{
+    IUIElement Instantiate(IUIElement? mount);
 }
 
 public interface IUIHost

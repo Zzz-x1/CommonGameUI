@@ -39,8 +39,14 @@ public class AnimationCapabilityTests
     private sealed class Loader : IUIResourceLoader
     {
         public readonly List<OrderedElement> Siblings = new();
-        public Task<IUIElement> LoadAsync(string resource, IUIElement? mount, CancellationToken token)
-        { token.ThrowIfCancellationRequested(); var e = new OrderedElement(Siblings); Siblings.Add(e); return Task.FromResult<IUIElement>(e); }
+        public Task<IUIResource> LoadAsync(string resource, CancellationToken token)
+        { token.ThrowIfCancellationRequested(); return Task.FromResult<IUIResource>(new Resource(Siblings)); }
+        private sealed class Resource(List<OrderedElement> siblings) : IUIResource
+        {
+            public IUIElement Instantiate(IUIElement? mount)
+            { var e = new OrderedElement(siblings); siblings.Add(e); return e; }
+            public void Dispose() { }
+        }
     }
 
     [Fact] public async Task StateSeparatesPreparationPlaybackAndCompletionAndResetsForEachOperation()

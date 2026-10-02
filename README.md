@@ -20,6 +20,8 @@ V5 增加逐次 playAnimation 开关与统一的 Transitions.Select 包装函数
 
 后续对照 USN 补齐转场绘制优先级、延迟/缓动/起止帧参数及运行状态/进度通知，实际契约与验收集中于设计文档第 11 节。
 
+资源取得与实例创建已分离，Godot 使用后台加载。预加载、共享持有、取消和释放的实际契约见设计文档第 10.4 节，验收见第 12 节。
+
 ## 运行
 
 需要 .NET 10 SDK 和 Godot 4.7.2 .NET。下载的便携引擎放在 `.tools`，不进入项目源码，也不修改系统安装。
@@ -192,8 +194,21 @@ Node 提供 IsTransitioning、CurrentTransitionPhase、TransitionProgress 和包
 
 Godot 显示句柄分 owned（动态资源根）与 borrowed（内嵌控件）。借用句柄销毁仅结束逻辑管理，不单独释放父场景资源。
 
+## 资源预加载
+
+资源预加载不创建节点或执行生命周期，普通开窗继续自动取得资源：
+
+```csharp
+var prepared = await ui.PreloadAsync<InventoryWindowView>();
+var backpack = await windows.OpenAsync<InventoryWindowView>();
+prepared.Dispose(); // 窗口独立持有资源，继续正常使用。
+await windows.CloseAsync(backpack); // 归还实例持有。
+```
+
+同一 Context、同一路径的加载合并；每个预加载句柄/实例独立持有，最后一个持有释放后归还资源。取消一个等待者不影响其他等待者，Context.DisposeAsync 取消并等待所有共享加载收尾、释放剩余句柄。适配器实现 IUIResourceLoader.LoadAsync 返回 IUIResource，其同步 Instantiate 创建 IUIElement，Dispose 归还资源引用；旧加载器签名已移除。
+
 ## 当前边界
 
-当前实际验证了 Godot 桌面端。其他引擎需要适配器，尚未验证。Godot 场景加载采用同步 `ResourceLoader.Load`，包装在可等待接口中；大资源后台加载、编辑器节点配置、运行时重挂载、通用缓存/池化、绑定框架及诊断分析均未实现。
+当前实际验证了 Godot 桌面端，其他引擎需要适配器。Godot 场景使用 ResourceLoader 后台加载，场景实例化和节点初始化仍在主线程；取消底层请求需要等待 Godot 加载结束。释放归还框架引用，实际内存回收受其他引用和引擎/GC 影响。编辑器节点配置、运行时重挂载、缓存预算/池化、绑定框架及诊断分析均未实现。
 
 素材来源与许可见 [Demo 资源记录](Demo/Godot/Assets/SOURCES.md)。

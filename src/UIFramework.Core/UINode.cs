@@ -32,6 +32,7 @@ public class UINode : IAsyncDisposable
     public IReadOnlyList<UINode> Children => _children.AsReadOnly();
     public UIContext Context => _context ?? throw new InvalidOperationException("Node is not attached to a UI context.");
     public IUIElement? Element { get; private set; }
+    internal UIResourceLease? ResourceLease { get; set; }
     public NodeState State { get; private set; }
     public bool IsVisible => _visible && (Parent?.IsVisible ?? true);
     internal bool CommittedVisible => _committedVisible && (Parent?.CommittedVisible ?? true);
@@ -312,6 +313,7 @@ public class UINode : IAsyncDisposable
                 finally { Executing.Value = previous; }
             });
         if (Element != null) await Attempt(async () => await Element.DisposeAsync());
+        await Attempt(() => { ResourceLease?.Dispose(); ResourceLease = null; return Task.CompletedTask; });
         var formerParent = Parent;
         await Attempt(() =>
         {

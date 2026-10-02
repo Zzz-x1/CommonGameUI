@@ -11,6 +11,7 @@ public partial class DemoApp : Control
     private readonly List<Task> _tasks = new();
     private readonly List<Action> _disconnect = new();
     private UIContext _ui = null!;
+    private Task<UIResourceLease> _backpackResources = null!;
     private PanelContainerNode _stage = null!;
     private PanelContainerNode _cards = null!;
     private StackContainerNode? _inventoryStack;
@@ -35,6 +36,7 @@ public partial class DemoApp : Control
         _ui = GodotUI.Create(this);
         _ui.DefaultTransition = GodotTransitions.Fade(0.12);
         _ui.RegisterGeneratedUI();
+        _backpackResources = _ui.PreloadAsync<InventoryWindowView>();
         _menu = new DemoMenuNode();
         await _menu.AttachToAsync(_ui.Root, "DemoMenu", GetNode<Control>("Frame/Layout/Workspace/Sidebar"));
         _stage = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoStage", _content);
@@ -47,6 +49,7 @@ public partial class DemoApp : Control
         Wire("Instances", OpenCardsAsync);
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", OpenHomeAsync);
+        await _backpackResources;
         await RunDevelopmentModeAsync();
     }
 
@@ -100,7 +103,9 @@ public partial class DemoApp : Control
 
     public Task OpenInventoryAsync() => ChangeScenarioAsync(async () =>
     {
+        var resources = await _backpackResources;
         var window = await _stage.OpenInventoryWindowViewAsync();
+        resources.Dispose(); // The opened window now owns its independent resource hold.
         _scenario = window;
         _inventoryStack = window.Body;
         Status($"Backpack / {window.Inventory.Tabs.CurrentName} / Pick up where you left off.");

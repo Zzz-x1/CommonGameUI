@@ -11,6 +11,8 @@ public sealed class UIContext : IAsyncDisposable
         public WindowInstanceMode WindowMode { get; }
     }
     private readonly Dictionary<Type, Registration> _registrations = new();
+    private readonly UIResources _resources;
+    private Task? _disposeTask;
 
     public UIContext(IUIHost host, IUIResourceLoader loader, IUILog? log = null)
     {
@@ -20,6 +22,7 @@ public sealed class UIContext : IAsyncDisposable
         Host.VerifyAccess();
         Root = new UINode();
         Root.InitializeRoot(this);
+        _resources = new UIResources(this);
     }
 
     public UINode Root { get; }
@@ -140,6 +143,20 @@ public sealed class UIContext : IAsyncDisposable
         _registrations.TryGetValue(typeof(T), out var registration) ? registration.WindowMode :
             throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
 
+    public async Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : UINode
+    {
+        try
+        {
+            Host.VerifyAccess(); VerifyMutation();
+            if (!_registrations.TryGetValue(typeof(T), out var registration))
+                throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
+            if (registration.Resource == null) throw new InvalidOperationException($"Node {typeof(T).FullName} has no resource to preload.");
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Root.Lifetime);
+            return await _resources.AcquireAsync(registration.Resource, linked.Token);
+        }
+        catch (Exception ex) { Report(ex, $"Preload {typeof(T).FullName}"); throw; }
+    }
+
     internal async Task<T> CreateAsync<T>(UINode parent, object? args, CancellationToken token) where T : UINode
     {
         Host.VerifyAccess();
@@ -149,11 +166,18 @@ public sealed class UIContext : IAsyncDisposable
         var node = (T)registration.Factory();
         if (node.State != NodeState.Detached) throw new InvalidOperationException("A factory must return a fresh detached node.");
         IUIElement? element = null;
+        UIResourceLease? lease = null;
         try
         {
             node.SetParameters(args);
             if (registration.Resource != null)
-                element = await Loader.LoadAsync(registration.Resource, parent.Element, token);
+            {
+                lease = await _resources.AcquireAsync(registration.Resource, token);
+                token.ThrowIfCancellationRequested();
+                element = lease.Resource.Instantiate(parent.Element)
+                    ?? throw new InvalidOperationException($"Resource '{registration.Resource}' returned no instance.");
+                node.ResourceLease = lease;
+            }
             token.ThrowIfCancellationRequested();
             await node.AttachAsync(parent, typeof(T).Name, element, token);
             return node;
@@ -166,6 +190,7 @@ public sealed class UIContext : IAsyncDisposable
                 if (node.State != NodeState.Detached) await node.DisposeAsync();
                 else if (element != null) await element.DisposeAsync();
             });
+            await CleanupAsync(ex, () => { lease?.Dispose(); return Task.CompletedTask; });
             throw;
         }
     }
@@ -185,5 +210,21 @@ public sealed class UIContext : IAsyncDisposable
         catch (Exception secondary) { Report(secondary, "Cleanup after failure"); UIFailure.AddSecondary(primary, secondary); }
     }
 
-    public ValueTask DisposeAsync() => Root.DisposeAsync();
+    public ValueTask DisposeAsync()
+    {
+        Host.VerifyAccess(); VerifyMutation();
+        // Root validates reentrant disposal before a context disposal task is retained.
+        var root = Root.DisposeAsync();
+        return new ValueTask(_disposeTask ??= DisposeCoreAsync(root));
+    }
+    private async Task DisposeCoreAsync(ValueTask root)
+    {
+        try { await root; }
+        catch (Exception ex)
+        {
+            await CleanupAsync(ex, _resources.DisposeAsync);
+            throw;
+        }
+        await _resources.DisposeAsync();
+    }
 }

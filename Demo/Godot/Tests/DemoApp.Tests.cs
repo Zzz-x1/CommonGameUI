@@ -25,10 +25,15 @@ public partial class DemoApp
     private sealed class DelayedLoader(IUIResourceLoader inner) : IUIResourceLoader
     {
         public int InstancesCreated;
-        public async Task<IUIElement> LoadAsync(string resource, IUIElement? mount, CancellationToken token)
+        public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
         {
             await Task.Delay(500, token);
-            var display = await inner.LoadAsync(resource, mount, token); InstancesCreated++; return display;
+            return new Resource(this, await inner.LoadAsync(resource, token));
+        }
+        private sealed class Resource(DelayedLoader owner, IUIResource inner) : IUIResource
+        {
+            public IUIElement Instantiate(IUIElement? mount) { owner.InstancesCreated++; return inner.Instantiate(mount); }
+            public void Dispose() => inner.Dispose();
         }
     }
 
@@ -43,9 +48,45 @@ public partial class DemoApp
         if (!condition) throw new InvalidOperationException($"Demo validation failed: {message}");
     }
 
+    private sealed class CountingLoader(IUIResourceLoader inner) : IUIResourceLoader
+    {
+        public int Loads, Instances, Releases;
+        public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
+        { Loads++; return new Resource(this, await inner.LoadAsync(resource, token)); }
+        private sealed class Resource(CountingLoader owner, IUIResource inner) : IUIResource
+        {
+            public IUIElement Instantiate(IUIElement? mount) { owner.Instances++; return inner.Instantiate(mount); }
+            public void Dispose() { owner.Releases++; inner.Dispose(); }
+        }
+    }
+
+    private async Task RunResourceSelfTestAsync()
+    {
+        var host = new GodotUIHost(GetViewport());
+        var loader = new CountingLoader(new GodotSceneLoader(host));
+        await using var ui = GodotUI.Create(this, loader: loader);
+        ui.Register<CardView>("res://Scenes/Inventory/Card.tscn");
+        var first = ui.PreloadAsync<CardView>(); var second = ui.PreloadAsync<CardView>();
+        var a = await first; var b = await second;
+        Check(loader.Loads == 1 && loader.Instances == 0 && ui.Root.Children.Count == 0,
+            "Preload did not share a pure resource acquisition.");
+        var panels = await ui.Root.CreateContainerAsync<PanelContainerNode>("ResourceCase", GetNode<Control>("FloatingMount"));
+        var window = await panels.OpenAsync<CardView>(new CardArgs("PREPARED RELIC", Vector2.Zero), playAnimation: false);
+        a.Dispose(); b.Dispose();
+        Check(loader.Loads == 1 && loader.Instances == 1 && loader.Releases == 0 && window.GetControl().IsInsideTree(),
+            "Releasing preload damaged the opened window or reloaded its resource.");
+        await panels.CloseAsync(window, playAnimation: false);
+        Check(loader.Releases == 1, "Closing the last instance kept its resource hold.");
+        var remaining = await ui.PreloadAsync<CardView>();
+        await ui.DisposeAsync(); remaining.Dispose();
+        Check(loader.Loads == 2 && loader.Releases == 2 && loader.Instances == 1, "Context retained a preload or instantiated it.");
+        GD.Print("PASS resources: threaded acquisition, pure/shared preload, independent instance hold, explicit/context release");
+    }
+
     private async Task RunSelfTestAsync()
     {
         await RunAdapterSelfTestAsync();
+        await RunResourceSelfTestAsync();
         Check(_ui.Root.Children.Count == 4, "Only project-declared mounts should exist.");
         await OpenPreferencesAsync();
         var tabs = (PreferencesView)_scenario!;
@@ -204,7 +245,7 @@ public partial class DemoApp
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (22 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (23 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
     }
@@ -240,14 +281,17 @@ public partial class DemoApp
         foreach (var mode in new[] { ModalBackdropMode.Shared, ModalBackdropMode.PerModal })
         {
             Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track, duration: 2), mode);
+            using var preloaded = await _ui.PreloadAsync<SettingsWindowView>();
+            using var settingsPage = await _ui.PreloadAsync<SettingsView>();
             var opening = Modals.OpenSettingsWindowViewAsync(playAnimation: false);
-            Check(opening.IsCompletedSuccessfully, "Instant modal waited for its node or dim animation."); var window = await opening;
+            Check(opening.IsCompletedSuccessfully, "Preloaded instant modal waited for its node or dim animation."); var window = await opening;
             var dim = window.GetControl().GetParent().GetChildren().OfType<ColorRect>().Single(c => !c.IsQueuedForDeletion());
             Check(dim.Visible && dim.Modulate.A == 1 && Modals.Current == window && window.IsInteractive, "Instant backdrop/input final state.");
             var closing = Modals.CloseAsync(window, playAnimation: false); Check(closing.IsCompletedSuccessfully, "Instant close waited for animation.");
             await closing; Check(Modals.CurrentBackdrop == null && window.State == NodeState.Disposed && _menu.IsInteractive, "Instant modal cleanup or input restoration.");
         }
         Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track));
+        using var confirmResources = await _ui.PreloadAsync<ConfirmView>();
         var dialog = Modals.ShowConfirmViewAsync(playAnimation: false); ((ConfirmView)Modals.Current!).Complete(false);
         Check(!await dialog && Modals.Current == null, "Generated instant dialog failed to return the explicit cancel result.");
         GD.Print("PASS V5 modal: instant shared/per-modal dim, lifecycle/input/cleanup, generated dialog result");

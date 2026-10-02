@@ -49,6 +49,7 @@ public partial class DemoApp
         await OpenInventoryAsync();
         var inventory = ((InventoryWindowView)_scenario!).Inventory;
         await CaptureAsync("partner-list.png");
+        using var detailsResources = await _ui.PreloadAsync<DetailsView>();
         var entering = inventory.InspectAsync("Oakheart Bow");
         while (inventory.Parent!.Children.OfType<DetailsView>().Single().TransitionProgress < .25f && !entering.IsCompleted)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);

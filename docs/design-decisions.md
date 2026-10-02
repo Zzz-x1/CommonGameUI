@@ -1,6 +1,6 @@
 # UI 管理框架设计文档
 
-更新日期：2026-10-02（Asia/Shanghai）。当前已实现 V4 转场与模态遮罩；转场实际契约见 9.5，遮罩与验收见 9.6。V3 历史验收见 8.10。
+更新日期：2026-10-02（Asia/Shanghai）。当前包含 V5、动画能力及资源加载/预加载；资源实际契约见 10.4，最新范围与验收见第 12 节。历史版本验收保留其当时状态。
 
 ## 目录
 
@@ -843,7 +843,7 @@ Demo 的背包窗口外壳、内嵌背包 Tab、详情、物品手记组成实�
 | 前置/完成生命周期及外部处理器 | V2 已实现，V3 增加 Show/Hide | 不重复建设；容器操作观察与节点生命周期需区分 |
 | 通用、单界面及伙伴界面相关转场、绘制顺序 | 每 Node 可设置 IUITransition；仅收到 element、entering，Godot 只有 Fade | 优先补齐原因/源目标上下文与易用动画配置 |
 | 遮罩资源覆盖、点击关闭及多弹窗遮罩策略 | Demo 各弹窗自带 ColorRect；核心无遮罩管理 | 优先统一遮罩的归属、排序、嵌套与业务关闭请求 |
-| 可替换资源加载及预加载/释放 | 已有可替换 loader；Godot 同步加载，无预加载契约 | 候选项；区分资源缓存和节点实例保留 |
+| 可替换资源加载及预加载/释放 | 已实现可替换 loader、Godot 后台加载及独立资源持有凭据 | 实际契约见 10.4；区分资源持有和节点实例保留 |
 | 不加入返回历史的临时页 | 当前每次 Push 都保留历史 | 仅在确有临时页面流程时考虑，不借此恢复 Replace |
 | 容器操作前后回调 | 节点有上下文和处理器，无独立容器操作观察入口 | 可选；需先证明节点处理器/项目协调代码不足 |
 
@@ -1018,8 +1018,8 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 | 编号 | 能力 | 当前差距 | 游戏使用场景 |
 | --- | --- | --- | --- |
-| 1 | 资源取得、实例创建分离；异步加载与释放 | 接口直接返回实例；Godot 同步加载 | 大型界面按需加载和关闭后归还资源 |
-| 2 | 预加载与显式释放 | 没有独立资源持有凭据 | 菜单预备背包/商店资源 |
+| 1 | 资源取得、实例创建分离；异步加载与释放 | 已实现 IUIResourceLoader → IUIResource → IUIElement；Godot 后台加载，同步归还持有 | 大型界面按需加载和关闭后归还资源 |
+| 2 | 预加载与显式释放 | 已实现 Context.PreloadAsync<T> 与 UIResourceLease.Dispose | 菜单预备背包/商店资源 |
 | 3 | Modal 一次返回指定下层实例 | 只有顶层 Close | 商品确认后直接回商店 |
 | 4 | 临时页不保留历史 | 每次 Push 都保留 | 资源准备页不出现在返回路径 |
 | 5 | 容器整体操作前后回调 | 只有节点生命周期与状态通知 | 外壳统一同步标题/返回按钮 |
@@ -1051,7 +1051,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | Inspector 配置动画、遮罩、加载器 | 当前以 C# 配置和 Godot 场景资源为主 | 编辑器配置是易用性差距，后续独立规划；不把 Unity Inspector 放进核心 |
 | Container.Of/Find、全局 Instances | Root/Parent/GetChild、项目持有引用 | 层级定位可实现；缺少直接查祖先/深层名称的便利 API，但不因此引入全局静态注册表 |
 | 按数量/ID 返回、指定字符串实例 ID | 当前主要通过具体实例定位 | 功能需求可对应，全部重载不是必须补齐的功能 |
-| 同步资源加载选项 | 后端当前实际同步；公共容器流程可能仍需异步生命周期/转场 | 资源是否同步与整个开窗 API 是否同步是两件事，不能为方法数量而增加同步阻塞入口 |
+| 同步资源加载选项 | Godot 后台加载；公共容器流程还需等待生命周期/转场 | 资源是否同步与整个开窗 API 是否同步是两件事，不能为方法数量而增加同步阻塞入口 |
 | Container 内容裁剪、布局填充 | Godot 资源设置 ClipContents/锚点；Demo 已使用包装层和裁剪 | 引擎适配/资源职责，不新增渲染无关核心的矩形裁剪系统 |
 | Coroutine/Task/完成回调多种等待方式 | C# Task/ValueTask 和应用任务观察 | 当前足以观察结果/异常，不必复制 Unity 协程句柄 |
 | Resources/Addressables、Timeline、ScriptableObject | 目前 Godot 实现；Unity 专用适配未实现 | 不能宣称支持 Unity 后端；属于后续引擎适配交付，不是核心流程缺失 |
@@ -1073,21 +1073,45 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 ### 10.4 实现与 API 方向
 
-以下为候选，名称、签名及细节在用户选择后定稿；示例不代表当前已提供。
+资源流程 1、2 已由用户选择并实施；其余为候选，名称、签名及细节在用户选择后定稿。
 
-#### 1、2. 资源流程与预加载
+#### 1、2. 资源流程与预加载（已实现）
 
-[USN 资源加载](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#loading-screen-resources) 支持替换加载器与资源释放；[预加载](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#preloading) 提供 Preload/ReleasePreloaded。当前 IUIResourceLoader.LoadAsync 直接创建 IUIElement，提前调用会产生实例，不能当作单纯资源预加载。
+[USN 资源加载](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#loading-screen-resources) 支持替换加载器与资源释放；[预加载](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#preloading) 提供 Preload/ReleasePreloaded。此前加载接口直接返回实例，无法表达纯资源预加载；已替换该接口，不保留兼容入口。
 
-应重构为“取得可实例化资源 → 创建/挂载实例 → 节点初始化 → 容器流程”。后端实现资源句柄，核心不依赖 PackedScene/GameObject。普通 Open/Push 自动取得所需资源，使用者继续使用已有容器 API，不为普通开窗增加手动资源管理。
+流程为“取得可实例化资源 → 同步创建/挂载实例 → 节点初始化 → 容器流程”。后端实现资源句柄，核心不依赖 PackedScene/GameObject。普通 Open/Push 自动取得所需资源，使用者继续使用已有容器 API，不为普通开窗增加手动资源管理。
 
-预加载只持有资源，不创建 Node/显示实例，不执行初始化或进入生命周期。候选 `ui.PreloadAsync<InventoryWindow>(token)` 返回持有凭据；打开窗口时复用已准备资源。凭据提供明确释放入口：即时归还引用使用同步 Dispose，确实需要等待才用 DisposeAsync；取得异步不等于释放也必须异步。最终完整示例在协议定稿后提供。
+预加载只持有资源，不调用节点工厂、不创建显示实例、不执行生命周期。公开入口如下，普通项目只需使用第一个入口和返回的句柄：
 
-预加载与打开实例共享底层资源、分别持有；释放预加载不能销毁仍使用资源的窗口。关闭实例归还其持有，Context 销毁清理剩余资源。重复请求是否合并及一个等待者取消的隔离规则须明确，不能误取消其他使用者。加载/创建失败原样传播并清理已取得资源，附加清理失败不能掩盖最初异常；不缓存失败为成功、不自动重试或返回空资源。
+```csharp
+Task<UIResourceLease> UIContext.PreloadAsync<T>(CancellationToken cancellationToken = default)
+    where T : UINode;
 
-Godot 使用真正可等待的资源加载，实例化/场景树操作留在引擎线程；不以 Task.FromResult 包装同步读取宣称异步，也不把场景树操作放进 Task.Run。后端是否能中止底层加载及取消后的资源归还，实施前按可用 API 核对。
+// 适配器协议：加载不实例化，实例化不异步。
+Task<IUIResource> IUIResourceLoader.LoadAsync(string resource, CancellationToken cancellationToken);
+IUIElement IUIResource.Instantiate(IUIElement? mount);
+void IUIResource.Dispose();
+void UIResourceLease.Dispose();
 
-Demo 复用菜单、背包和详情：菜单预备常用资源，进入时创建页面，预加载持有释放后现有页面仍正常使用。验收包含预加载无实例、重复持有、取消/失败、独立释放、Context 清理及 Godot 线程/挂载。不用人工延时声称性能提升，不增加技术缓存面板。实例池、LRU、内存预算不顺带纳入。
+// 菜单预备资源；窗口创建成功后可以归还预加载持有。
+var prepared = await ui.PreloadAsync<InventoryWindowView>();
+var backpack = await windows.OpenAsync<InventoryWindowView>();
+prepared.Dispose();
+// backpack 仍可显示、隐藏、恢复；关闭时归还实例自己的持有。
+await windows.CloseAsync(backpack);
+```
+
+句柄同步、幂等释放；只能在宿主 UI 线程操作。未注册类型、没有资源的结构性类型、已销毁 Context 均明确报错，不返回空凭据。最后一个持有释放后移除资源记录，下一次显式请求重新取得；不缓存没有持有者的已完成资源。
+
+同一 Context 内按注册资源字符串（Ordinal 精确匹配）合并正在加载的请求和仍有持有者的资源；不同类型注册相同路径也共享。每个等待者先独立保留一次持有，成功后转为句柄/实例持有。取消等待立即结束该调用，只归还自己的保留，不取消共享加载；即使最后等待者取消，也将已经开始的加载收尾并归还结果。Context 销毁先取消节点/预加载等待，随后取消底层加载、等待收尾、释放所有剩余句柄；外部保留的句柄之后再次 Dispose 不重复释放。
+
+加载/创建/清理失败记录并传播原始异常，不包装、不缓存失败为成功、不自动重试。取消后的无人等待加载仍可能失败：立即记录原异常，由 Context.DisposeAsync 传播无人观察的失败，不遗失后台错误。正常调用已观察到的加载失败不在 Context 销毁时重复抛出。清理失败保留首个异常并按既有 UIFailure 契约附加其他异常。资源持有在显示实例清理之后归还；显示清理失败也执行资源清理。
+
+Godot 使用 LoadThreadedRequest 启动加载，每帧等待并查询 LoadThreadedGetStatus，仅结束后调用 LoadThreadedGet，避免阻塞主线程等候未完成的资源。Instantiate/AddChild 保留在场景线程，无 Task.Run 场景树操作或同步读取的 Task.FromResult 包装。Godot 未提供中止后台请求的接口，取消会等待底层请求完成并取回结果，不创建晚到实例；失败状态/错误码转为明确 IOException，已有 C# 异常原样传播。依据：[Godot ResourceLoader](https://docs.godotengine.org/en/stable/classes/class_resourceloader.html)。
+
+Godot 资源释放清空此持有对象的 PackedScene 引用，不对引擎可能共享的托管 PackedScene 包装对象调用 Dispose，不强制 GC。这里只保证归还框架引用；实际内存/显存回收受实例、其他使用者、引擎缓存及托管 GC 影响。借用的内嵌 Tab 不另行加载或持有资源，仍由其父场景拥有。
+
+Demo 菜单初始化时预加载背包外壳，首次开窗成功后释放预加载句柄；内部背包页/详情仍按需加载，Hide 保留实例与资源。主菜单没有缓存按钮或诊断面板，正常流程不人工延时；延时加载仅用于显式取消测试。实例池、LRU、内存预算不在本次范围。
 
 #### 3. 弹窗一次返回指定实例
 
@@ -1393,18 +1417,26 @@ ItemPartnerTransition 从 Source/Target 获取另一侧 InventoryView，详情�
 
 ## 12. 下一版候选与当前 USN 覆盖结论（2026-10-02）
 
-本节为用户询问后的建议，尚未确认实施范围，不新建版本文档或开始实现。基于当前 demo/partner-screen-transition 分支代码、USN master README、PageContainer.cs 与 ScreenContainerTransitionHandler.cs 静态核对；未运行 USN。后续以最小场景/API 和代码简洁规范执行，不为填平功能表自动加入全部候选。
+用户已选择本节第 1 项，资源流程/预加载已实施；第 2、3 项及其他差距继续待定，不新建版本文档。基于当前 demo/partner-screen-transition 分支代码、USN master README、PageContainer.cs 与 ScreenContainerTransitionHandler.cs 静态核对；未运行 USN。以最小场景/API 和代码简洁规范执行，不为填平功能表自动加入全部候选。
 
-结论：常用页面历史、内嵌切换、嵌套弹窗、生命周期和动画主干已有对应能力；尚不能宣称完整覆盖 USN，尤其资源生命周期和容器边界能力仍有缺口。Partner Demo 验证的是现有上下文支持项目自定义伙伴动画，不代表新增自动共享元素系统。Unity Inspector、Timeline、Addressables 没有交付对应 Unity 适配，Godot AnimationPlayer 是不同后端的对应能力；不按方法数量计算覆盖百分比。
+结论：常用页面历史、内嵌切换、嵌套弹窗、生命周期和动画主干已有对应能力；尚不能宣称完整覆盖 USN，资源主流程已补齐，容器边界操作及后端便利能力仍有差距。Partner Demo 验证的是现有上下文支持项目自定义伙伴动画，不代表新增自动共享元素系统。Unity Inspector、Timeline、Addressables 没有交付对应 Unity 适配，Godot AnimationPlayer 是不同后端的对应能力；不按方法数量计算覆盖百分比。
 
-当前未完成项继续沿用 10.2 编号：1/2 资源取得与实例创建分离、异步加载、预加载和显式资源释放；3 Modal 一次返回下层实例；4 不保留历史的临时页；5 容器整体操作通知；12 输入策略；13 更多遮罩策略/时序；14 隐藏当前 Tab 并清空选中；15 生命周期处理器顺序；16 独立资源动态 Tab。除此之外还有后端编辑器配置、已加载 PackedScene 引用便利注册等接入差异。6—11 已实现，不再重复列为缺失。
+当前未完成项继续沿用 10.2 编号：3 Modal 一次返回下层实例；4 不保留历史的临时页；5 容器整体操作通知；12 输入策略；13 更多遮罩策略/时序；14 隐藏当前 Tab 并清空选中；15 生命周期处理器顺序；16 独立资源动态 Tab。除此之外还有后端编辑器配置、已加载 PackedScene 引用便利注册等接入差异。1/2、6—11 已实现，不再重复列为缺失。
 
 建议下一版以资源流程为主，分为以下优先级：
 
-1. **首选：资源加载与预加载作为同一完整能力交付。** 场景是主菜单提前取得背包/商店资源，玩家打开时再创建页面；加载大资源时主线程 UI 保持响应。当前 LoadAsync 直接返回显示实例且 Godot 使用同步 ResourceLoader.Load，不能靠已有接口简单调用实现纯资源预加载。重构取得资源→创建实例→初始化节点；正常 Open/Push 调用保持简洁，只有主动预加载者持有明确释放凭据。预加载不创建 Node、不执行生命周期，释放预加载不销毁活跃窗口。API 候选沿用 10.4，不新增实例池、LRU、缓存预算或多套策略。
+1. **已实施：资源加载与预加载作为同一完整能力交付。** 场景是主菜单提前取得背包/商店资源，玩家打开时再创建页面；加载期间逐帧等待，实例化/初始化仍可能消耗主线程时间，不宣称全部开窗步骤无成本。实际接口、共享/取消/释放及 Godot 限制见 10.4，不新增实例池、LRU、缓存预算或多套策略。
 2. **次选：Modal 返回指定下层实例。** 场景为商店弹窗→商品详情→购买确认，完成后直接回原商店；现有循环 Close 会逐层交接焦点/输入，不能表达一次整体提交。仅保留一个按具体下层实例定位的候选 CloseToAsync，不堆叠数量/索引/字符串等重载；结果弹窗、中间项生命周期与遮罩清理在选定后明确。
 3. **小范围可选：Tab 隐藏当前项。** 场景是互斥侧栏收起内容，但保留外壳与内嵌页面，之后重新选中。隐藏父容器不等于 Current=null；候选 HideAsync 隐藏当前项并清空选中，不销毁页面、不引入历史。没有当前项时的行为须在 API 定稿时明确，不能实现时偷偷保底。
 
-若需要控制版本规模，只选择第 1 项即可。临时历史页、容器通知、输入/遮罩策略、处理器顺序、动态 Tab 与编辑器配置继续待定；不将伙伴动画通用化或 Analyzer/诊断系统作为此次默认范围。
+本次仅实施第 1 项。临时历史页、容器通知、输入/遮罩策略、处理器顺序、动态 Tab 与编辑器配置继续待定；不将伙伴动画通用化或 Analyzer/诊断系统作为此次默认范围。
 
-调研来源：[资源加载](https://github.com/Haruma-K/UnityScreenNavigator#loading-screen-resources)、[预加载](https://github.com/Haruma-K/UnityScreenNavigator#preloading)、[多层返回](https://github.com/Haruma-K/UnityScreenNavigator#pop-multiple-screens-at-once)、[Sheet 的隐藏](https://github.com/Haruma-K/UnityScreenNavigator#create-sheet-and-transition)、[其他特性](https://github.com/Haruma-K/UnityScreenNavigator#other-features)、[PageContainer.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)、[ScreenContainerTransitionHandler.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/ScreenContainerTransitionHandler.cs)。本次仅更新候选与调研记录，未修改运行代码，无新增运行验收。
+调研来源：[资源加载](https://github.com/Haruma-K/UnityScreenNavigator#loading-screen-resources)、[预加载](https://github.com/Haruma-K/UnityScreenNavigator#preloading)、[多层返回](https://github.com/Haruma-K/UnityScreenNavigator#pop-multiple-screens-at-once)、[Sheet 的隐藏](https://github.com/Haruma-K/UnityScreenNavigator#create-sheet-and-transition)、[其他特性](https://github.com/Haruma-K/UnityScreenNavigator#other-features)、[PageContainer.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageContainer.cs)、[ScreenContainerTransitionHandler.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/ScreenContainerTransitionHandler.cs)。初次评估只记录候选；用户随后确认第 1 项，其实施验收如下。
+
+### 12.1 第 1 项实施与验收（2026-10-02）
+
+- 核心增加 IUIResource 与 UIResourceLease，加载器改为取得资源，实例化同步执行；普通容器/生成 API 的调用保持原用法，内嵌 Tab 不变。节点销毁在显示清理后归还资源，失败仍继续必要清理并保留原始异常。Context 收尾全部加载和剩余资源，无旧接口兼容层。
+- 同路径请求合并，独立持有、取消隔离、最后引用释放、重新显式取得与无人观察的后台错误收尾均纳入核心测试。追加 11 项有实际资源行为的测试，总计核心/生成器 138 项通过；构建 0 警告、0 错误。
+- Godot headless 与原生 OpenGL 自测均通过 23 场景并退出 0；新增实际适配器资源共享/纯预加载/显式及 Context 释放验证，保留无晚到实例的取消测试。预期错误均明确断言，不由业务捕获或隐藏。
+- Demo 菜单预备背包外壳，开窗后释放预加载持有，保留窗口和历史；内部页面按需加载。即时转场测试先预备所需资源，再验证不等待动画；不能把 playAnimation:false 当作同步资源加载保证。原生 Partner 四阶段截图生成成功，详情布局已目视检查。
+- 未运行 USN、实测大资源帧耗时/加载性能、验证全部分辨率、实体手柄、导出平台或其他引擎。Godot 无底层中止接口、实际内存回收边界按 10.4；未增加池化/LRU/缓存预算/编辑器/诊断机制，也未实施本节第 2、3 项。

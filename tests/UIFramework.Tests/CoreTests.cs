@@ -30,22 +30,37 @@ public sealed class TestHost : IUIHost, IUILog, IUIResourceLoader
 {
     public readonly List<Exception> Errors = new();
     public readonly List<MemoryElement> Loaded = new();
+    public readonly List<MemoryResource> Resources = new();
     public Exception? LoadFailure;
     public TaskCompletionSource<bool>? LoadGate;
+    public TaskCompletionSource<bool>? ResourceCreated;
+    public TaskCompletionSource<Exception>? ErrorReported;
     public object? Focus;
     public void VerifyAccess() { }
     public object? CaptureFocus() => Focus;
     public void FocusElement(IUIElement? element) => Focus = element;
     void IUIHost.Focus(IUIElement? element) => FocusElement(element);
     public void RestoreFocus(object? focus) => Focus = focus;
-    public void Error(Exception exception, string context) => Errors.Add(exception);
-    public async Task<IUIElement> LoadAsync(string resource, IUIElement? mount, CancellationToken token)
+    public void Error(Exception exception, string context) { Errors.Add(exception); ErrorReported?.TrySetResult(exception); }
+    public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
     {
         if (LoadGate != null) await LoadGate.Task.WaitAsync(token);
         if (LoadFailure != null) throw LoadFailure;
         token.ThrowIfCancellationRequested();
-        var element = new MemoryElement(); Loaded.Add(element); return element;
+        var loaded = new MemoryResource(this); Resources.Add(loaded); ResourceCreated?.TrySetResult(true); return loaded;
     }
+}
+
+public sealed class MemoryResource(TestHost host) : IUIResource
+{
+    public int Disposals;
+    public Exception? InstantiateFailure, DisposeFailure;
+    public IUIElement Instantiate(IUIElement? mount)
+    {
+        if (InstantiateFailure != null) throw InstantiateFailure;
+        var element = new MemoryElement(); host.Loaded.Add(element); return element;
+    }
+    public void Dispose() { Disposals++; if (DisposeFailure != null) throw DisposeFailure; }
 }
 
 public class CounterView : UINode
@@ -141,7 +156,8 @@ public class CoreTests
     {
         var (ui, host) = Create(); ui.Register<CounterView>("page"); var stack = await Attach<StackContainerNode>(ui);
         var first = await stack.PushAsync<CounterView>(); var error = new IOException("raw load error"); host.LoadFailure = error;
-        var received = await Assert.ThrowsAsync<IOException>(() => stack.PushAsync<CounterView>());
+        ui.Register<ArgumentView>("other-page");
+        var received = await Assert.ThrowsAsync<IOException>(() => stack.PushAsync<ArgumentView>("args"));
         Assert.Same(error, received); Assert.Same(first, stack.Current); Assert.True(first.IsVisible);
         Assert.Single(host.Errors); Assert.Contains("LoadAsync", received.StackTrace); await ui.DisposeAsync();
     }

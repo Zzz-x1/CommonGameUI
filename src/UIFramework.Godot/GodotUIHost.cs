@@ -7,6 +7,7 @@ public sealed class GodotUIHost : IUIHost, IUILog
     private readonly int _thread = System.Environment.CurrentManagedThreadId;
     private readonly Viewport _viewport;
     public GodotUIHost(Viewport viewport) => _viewport = viewport;
+    internal async Task NextFrameAsync() => await _viewport.ToSignal(_viewport.GetTree(), SceneTree.SignalName.ProcessFrame);
     public void VerifyAccess()
     {
         if (System.Environment.CurrentManagedThreadId != _thread)
@@ -36,24 +37,46 @@ public sealed class GodotSceneLoader : IUIResourceLoader
 {
     private readonly GodotUIHost _host;
     public GodotSceneLoader(GodotUIHost host) => _host = host;
-    public Task<IUIElement> LoadAsync(string resource, IUIElement? mount, CancellationToken token)
+    public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
     {
         _host.VerifyAccess(); token.ThrowIfCancellationRequested();
-        if (!(mount is GodotUIElement target)) throw new InvalidOperationException("A Godot scene needs an explicit Control mount.");
-        var scene = ResourceLoader.Load<PackedScene>(resource) ?? throw new FileNotFoundException("UI scene was not found.", resource);
-        var instance = scene.Instantiate();
-        if (!(instance is Control control))
+        var error = ResourceLoader.LoadThreadedRequest(resource, "PackedScene");
+        if (error != Error.Ok) throw new IOException($"Cannot request UI resource '{resource}': {error}.");
+        // Godot cannot cancel a threaded request. Drain it before returning cancellation.
+        while (ResourceLoader.LoadThreadedGetStatus(resource) == ResourceLoader.ThreadLoadStatus.InProgress)
+            await _host.NextFrameAsync();
+        var status = ResourceLoader.LoadThreadedGetStatus(resource);
+        var loaded = ResourceLoader.LoadThreadedGet(resource);
+        if (status != ResourceLoader.ThreadLoadStatus.Loaded)
+            throw new IOException($"Cannot load UI resource '{resource}': {status}.");
+        token.ThrowIfCancellationRequested();
+        if (!(loaded is PackedScene scene)) throw new InvalidOperationException($"UI resource '{resource}' must be a PackedScene.");
+        return new SceneResource(_host, resource, scene);
+    }
+
+    private sealed class SceneResource(GodotUIHost host, string path, PackedScene scene) : IUIResource
+    {
+        private PackedScene? _scene = scene;
+        public IUIElement Instantiate(IUIElement? mount)
         {
-            instance.Free();
-            throw new InvalidOperationException($"UI resource '{resource}' must have a Control root.");
+            host.VerifyAccess();
+            if (!(mount is GodotUIElement target)) throw new InvalidOperationException("A Godot scene needs an explicit Control mount.");
+            var instance = (_scene ?? throw new ObjectDisposedException(nameof(SceneResource))).Instantiate();
+            if (!(instance is Control control))
+            {
+                instance.Free();
+                throw new InvalidOperationException($"UI resource '{path}' must have a Control root.");
+            }
+            control.Visible = false;
+            try { target.Control.AddChild(control); return new GodotUIElement(control, owned: true); }
+            catch (Exception ex) { GodotUI.Cleanup(ex, control.Free); throw; }
         }
-        control.Visible = false;
-        try
+        public void Dispose()
         {
-            token.ThrowIfCancellationRequested();
-            target.Control.AddChild(control);
-            return Task.FromResult<IUIElement>(new GodotUIElement(control, owned: true));
+            host.VerifyAccess();
+            // Drop this owner's reference. Godot may share the same wrapper with other users.
+            // Disposing that shared PackedScene would invalidate their managed reference.
+            _scene = null;
         }
-        catch { control.Free(); throw; }
     }
 }
