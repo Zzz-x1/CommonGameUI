@@ -1119,7 +1119,7 @@ USN README 的生命周期章节为 Page/Modal/Sheet 提供容器 Before/After �
 
 ### 10.6 先行设计：6、7、8 转场 API（候选，未实施）
 
-用户要求先处理 6、7、8 并设计 API。下面是建议契约及审阅示例，不代表公共类型已实现或全部细节获用户确认。以“单次操作开关 + 可复用阶段配方 + 条件选择”覆盖需求；调用仍直接位于对应容器，规则配置同步，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
+用户要求先处理 6、7、8 并设计 API。下面是建议契约及审阅示例，不代表公共类型已实现或全部细节获用户确认。用户进一步提出第 8 项采用自由编程；候选方案据此改为“单次操作开关 + 可复用阶段配方 + 同步选择函数”，移除先前 When/首条匹配规则。调用仍直接位于对应容器，配置同步，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
 
 #### 6. 单次操作动画开关
 
@@ -1166,7 +1166,7 @@ Source Generator 类型化入口同步增加并传递 `playAnimation`，包括�
 
 #### 7. 分阶段长期配置
 
-保留目前三层配置入口：`ui.DefaultTransition`、`container.ChildTransition`、`node.Transition`，值仍为 IUITransition。增加可复用、不可变的 `TransitionSet : IUITransition`，把阶段和条件选择组合成普通配方；现有单一 Fade 等配方仍可直接赋值。
+保留目前三层配置入口：`ui.DefaultTransition`、`container.ChildTransition`、`node.Transition`，值仍为 IUITransition。增加可复用、不可变的 `TransitionSet : IUITransition`，把阶段配置与同步选择函数组合成普通配方；现有单一 Fade 等配方仍可直接赋值。
 
 ```csharp
 ui.DefaultTransition = GodotTransitions.Fade();
@@ -1198,13 +1198,13 @@ public sealed class TransitionSet : IUITransition
 {
     public static TransitionSet Create(IUITransition defaultTransition);
     public TransitionSet With(TransitionPhase phase, IUITransition transition);
-    public TransitionSet When(TransitionPhase phase,
-        Func<TransitionContext, bool> condition, IUITransition transition);
+    public TransitionSet With(TransitionPhase phase,
+        Func<TransitionContext, IUITransition> select);
     public IUITransitionRun Create(TransitionContext context);
 }
 ```
 
-Create/With/When 均同步；With/When 返回新值，不修改已有 Set，多个节点/容器可安全共享配置。Create 明确要求一个默认配方，避免没有命中时偷偷提供 Fade；需要无动画默认就显式传 InstantTransition。With 为一个阶段配置基础配方；对同一阶段再次 With 明确替换返回的新 Set 中该槽，原 Set 不变，便于项目基于共享模板定制。参数 null、无效枚举等配置错误直接暴露；配方必须延续现有可复用配方/逐次执行对象的职责分离。
+Create/With 均同步；With 的两个重载返回新值，不修改已有 Set，多个节点/容器可安全共享配置。Create 明确要求一个默认配方，避免没有配置的阶段偷偷使用 Fade；需要无动画默认就显式传 InstantTransition。With 为一个阶段配置基础配方；对同一阶段再次 With 明确替换返回的新 Set 中该槽，原 Set 不变，便于项目基于共享模板定制。参数 null、无效枚举等配置错误直接暴露；配方必须延续现有可复用配方/逐次执行对象的职责分离。
 
 阶段由容器提供的 Direction 与进入/退出信息计算，TransitionContext 增加只读 Phase，保留 Source/Target 等现有上下文；不根据节点名称猜测动作，不新增独立历史。
 
@@ -1218,55 +1218,63 @@ Create/With/When 均同步；With/When 返回新值，不修改已有 Set，多�
 | Modal Open | 无（底层只失活） | 新弹窗 Enter |
 | Modal Close | 顶层 Exit | 无（下层恢复输入，不重播入场） |
 
-初次 Push 只有进入项，最后 Pop 只有退出项；PopTo 中间项沿用仅清理语义。Enter/Exit 同时是一般进入/退出阶段的配置槽：PushEnter/PopEnter 没有专用匹配时可使用 Enter，退出对应 Exit。返回恢复与新建进入可以不同动画，但不因此增加新的生命周期回调。
+初次 Push 只有进入项，最后 Pop 只有退出项；PopTo 中间项沿用仅清理语义。Enter/Exit 同时是一般进入/退出阶段的配置槽：PushEnter/PopEnter 没有专用配置时可使用 Enter，退出对应 Exit。返回恢复与新建进入可以不同动画，但不因此增加新的生命周期回调。
 
 三层继承继续按整个配方选择：Node 非 null → 直接管理 Container.ChildTransition 非 null → Context.DefaultTransition；不逐阶段把不同层的规则隐式混合。Node 配置一个 TransitionSet 后，该 Set 的默认配方负责未特别配置的阶段。Root 及无关祖先不自动参与查找；与 V4 相同，配置变化只影响后续操作。
 
-#### 8. 根据来源/目标配置条件规则
+#### 8. 自由编程选择动画
 
-在同一 Set 上使用 When；典型业务不需要自己实现 IUITransition。规则使用已有 Source/Target 和业务类型或名称，基础 Node 也可以参与。
+用户认为 When 条件规则不够好，倾向自由编程。建议取消该匹配 API，改为 With 的同步函数重载，返回本次应执行的 IUITransition。框架不解释业务条件、首条匹配优先级、类型权重或正则规则；分支与缺省行为由普通 C# 函数明确表达。
 
 ```csharp
-// 示例业务类型：同一物品详情页来自物品列表或图鉴时，使用不同动画。
-details.Transition = TransitionSet.Create(GodotTransitions.Fade())
-    .When(TransitionPhase.PushEnter,
-        c => c.Source is ItemListView,
-        GodotTransitions.SlideHorizontal())
-    .When(TransitionPhase.PushEnter,
-        c => c.Source is CodexView,
-        GodotTransitions.ScaleFade())
-    .With(TransitionPhase.PopExit, GodotTransitions.Fade());
+var fade = GodotTransitions.Fade();
+var slide = GodotTransitions.SlideHorizontal();
+var scale = GodotTransitions.ScaleFade();
 
-// Tab 项可以只是 UINode；名称在容器中定义，不强制增加业务 View。
-tabs.ChildTransition = TransitionSet.Create(GodotTransitions.Fade())
-    .When(TransitionPhase.Enter,
-        c => c.Source?.Name == "General" && c.Target?.Name == "Graphics",
-        GodotTransitions.ScaleFade());
+Transition = TransitionSet.Create(fade)
+    .With(TransitionPhase.PushEnter, context =>
+    {
+        if (context.Source is ItemListView)
+            return slide;
+
+        if (context.Source is CodexView)
+            return scale;
+
+        return fade;
+    })
+    .With(TransitionPhase.PopExit, fade);
 ```
 
-示例的 ItemListView/CodexView 为项目业务类型，不是框架内置节点。新创建详情页需在构造或 OnInitializeAsync 配置自己的 Transition，不能等 Push 完成拿到返回值才配置首次动画。业务调用仍是 `PushAsync<ItemDetailsView>(args)` / `SwitchAsync("Graphics")`，不用在按钮事件里判断动画规则。
+这段代码放在详情页构造或 OnInitializeAsync 中，初次 Push 即生效。ItemListView/CodexView 是示例业务类型，不是框架内置节点。简单使用固定动画重载，复杂选择使用函数重载；也可以传普通方法，例如 `.With(TransitionPhase.PushEnter, ChooseEnterTransition)`，方法签名为 `IUITransition ChooseEnterTransition(TransitionContext context)`。无需为了一个条件实现完整 IUITransition 配方与执行对象；真正自定义动画行为仍使用既有接口。
 
-Source 始终是该操作离开的当前项，Target 是将显示/恢复的项；源和目标动画各自拿到相同的 Source/Target，Node 表示当前正在配置动画的那个项。没有源/目标时保持 null，不造空占位对象；例如 Modal Close 的 Target 可为下层弹窗，但不会因此创建下层进入动画。
+基础 Node 不需要增加业务 View；项目可以直接按名称、实例、类型、参数和业务状态判断：
 
-解析规则固定为：
+```csharp
+tabs.ChildTransition = TransitionSet.Create(fade)
+    .With(TransitionPhase.Enter, context =>
+        context.Source?.Name == "General" && context.Target?.Name == "Graphics"
+            ? scale
+            : fade);
+```
 
-1. 实际阶段的 When 条件，按声明顺序选择第一个 true。
-2. 实际阶段的 With 配方。
-3. 如实际阶段为 Push/Pop，则查一般 Enter/Exit 的 When，再查其 With。
-4. 该 Set 显式指定的默认配方。
+条件可以包含 switch、模式匹配或调用项目纯查询方法，框架不增加对应 DSL。业务按钮仍只调用 `PushAsync<ItemDetailsView>(args)` / `SwitchAsync("Graphics")`。预设配方可在配置时创建并复用，函数只返回选中的配方，不持有本次动画运行对象，也不在每次分支里重复建立相同配置。
 
-例如 PushEnter 的基础配置优先于一般 Enter 条件；具体阶段表达更窄的配置范围。同一阶段多项条件同时成立时以书写顺序为明确优先级，不自动猜类型继承深度；项目把更具体条件放前。Source/Target 名称匹配可直接使用普通 C# 条件，当前不预建字符串 ID 系统、正则匹配 DSL 或数值优先级体系。
+Source 是操作切换的起点，Target 是将显示/恢复的项；两侧动画取得相同的 Source/Target，Node 表示当前动画所属项。无源/目标时保持 null。例如 Modal Close 的 Target 可以是下层弹窗，但该上下文信息不意味着框架要为下层重播进入动画。
 
-条件必须同步且只读，不能在解析时开关页面、配置节点或启动嵌套操作；框架配置/状态修改守卫须覆盖该阶段。条件运行最多一次直到首个命中，每个源/目标各自解析。未命中是正常配置路由；条件抛错、配方 Create 返回 null、播放/恢复失败则记录并传播原异常，不能改用默认配方或跳到下一条规则。
+框架仅确定阶段配置槽：实际阶段已配置则使用该槽；Push/Pop 的实际阶段未配置时查一般 Enter/Exit；均未配置时使用 Set 明确指定的默认配方。固定槽直接使用配方，函数槽同步调用一次取得配方；函数没有“未命中”返回值。需要某场景无动画就明确返回 InstantTransition，普通分支的默认返回由项目函数书写。
+
+函数抛出异常或返回 null 都是错误，记录并传播，不能改用通用阶段或默认配方。函数选择完成后才进入原动画执行流程；Create/播放/恢复失败仍原样暴露。playAnimation 为 false 时不调用选择函数，属于调用方明确关闭动画，不属于错误后的跳过。
+
+函数应只读、同步，不负责加载资源、等待业务或执行动画；需要等待的准备继续放在生命周期里。禁止在选择函数中操作容器、修改框架配置或发起嵌套变更，现有修改守卫需覆盖解析阶段。不可变的是配置结构，函数捕获的业务对象可能变化，因此本次选择必须冻结；配置不会自动复制闭包或业务状态。
 
 #### 流程、验收和 Demo
 
-playAnimation 和方向/阶段在操作开始时固定；新实例完成初始化后，捕获源/目标所用配方及条件结果，再执行 Entering/Exiting 准备；各项的实际执行对象在准备后创建以捕获动画基线。TransitionSet 由框架内部提前解析到具体配方；若选中配方仍是另一个不可变 TransitionSet，则在同一上下文继续解析，直到具体执行配方。可以显式以共享 Set 作为默认配方，不做隐式跨层混合，也不把新的动画解析器对象暴露给用户。条件读取的是解析当时的业务状态，进入/退出准备随后改变业务字段不会重新选择本次动画。
+playAnimation 和方向/阶段在操作开始时固定；新实例完成初始化后，捕获源/目标所用配方及选择函数的返回值，再执行 Entering/Exiting 准备；各项的实际执行对象在准备后创建以捕获动画基线。TransitionSet 由框架内部提前解析到具体配方；若选中配方仍是另一个不可变 TransitionSet，则在同一上下文继续解析，直到具体执行配方。可以显式以共享 Set 作为默认配方，不做隐式跨层混合，也不把新的动画解析器对象暴露给用户。解析遇到重复 Set 引用则直接报循环配置错误，防止选择函数返回自身导致无限递归。选择函数读取的是解析当时的业务状态，进入/退出准备随后改变业务字段不会重新选择本次动画。
 
-源/目标分别解析和播放，保持 V4 并行播放、一次提交、失败取消伙伴并观察全部原异常、成功/失败恢复表现的契约。关闭动画也保留生命周期的异步等待与失败恢复；配置非法不被当作“无动画”处理。只有用户显式选择 false 时正常略过动画规则与执行，这与失败后的自动降级不同。
+源/目标分别解析和播放，保持 V4 并行播放、一次提交、失败取消伙伴并观察全部原异常、成功/失败恢复表现的契约。关闭动画也保留生命周期的异步等待与失败恢复；配置非法不被当作“无动画”处理。只有用户显式选择 false 时正常略过选择函数与动画执行，这与失败后的自动降级不同。
 
-实施验收至少包括：默认参数与单次 false 不污染其他调用；false 同时即时处理遮罩；生命周期在 false 下仍等待且报错；四种 Stack 阶段与首次/末次/PopTo；Panel/Tab/Modal 通用阶段；条件首次命中顺序、具体阶段优先、null 源/目标、类型与名称条件；条件异常不尝试下一条；解析发生在准备前；不可变共享配置；取消/动画失败恢复；生成器完整透传。
+实施验收至少包括：默认参数与单次 false 不污染其他调用；false 同时即时处理遮罩；生命周期在 false 下仍等待且报错；四种 Stack 阶段与首次/末次/PopTo；Panel/Tab/Modal 通用阶段；固定/函数重载、阶段槽顺序、null 源/目标、类型/名称/业务状态选择；函数每项只调用一次，异常/null 不尝试其他配置；解析发生在准备前；不可变共享配置；取消/动画失败恢复；生成器完整透传。
 
-Demo 使用已有设置内嵌 General/Graphics 页面验证名称条件与单次即时切换，背包列表/详情/手记验证推进/返回阶段及来源条件；普通打开保持自然动画，不增加技术展台。具体业务路径与资源布局按现有 Demo 核对，不能用不存在的图鉴页面宣称已验证。未实施前不修改 Demo 操作说明为已提供，也不把历史 V4 验收当作这些能力的测试结果。
+Demo 使用已有设置内嵌 General/Graphics 页面验证名称选择函数与单次即时切换，背包列表/详情/手记验证推进/返回阶段及来源选择函数；普通打开保持自然动画，不增加技术展台。具体业务路径与资源布局按现有 Demo 核对，不能用不存在的图鉴页面宣称已验证。未实施前不修改 Demo 操作说明为已提供，也不把历史 V4 验收当作这些能力的测试结果。
 
 本轮只提交 API 设计文档，功能代码、生成器和 Demo 尚未修改；实现需后续明确授权。
