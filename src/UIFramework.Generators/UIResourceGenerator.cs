@@ -44,22 +44,21 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                 {
                     source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> ")
                         .Append(pair.Method).Append(suffix).Append("Async(this global::UIFramework.").Append(pair.Container)
-                        .Append(" container, ").Append(argumentDeclaration).Append("global::System.Threading.CancellationToken cancellationToken = default) => container.")
+                        .Append(" container, ").Append(argumentDeclaration).Append("bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.")
                         .Append(pair.Method).Append("Async<").Append(type).Append(">(")
-                        .Append(pair.Container == "PanelContainerNode" && argumentType == null ? "" : argumentCall + ", ")
-                        .Append("cancellationToken);\n");
+                        .Append(argumentCall).Append(", playAnimation, cancellationToken);\n");
                     if (pair.Container == "PanelContainerNode" && argumentType != null)
                         source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> Open")
-                            .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
-                            .Append(type).Append(">(cancellationToken);\n");
+                            .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
+                            .Append(type).Append(">(null, playAnimation, cancellationToken);\n");
                 }
                 for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
                     if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.DialogNode<TResult>")
                     {
                         var resultType = baseType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                         source.Append("public static global::System.Threading.Tasks.Task<").Append(resultType).Append("> Show")
-                            .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
-                            .Append(type).Append(", ").Append(resultType).Append(">(null, cancellationToken);\n");
+                            .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
+                            .Append(type).Append(", ").Append(resultType).Append(">(null, playAnimation, cancellationToken);\n");
                     }
             }
             source.Append("}\n}\n");

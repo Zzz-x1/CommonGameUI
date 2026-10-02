@@ -41,7 +41,14 @@ public sealed class UIContext : IAsyncDisposable
     private int _notificationDepth;
     internal void VerifyMutation()
     {
-        if (_notificationDepth != 0) throw new InvalidOperationException("Lifecycle notifications allow queries, not hierarchy mutations.");
+        if (_notificationDepth != 0) throw new InvalidOperationException("Read-only callbacks allow queries, not framework mutations.");
+    }
+    internal T Query<T>(Func<T> query, string stage)
+    {
+        _notificationDepth++;
+        try { return query(); }
+        catch (Exception ex) { Report(ex, stage); throw; }
+        finally { _notificationDepth--; }
     }
     internal void Notify(Action action, string stage)
     {

@@ -5,13 +5,15 @@ namespace UIFramework;
 internal static class TransitionFlow
 {
     internal static async Task PrepareAsync(ContainerNode container, LifecycleContext? exit,
-        LifecycleContext? enter, TransitionDirection direction, CancellationToken token)
+        LifecycleContext? enter, TransitionDirection direction, bool playAnimation, CancellationToken token)
     {
         var context = container.Context;
         // Freeze recipes before business preparation; execution state is created afterwards.
-        IUITransition Resolve(UINode node) => node.Transition ?? container.ChildTransition ?? context.DefaultTransition;
-        var exitRecipe = exit == null ? null : Resolve(exit.Node);
-        var enterRecipe = enter == null ? null : Resolve(enter.Node);
+        var exitContext = exit == null ? null : new TransitionContext(exit, false, direction);
+        var enterContext = enter == null ? null : new TransitionContext(enter, true, direction);
+        IUITransition Resolve(TransitionContext item) => context.Query(
+            () => Transitions.Resolve(item.Node.Transition ?? container.ChildTransition ?? context.DefaultTransition, item),
+            $"Select transition {item.Node.GetType().Name}/{item.Node.Name} ({item.Node.Id}) {item.Phase}");
         var runs = new List<IUITransitionRun>();
         var orders = new List<(IUIElement Element, object Order)>();
         var restoreCount = 0;
@@ -34,16 +36,24 @@ internal static class TransitionFlow
         }
         try
         {
+            var exitRecipe = playAnimation && exitContext != null ? Resolve(exitContext) : null;
+            var enterRecipe = playAnimation && enterContext != null ? Resolve(enterContext) : null;
             if (exit != null) await exit.Node.PrepareExitAsync(exit, token);
             if (enter != null) await enter.Node.PrepareEnterAsync(enter, token);
             token.ThrowIfCancellationRequested();
+            if (!playAnimation)
+            {
+                enter?.Node.StageVisibility(true);
+                exit?.Node.StageVisibility(false);
+                return;
+            }
             foreach (var node in new[] { exit?.Node, enter?.Node })
                 if (node?.Element is { } element) orders.Add((element, element.CaptureOrder()));
-            if (exit != null) runs.Add(exitRecipe!.Create(new(exit, false, direction))
+            if (exit != null) runs.Add(exitRecipe!.Create(exitContext!)
                 ?? throw new InvalidOperationException("Transition factory returned null."));
             if (enter != null)
             {
-                runs.Add(enterRecipe!.Create(new(enter, true, direction))
+                runs.Add(enterRecipe!.Create(enterContext!)
                     ?? throw new InvalidOperationException("Transition factory returned null."));
                 enter.Node.StageVisibility(true);
             }

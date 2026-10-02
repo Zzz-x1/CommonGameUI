@@ -391,13 +391,15 @@ V1 范围建议、默认规则、开发阶段及验收标准统一维护在 [V1 
 | UIContext | 构造时创建唯一实例 Root；提供 Register<T>、工厂注册和 DisposeAsync；没有全局静态实例 |
 | UINode / UINode<TArgs> | Id、Name、Parent、Children、Context、Element、State、Lifetime；AttachAsync、GetChild、DisposeAsync；可选类型化参数 |
 | ContainerNode | 容器共享异步操作控制，不公开 Push / Switch / Open |
-| PanelContainerNode | 无参/带参 OpenAsync<T>、TryGet<T>、HideAsync、ShowAsync、CloseAsync；注册模式决定容器内 Single/Multiple，隐藏保留，关闭销毁 |
-| StackContainerNode | PushAsync<T>(args, token)、PopAsync(token)、PopToAsync(target, token)、Current、History；覆盖保留，返回恢复原实例，移除项销毁 |
-| TabContainerNode | BindAsync(name, node, embeddedElement, token)、SwitchAsync(name, token)、可选 SwitchAsync<T>(token)、Items、CurrentName；仅绑定既有项 |
+| PanelContainerNode | OpenAsync<T>(args = null, playAnimation = true, cancellationToken = default)、TryGet<T>、HideAsync、ShowAsync、CloseAsync；注册模式决定容器内 Single/Multiple，隐藏保留，关闭销毁 |
+| StackContainerNode | PushAsync<T>(args = null, playAnimation = true, cancellationToken = default)、PopAsync、PopToAsync、Current、History；覆盖保留，返回恢复原实例，移除项销毁 |
+| TabContainerNode | BindAsync(name, node, embeddedElement, token)、SwitchAsync(name, playAnimation = true, cancellationToken = default)、SwitchAsync<T>、Items、CurrentName；仅绑定既有项 |
 | ModalContainerNode | OpenAsync<T>、CloseAsync(node)、ShowDialogAsync<T,TResult>；仅关闭当前模态，持有输入并恢复焦点；V4 增加 ConfigureBackdrop、RequestDismissAsync、CurrentBackdrop |
 | DialogNode<TResult> | 可选结果契约，Complete(result)；普通模态窗口仍可为一般 UINode，不要求继承此类 |
 | GodotUIElement | owned 动态场景与 borrowed 内嵌 Control 句柄；显隐、输入、排序及按所有权销毁 |
 | Source Generator | UIResource 特性生成模块注册、容器直接调用、类型化参数及弹窗结果便利 API |
+
+所有实际转场操作均支持默认 true 的 playAnimation，准确签名和选择配方契约见 10.6。
 
 NodeState 为 Detached、Initializing、Ready、Disposing、Disposed；可见和交互是独立的局部状态，经祖先状态及输入拥有者计算有效状态。生命周期已重构为第 7 节中的前置/完成、状态通知及处理器契约，旧 OnEnterAsync/OnExitAsync 已删除。容器内部执行进入/退出，业务使用相应容器 API，不公开万能节点导航入口。
 
@@ -725,12 +727,11 @@ public class CardView : UINode<CardArgs> { /* 业务实现 */ }
 
 ```csharp
 // 公开签名；泛型方法约束 where T : UINode。
-Task<T> OpenAsync<T>(CancellationToken cancellationToken = default);
-Task<T> OpenAsync<T>(object args, CancellationToken cancellationToken = default);
+Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default);
 bool TryGet<T>(out T? node);
-Task HideAsync(UINode node, CancellationToken cancellationToken = default);
-Task ShowAsync(UINode node, CancellationToken cancellationToken = default);
-Task CloseAsync(UINode node, CancellationToken cancellationToken = default);
+Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default);
+Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default);
+Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default);
 ```
 
 | 操作 | 实际行为 |
@@ -746,7 +747,7 @@ Task CloseAsync(UINode node, CancellationToken cancellationToken = default);
 
 TryGet 是明确的存在性查询，false 表示正常的“不存在”，不是异常兜底。多实例集合仍可用 Children，具体对象已有 Id，不新增句柄或全局查询系统。查询不能返回正在初始化/准备进入、尚未提交的新实例，也不能返回已从管理表移除但正在清理的实例。
 
-参数明确作为 **创建参数**，不兼任刷新：参数版 Open 只用于新建，已有单实例时再次传参直接报错，不能忽略、自动比较、覆盖 Parameters 或隐式重跑业务方法。无参数版可重开已创建的参数化单实例，但首次创建缺少必需参数仍报错；参数版拒绝 null，沿用当前 UINode<TArgs> 不接受 null 的契约。生成器为参数化窗口生成带参创建调用和无参重开调用，不用传 null 区分意图。后续数据更新由业务 View 的普通方法/模型订阅负责；需要可等待更新时由业务明确提供异步方法。
+参数明确作为 **创建参数**，不兼任刷新：非 null args 只用于新建，已有单实例时再次提供直接报错，不能忽略、自动比较、覆盖 Parameters 或隐式重跑业务方法。省略 args 或传 null 可重开已创建的参数化单实例，但首次创建缺少必需参数仍报错。V5 将核心 Open 统一为上述签名，生成器继续提供具体参数类型的创建入口及省略业务参数的重开入口。后续数据更新由业务 View 的普通方法/模型订阅负责；需要可等待更新时由业务明确提供异步方法。
 
 ```csharp
 var inventory = await windows.OpenAsync<InventoryView>();
@@ -966,7 +967,7 @@ Shared 首次打开创建并淡入一张遮罩；再次打开复用并放到当�
 
 遮罩动画与窗口动画独立：新遮罩先淡入，随后播放窗口入场；窗口退出后，该操作需释放的遮罩再淡出；共享遮罩的嵌套打开/关闭不重复播放。窗口/页面源目标动画并行，遮罩不参加其源目标列表。这一时序避免缩放全屏背景，且整个容器任务等待所有阶段。若以后调整为同时播放须单独验证，不宣称当前已经并行淡入窗口与遮罩。
 
-`UINode.DismissRequested` 为可选 `Func<CancellationToken, Task>` 业务处理器。普通设置配置为 CloseAsync(this, token)，Confirm 配置为 Complete(false) 并返回已完成任务。`RequestDismissAsync(token)` 返回 Task<bool>：处理器缺省是明确的“不允许外部点击关闭”，返回 false；已处理返回 true；不存在模态、失去输入、操作中或重复并发请求直接报错。异步业务失败原样传播，不转换为 false。该入口只用于模态外部点击，不扩展为未选择的 Esc/返回路由系统。
+`UINode.DismissRequested` 为可选 `Func<CancellationToken, Task>` 业务处理器。普通设置配置为 CloseAsync(this, cancellationToken: token)，Confirm 配置为 Complete(false) 并返回已完成任务。`RequestDismissAsync(token)` 返回 Task<bool>：处理器缺省是明确的“不允许外部点击关闭”，返回 false；已处理返回 true；不存在模态、失去输入、操作中或重复并发请求直接报错。异步业务失败原样传播，不转换为 false。该入口只用于模态外部点击，不扩展为未选择的 Esc/返回路由系统。
 
 GodotBackdrops.Dim 要求提供 `Action<Task>` 观察入口。Demo 使用已有 Track，任务由应用持有，在帧入口记录原异常、退出 1 并重新抛出；即使遮罩已 QueueFree 也不丢弃任务。没有 async void、后台任务或遮罩自身销毁时停止观察的机制。没有处理器时遮罩仍拦截鼠标，不穿透背景。
 
@@ -980,11 +981,11 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 **15 个独立故障夹具均退出 1 并记录异常**：原 12 项加 transition-target、backdrop、backdrop-dismiss。设置与嵌套确认原生截图已目视检查，顶部内容清晰且共享遮罩只加深一次背景；截图与日志在被忽略的 artifacts，不入库。未验证全部分辨率、实体手柄、导出平台或其他引擎；AnimationPlayer 任意业务脚本/方法/音频轨道副作用需项目恢复，未承诺自动撤销。Godot 资源加载仍同步，预加载及返回/页面焦点扩展不属于 V4。
 
-## 10. V5 迭代计划候选
+## 10. V5 实现与后续候选
 
 ### 10.1 方向与依据（2026-10-02）
 
-用户确认优先覆盖 UnityScreenNavigator（USN）的能力，并选择先处理能力清单中的 6、7、8：单次动画开关，以及统一的上下文动画选择。7、8 已合并为同一能力，用户要求只保留一个选择包装函数。本轮授权为设计 API，尚未授权实现；候选方案见 10.6。此前以焦点/返回请求为主、以及优先做 1/2/3 的建议均被此顺序取代，不新建未指定的 V5 开发文档。
+用户确认优先覆盖 UnityScreenNavigator（USN）的能力，并授权实现能力清单中的 6、7、8：单次动画开关，以及统一的上下文动画选择。7、8 合并为同一能力，只保留一个同步选择包装函数 `Transitions.Select(Func<TransitionContext, IUITransition>)`。实际契约见 10.6，验收见 10.7；其他候选尚未授权实施。不新建未指定的 V5 开发文档。
 
 覆盖指解决相同游戏 UI 需求，不要求照搬 Page/Sheet/Modal 基类、Unity 组件或全部方法重载。Node 模型、直接容器 API、内嵌 Tab、无历史兼容、原异常传播和同步/异步边界继续有效；不因参考 USN 而引入 Replace。
 
@@ -1020,8 +1021,8 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 3 | Modal 一次返回指定下层实例 | 只有顶层 Close | 商品确认后直接回商店 |
 | 4 | 临时页不保留历史 | 每次 Push 都保留 | 资源准备页不出现在返回路径 |
 | 5 | 容器整体操作前后回调 | 只有节点生命周期与状态通知 | 外壳统一同步标题/返回按钮 |
-| 6 | 单次操作选择是否播放动画 | Instant 配方可配置，但 Open/Push/Pop/Switch 没有逐次选项 | 首次恢复菜单立即显示，之后操作正常动画；不临时改共享配方 |
-| 7、8 | 根据转场上下文选择动画 | 当前需自定义配方分支；缺少选择函数包装入口及 Phase 信息 | 阶段、来源/目标等条件由同一函数判断，覆盖推进/返回差异和不同来源的进入表现 |
+| 6 | 单次操作选择是否播放动画 | V5 已实现容器操作的 playAnimation 选项，生成 API 和遮罩同步透传 | 首次恢复菜单立即显示，之后操作正常动画；不临时改共享配方 |
+| 7、8 | 根据转场上下文选择动画 | V5 已实现 Transitions.Select 与 TransitionContext.Phase | 阶段、来源/目标等条件由同一函数判断，覆盖推进/返回差异和不同来源的进入表现 |
 | 9 | 转场绘制顺序配置 | 支持固定 Push 目标在前、Return 源在前；没有项目覆盖策略 | 旧页覆盖新页退出，而不是始终由新页盖住旧页 |
 | 10 | 动画参数配置 | Godot 预设有时长、部分缩放；没有延迟、缓动选择及通用起止位置/缩放/透明度配置 | 美术调整移动与淡入节奏，不为每套参数写自定义配方 |
 | 11 | 转场状态、类型、进度及变化通知 | 当前没有对应公开运行信息；内部操作守卫不等于公共查询 | 窗口动画期间协调外壳装饰/按钮状态；这是运行能力，不能自动视为诊断系统 |
@@ -1062,7 +1063,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 4 | 临时栈页面不保留历史 | 菜单→资源准备页→目标页面，返回时跳过准备页 | 次优先，可选 |
 | 5 | 容器整体操作回调 | 背包外壳统一更新详情/手记标题与返回按钮，子页面不重复通知 | 次优先，可选 |
 
-上表保留此前 1—5 的候选用途，不代表当前执行顺序。用户现已指定先设计 **6、7、8**，具体方案见 10.6；1—5 尚未授权实施。
+上表保留此前 1—5 的候选用途，不代表当前执行顺序。用户已指定先实现 **6、7、8**，实际契约见 10.6；1—5 尚未授权实施。
 
 ### 10.4 实现与 API 方向
 
@@ -1110,15 +1111,15 @@ USN README 的生命周期章节为 Page/Modal/Sheet 提供容器 Before/After �
 
 ### 10.5 边界与交付
 
-焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab 与 9—13 的其他转场配置仍保留为后续差距；6—8 已进入本轮 API 设计。内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
+焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab 与 9—13 的其他转场配置仍保留为后续差距；6—8 已实现。内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
 
 用户选择后：定稿选中契约 → 重构核心与 Godot → 迁移受影响的生成器入口 → 更新游戏 UI Demo/操作说明 → 核心行为与故障测试、引擎验证 → 更新本文并自动本地提交。不保留旧加载接口转发兼容层。
 
-本轮仅修订计划和审计 USN 文档/源码，未改核心、生成器或 Demo，未运行新功能测试。V4 的 86 项测试与 12 场景属于此前验收，不代表 V5 完成。
+本轮已同步修改核心、生成器、Godot 适配器与 Demo。V4 的 86 项测试与 12 场景保留为历史记录，V5 验收独立记录于 10.7。
 
-### 10.6 先行设计：6、7、8 转场 API（候选，未实施）
+### 10.6 实际契约：6、7、8 转场 API
 
-当前设计范围为两项：6 的单次动画开关，以及 7、8 合并后的上下文动画选择。用户明确要求只保留一个同步选择包装函数；不再引入阶段配置集合或规则 DSL。调用仍直接位于对应容器，不增加 Navigation/Selection 对象。下面的公共入口为候选，尚未实施；未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
+本轮实现两项：6 的单次动画开关，以及 7、8 合并后的上下文动画选择。只保留一个同步选择包装函数；不引入阶段配置集合或规则 DSL。调用直接位于对应容器，不增加 Navigation/Selection 对象。未授权的资源重构、绘制顺序配置、缓动/进度、输入策略等不混入本次。
 
 #### 6. 单次操作动画开关
 
@@ -1137,7 +1138,7 @@ await modals.CloseAsync(settings, playAnimation: false);
 
 影响 Panel Open/Show/Hide/Close、Stack Push/Pop/PopTo、Tab Switch（名称和类型入口）、Modal Open/Close/ShowDialog。构造/注册/Attach/Bind/Dispose 不新增动画开关；显式销毁保持清理语义，不变成自动播放退出动画。未来新增操作若包含转场再遵循相同约定。
 
-候选主要签名：
+实际主要签名：
 
 ```csharp
 // Panel 与 Modal 的 Open 统一形状，各自在自己的容器类型上声明。
@@ -1154,6 +1155,8 @@ Task SwitchAsync<T>(bool playAnimation = true,
     CancellationToken cancellationToken = default) where T : UINode;
 // Show/Hide/Close 同样采用 (node, playAnimation = true, cancellationToken = default)。
 ```
+
+Panel Open 统一为一个核心签名，省略 args 或显式传 null 都表示没有创建参数；已有参数化 Single 可因此重开，新建参数化节点仍校验参数类型。非 null 参数仍只能用于新建。生成器保留具体业务参数的类型化创建入口及无需业务参数的重开入口，都调用同一核心方法。CancellationToken 使用命名参数，避免被 object args 误解释；动画开关也建议使用命名参数。旧版本文档中的无参核心重载说明由此契约取代。
 
 `false` 仅取消该次操作的框架转场表现：不调用动画选择函数、不创建/播放节点动画执行对象、不进行只为动画服务的临时排序。模态遮罩同样即时达到所需显隐状态；必要创建/重排/释放仍执行。IUIBackdrop 的 ShowAsync/HideAsync 也接收相同开关，由后端显式即时设置最终表现，不利用 Restore 冒充正常进入/退出，Restore 继续表达失败恢复。
 
@@ -1270,4 +1273,11 @@ playAnimation 与方向/阶段在操作开始时固定；新实例初始化后�
 
 Demo 使用已有设置内嵌页面验证名称选择与单次即时切换，背包列表/详情/手记验证推进/返回阶段和来源选择；普通打开保持自然动画。具体业务路径与资源布局实施时核对，不为选动画创建不存在的图鉴页面或技术展台，不用历史 V4 验收宣称新能力已验证。
 
-本轮仅更新设计文档，未改核心、生成器或 Demo；未运行功能测试，不代表实现已经完成。
+### 10.7 V5 验收记录（2026-10-02）
+
+- 解决方案构建 0 警告、0 错误；核心与生成器共 108 项测试通过。覆盖六种 Phase、来源/目标、三层继承、准备前冻结、包装组合及循环、原始异常/null、只读变更守卫、逐次开关、资源/生命周期等待与失败、结果弹窗取消清理和遮罩开关。生成器测试编译并执行生成 API，验证业务参数、动画开关、CancellationToken 和结果透传。
+- Godot 4.7.2 .NET 的 headless 与原生 OpenGL 自测均通过 15 场景。新增偏好名称选择、背包阶段/类型选择与即时返回清理、两种即时遮罩及生成对话框流程；既有 12 场景继续通过。
+- 18 个独立故障夹具均记录异常并退出 1；新增 selector、selector-null、selector-cycle。异常路径不回退到其他配方或跳过失败。
+- Demo 的内页初始化使用 playAnimation:false；偏好 Audio→Graphics 的进入使用缩放淡入，其他切换淡入淡出；背包列表/详情按推进和返回阶段组合滑动/淡入淡出，涉及手记时淡入淡出。自测验证即时切换，日常交互保留动画，不添加技术按钮。
+- 偏好与手记原生截图已目视检查，无新增素材；复用既有已许可资源。日志与截图保存在被忽略的 artifacts，工具和构建产物不入库。
+- 未验证全部分辨率、实体手柄、导出平台与其他引擎。Godot 资源加载仍同步；预加载、动态 Tab、其他 USN 差距继续待定。本次只读守卫约束框架变更，不能阻止闭包直接修改项目自己的状态，选择函数应保持纯查询。

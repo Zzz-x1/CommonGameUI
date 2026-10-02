@@ -31,8 +31,8 @@ public class TransitionBackdropTests
     {
         public int Shows, Hides, Restores;
         public Exception? ShowFailure, HideFailure, RestoreFailure;
-        public Task ShowAsync(CancellationToken token) { Shows++; token.ThrowIfCancellationRequested(); Visible = true; if (ShowFailure != null) throw ShowFailure; return Task.CompletedTask; }
-        public Task HideAsync(CancellationToken token) { Hides++; token.ThrowIfCancellationRequested(); Visible = false; if (HideFailure != null) throw HideFailure; return Task.CompletedTask; }
+        public Task ShowAsync(bool playAnimation, CancellationToken token) { Shows++; token.ThrowIfCancellationRequested(); Visible = true; if (ShowFailure != null) throw ShowFailure; return Task.CompletedTask; }
+        public Task HideAsync(bool playAnimation, CancellationToken token) { Hides++; token.ThrowIfCancellationRequested(); Visible = false; if (HideFailure != null) throw HideFailure; return Task.CompletedTask; }
         public void Restore(bool visible) { Restores++; Visible = visible; if (RestoreFailure != null) throw RestoreFailure; }
     }
     private sealed class Factory : IUIBackdropFactory

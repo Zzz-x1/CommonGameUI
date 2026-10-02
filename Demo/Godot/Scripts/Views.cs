@@ -54,6 +54,10 @@ public class PreferencesView : DemoView
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
         Tabs = await this.CreateContainerAsync<TabContainerNode>("Tabs", this.GetControl<Control>("TabContent"), token);
+        var fade = GodotTransitions.Fade(0.10);
+        var scale = GodotTransitions.ScaleFade(0.12, fromScale: 0.98f);
+        Tabs.ChildTransition = Transitions.Select(c => c.Phase == TransitionPhase.Enter &&
+            c.Source?.Name == "Audio" && c.Target?.Name == "Graphics" ? scale : fade);
         foreach (var name in new[] { "Graphics", "Audio", "Controls" })
         {
             var page = new UINode();
@@ -74,11 +78,11 @@ public class PreferencesView : DemoView
         WireToggle("TabContent/Audio/Enabled", value => model.Music = value);
         WireSlider("TabContent/Controls/Value", value => model.CameraSensitivity = value);
         WireToggle("TabContent/Controls/Enabled", value => model.InvertCamera = value);
-        await SelectAsync("Graphics", token);
+        await SelectAsync("Graphics", playAnimation: false, token: token);
     }
-    public async Task SelectAsync(string name, CancellationToken token = default)
+    public async Task SelectAsync(string name, bool playAnimation = true, CancellationToken token = default)
     {
-        await Tabs.SwitchAsync(name, token);
+        await Tabs.SwitchAsync(name, playAnimation, cancellationToken: token);
         foreach (var key in Tabs.Items.Keys)
             this.GetControl<Button>($"TabButtons/{key}").Disabled = key == name;
         DemoApp.Instance.Status($"Preferences / {name}");
@@ -92,10 +96,10 @@ public class SettingsWindowView : DemoView
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
         Transition = GodotTransitions.ScaleFade(targetPath: "Center");
-        DismissRequested = ct => DemoApp.Instance.Modals.CloseAsync(this, ct);
+        DismissRequested = ct => DemoApp.Instance.Modals.CloseAsync(this, cancellationToken: ct);
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("Center/Window/Margin/BodyMount"), token);
         Body.ChildTransition = GodotTransitions.Fade();
-        await Body.PushSettingsViewAsync(token);
+        await Body.PushSettingsViewAsync(playAnimation: false, cancellationToken: token);
     }
 }
 
@@ -143,8 +147,15 @@ public class InventoryWindowView : DemoView
         InitializeCount++;
         Transition = GodotTransitions.Fade();
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
-        Body.ChildTransition = GodotTransitions.SlideHorizontal();
-        Inventory = await Body.PushInventoryViewAsync(token);
+        var slide = GodotTransitions.SlideHorizontal();
+        var fade = GodotTransitions.Fade(0.12);
+        Body.ChildTransition = Transitions.Select(c =>
+            c.Source is ProvenanceView || c.Target is ProvenanceView ? fade : c.Phase switch
+            {
+                TransitionPhase.PushEnter or TransitionPhase.PopExit => slide,
+                _ => fade
+            });
+        Inventory = await Body.PushInventoryViewAsync(playAnimation: false, cancellationToken: token);
         Wire("Actions/Stow", () => DemoApp.Instance.OpenHomeAsync());
     }
 }
@@ -179,7 +190,7 @@ public class InventoryView : DemoView
                 Wire($"TabContent/{name}/Items/Item{i}", () => InspectAsync(button.Text.Split(" x")[0]));
             }
         }
-        await SelectAsync("Equipment", token);
+        await SelectAsync("Equipment", playAnimation: false, token: token);
     }
     protected override void OnEntered(LifecycleContext context)
     {
@@ -203,9 +214,9 @@ public class InventoryView : DemoView
         SelectedItem = item;
         return ((StackContainerNode)Parent!).PushDetailsViewAsync();
     }
-    public async Task SelectAsync(string name, CancellationToken token = default)
+    public async Task SelectAsync(string name, bool playAnimation = true, CancellationToken token = default)
     {
-        await Tabs.SwitchAsync(name, token);
+        await Tabs.SwitchAsync(name, playAnimation, cancellationToken: token);
         foreach (var key in Tabs.Items.Keys) this.GetControl<Button>($"TabButtons/{key}").Disabled = key == name;
         DemoApp.Instance.Status($"Backpack / {name} / Select an item to inspect.");
     }

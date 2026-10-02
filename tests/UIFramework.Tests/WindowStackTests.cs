@@ -71,7 +71,7 @@ public class WindowStackTests
         await Assert.ThrowsAsync<ArgumentException>(() => panels.OpenAsync<ArgumentView>());
         var window = await panels.OpenAsync<ArgumentView>("first");
         await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<ArgumentView>("second"));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => panels.OpenAsync<ArgumentView>(null!));
+        Assert.Same(window, await panels.OpenAsync<ArgumentView>(args: null));
         await panels.HideAsync(window); Assert.Same(window, await panels.OpenAsync<ArgumentView>());
         Assert.Equal("first", window.Parameters);
     }
@@ -124,7 +124,7 @@ public class WindowStackTests
         await using var ui = Create(); var gate = new GateTransition(); var n = new CounterView { Transition = gate };
         ui.Register(() => n); var panels = await Attach<PanelContainerNode>(ui.Root);
         using var cancellation = new CancellationTokenSource();
-        var pending = panels.OpenAsync<CounterView>(cancellation.Token);
+        var pending = panels.OpenAsync<CounterView>(cancellationToken: cancellation.Token);
         Assert.False(panels.TryGet<CounterView>(out _));
         await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<CounterView>());
         cancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
@@ -137,18 +137,18 @@ public class WindowStackTests
         var n = await panels.OpenAsync<CounterView>(); n.Transition = new GateTransition();
         using (var ct = new CancellationTokenSource())
         {
-            var pending = panels.HideAsync(n, ct.Token); ct.Cancel();
+            var pending = panels.HideAsync(n, cancellationToken: ct.Token); ct.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending); Assert.True(n.IsActive);
         }
         n.Transition = new InstantTransition(); await panels.HideAsync(n); n.Transition = new GateTransition();
         using (var ct = new CancellationTokenSource())
         {
-            var pending = panels.ShowAsync(n, ct.Token); ct.Cancel();
+            var pending = panels.ShowAsync(n, cancellationToken: ct.Token); ct.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending); Assert.False(n.IsVisible);
         }
         n.Transition = new InstantTransition(); await panels.ShowAsync(n);
         using var canceled = new CancellationTokenSource(); canceled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => panels.OpenAsync<CounterView>(canceled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => panels.OpenAsync<CounterView>(cancellationToken: canceled.Token));
     }
 
     [Fact] public async Task CompletionFailureKeepsPublishedWindowAndHideShowCommits()
@@ -236,7 +236,7 @@ public class WindowStackTests
         Assert.Equal(new[] { a, b, c }, stack.History); Assert.True(c.IsActive); Assert.False(a.IsVisible);
         Assert.Equal(NodeState.Ready, b.State); a.EnterFailure = null;
         using var ct = new CancellationTokenSource(); a.Transition = new GateTransition();
-        var pending = stack.PopToAsync(a, ct.Token); ct.Cancel();
+        var pending = stack.PopToAsync(a, cancellationToken: ct.Token); ct.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Equal(new[] { a, b, c }, stack.History); Assert.True(c.IsActive); a.Transition = new InstantTransition();
         await stack.PopToAsync(a); Assert.Same(a, stack.Current);
@@ -262,7 +262,7 @@ public class WindowStackTests
         await using var ui = Create(); ui.Register<CounterView>(); ui.Register<CleanupView>();
         var stack = await Attach<StackContainerNode>(ui.Root); var a = await stack.PushAsync<CounterView>();
         var cleanup = await stack.PushAsync<CleanupView>(); using var ct = new CancellationTokenSource();
-        var pending = stack.PopToAsync(a, ct.Token); Assert.Same(a, stack.Current); Assert.False(pending.IsCompleted);
+        var pending = stack.PopToAsync(a, cancellationToken: ct.Token); Assert.Same(a, stack.Current); Assert.False(pending.IsCompleted);
         ct.Cancel(); cleanup.Gate.SetResult(true); await pending;
         Assert.Equal(NodeState.Disposed, cleanup.State); Assert.True(a.IsActive);
     }

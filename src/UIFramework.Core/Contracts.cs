@@ -47,6 +47,7 @@ public interface IUITransitionRun
 }
 
 public enum TransitionDirection { None, Forward, Backward }
+public enum TransitionPhase { Enter, Exit, PushEnter, PushExit, PopEnter, PopExit }
 
 public sealed class TransitionContext
 {
@@ -55,6 +56,16 @@ public sealed class TransitionContext
     public LifecycleContext Lifecycle { get; }
     public bool Entering { get; }
     public TransitionDirection Direction { get; }
+    public TransitionPhase Phase => (Direction, Entering) switch
+    {
+        (TransitionDirection.Forward, true) => TransitionPhase.PushEnter,
+        (TransitionDirection.Forward, false) => TransitionPhase.PushExit,
+        (TransitionDirection.Backward, true) => TransitionPhase.PopEnter,
+        (TransitionDirection.Backward, false) => TransitionPhase.PopExit,
+        (TransitionDirection.None, true) => TransitionPhase.Enter,
+        (TransitionDirection.None, false) => TransitionPhase.Exit,
+        _ => throw new InvalidOperationException("Unknown transition direction.")
+    };
     public UINode Node => Lifecycle.Node;
     public IUIElement? Element => Node.Element;
     public ContainerNode? Container => Lifecycle.Container;
@@ -85,8 +96,8 @@ public interface IUIBackdropFactory
 
 public interface IUIBackdrop : IUIElement
 {
-    Task ShowAsync(CancellationToken token);
-    Task HideAsync(CancellationToken token);
+    Task ShowAsync(bool playAnimation, CancellationToken token);
+    Task HideAsync(bool playAnimation, CancellationToken token);
     void Restore(bool visible);
 }
 

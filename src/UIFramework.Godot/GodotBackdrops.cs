@@ -62,8 +62,15 @@ public static class GodotBackdrops
                 catch (Exception ex) { GodotUI.Report(ex, "Observe backdrop dismiss request"); throw; }
             }
         }
-        public Task ShowAsync(CancellationToken token) => AnimateAsync(true, token);
-        public Task HideAsync(CancellationToken token) => AnimateAsync(false, token);
+        public Task ShowAsync(bool playAnimation, CancellationToken token) => ChangeAsync(true, playAnimation, token);
+        public Task HideAsync(bool playAnimation, CancellationToken token) => ChangeAsync(false, playAnimation, token);
+        private Task ChangeAsync(bool show, bool playAnimation, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            if (playAnimation) return AnimateAsync(show, token);
+            _display.SetVisible(show);
+            return Task.CompletedTask;
+        }
         private async Task AnimateAsync(bool show, CancellationToken token)
         {
             var wasVisible = _control.Visible;

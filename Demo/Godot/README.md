@@ -27,7 +27,9 @@ V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount �
 
 初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页挂处理器时先构造 `UINode`、同步 `AddLifecycle`，再绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
 
-V4 转场：项目默认 Fade，背包详情/手记前进向左滑动、返回向右滑动，窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认；业务继续使用原容器 API。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包滑动内容。
+转场：项目默认 Fade，背包详情推进从右滑入、返回向右滑出，列表使用淡入淡出；涉及手记时两侧淡入淡出。窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包滑动内容。
+
+V5 使用 `Transitions.Select(context => ...)` 直接按 Phase 和 Source/Target 类型选择背包动画；偏好从 Audio 切到 Graphics 时进入页缩放淡入，其他名称切换淡入淡出。基础 Tab 页仍是 Node，未新增空 View 类。内页首次显示使用 `playAnimation:false`，避免外壳和内部初始页叠加转场；后续玩家操作默认播放动画。自测通过同一 API 验证即时 Tab 切换、即时 PopTo 和两种遮罩的即时开关，不增加技术按钮。
 
 V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared)`。弹窗场景不再自带 ColorRect；资源根/全屏布局忽略鼠标，内容面板阻挡鼠标。设置的 DismissRequested 关闭窗口，确认的 DismissRequested 执行 Complete(false)；应用持有并观察点击产生的任务。逐层加深模式使用 PerModal，自测覆盖，日常演示选择共享模式。
 
@@ -44,7 +46,7 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Dialogs
 ```
 
-自测覆盖原有 6 类流程、V3 的 3 类流程及 V4 的共享遮罩/外部关闭/逐层遮罩，共 12 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (12 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁。
+自测覆盖原有 6 类流程、V3 的 3 类流程、V4 的共享遮罩/外部关闭/逐层遮罩，以及 V5 的偏好选择/背包阶段选择/即时模态，共 15 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (15 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
@@ -66,11 +68,22 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Headless -Failure transition-target
 ./scripts/Run-Demo.ps1 -Headless -Failure backdrop
 ./scripts/Run-Demo.ps1 -Headless -Failure backdrop-dismiss
+./scripts/Run-Demo.ps1 -Headless -Failure selector
+./scripts/Run-Demo.ps1 -Headless -Failure selector-null
+./scripts/Run-Demo.ps1 -Headless -Failure selector-cycle
 ```
 
 同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
 
-## 验证记录：2026-10-02 / V4
+## 验证记录：2026-10-02 / V5
+
+- 构建 0 警告、0 错误；核心与生成器 108 项测试通过，生成方法已编译执行验证参数、动画开关、取消和结果透传。
+- Godot headless 与原生 OpenGL 自测通过 15 场景；新增选择函数阶段/来源、即时内页、即时返回清理，以及 Shared/PerModal 即时遮罩的实际引擎断言。
+- 18 个故障夹具均打印异常并退出 1；新增选择函数抛错、返回 null 和循环选择。原始异常继续向调用方传播。
+- 原生偏好、手记截图已目视检查；无新增素材。截图与日志不入库。
+- 未验证全部分辨率、实体手柄、导出平台或其他引擎；资源加载仍同步，AnimationPlayer 的业务副作用仍由项目恢复。
+
+## 历史验证记录：2026-10-02 / V4
 
 - 构建 0 警告、0 错误；核心与生成器 86 项测试通过。
 - Godot headless 与原生 OpenGL 自测通过 12 场景；适配器同时验证滑动方向、原表现恢复、取消和 AnimationPlayer。

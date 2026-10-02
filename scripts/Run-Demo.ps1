@@ -4,7 +4,7 @@ param(
     [switch]$SelfTest,
     [switch]$Capture,
     [ValidateSet('Inventory', 'Preferences', 'Settings', 'Notes', 'Dialogs')][string]$CaptureScene = 'Inventory',
-    [ValidateSet('tab', 'duplicate', 'load', 'lifecycle', 'transition', 'entered', 'state', 'cleanup', 'window-parameters', 'window-state', 'stack-target', 'return-cleanup', 'transition-target', 'backdrop', 'backdrop-dismiss')][string]$Failure
+    [ValidateSet('tab', 'duplicate', 'load', 'lifecycle', 'transition', 'entered', 'state', 'cleanup', 'window-parameters', 'window-state', 'stack-target', 'return-cleanup', 'transition-target', 'backdrop', 'backdrop-dismiss', 'selector', 'selector-null', 'selector-cycle')][string]$Failure
 )
 $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot

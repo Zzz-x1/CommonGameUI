@@ -1,6 +1,6 @@
 # UIFramework
 
-纯 C#、渲染无关的层级 UI 管理框架 V4，附持续维护的 Godot C# Demo。
+纯 C#、渲染无关的层级 UI 管理框架 V5，附持续维护的 Godot C# Demo。
 
 ## 工程结构
 
@@ -15,6 +15,8 @@
 设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V3 在 V2 生命周期上加入单实例窗口、隐藏恢复和返回指定历史实例；Demo 使用虚构冒险游戏的纯 UI 场景。V3 实际契约与验收集中于设计文档第 8.9、8.10 节。
 
 V4 增加转场配置、独立执行状态、源/目标并行动画及共享/逐层模态遮罩，实际契约见设计文档第 9.5、9.6 节。没有旧转场接口兼容层；资源预加载、Esc 返回与页面焦点扩展未纳入本版。
+
+V5 增加逐次 playAnimation 开关与统一的 Transitions.Select 包装函数，阶段及来源条件由普通 C# 表达；实际契约与验收见设计文档第 10.6、10.7 节。
 
 ## 运行
 
@@ -81,7 +83,7 @@ await stack.PushAsync<ItemNotesView>();
 await stack.PopToAsync(first); // 跳过中间页，恢复 first，等待移除项清理。
 ```
 
-窗口参数是创建参数：新建使用 `OpenAsync<T>(args)`，已有参数化单实例重开使用无参重载，更新数据调用业务方法。已有单实例再次带参 Open、Hide 已隐藏对象、Show 已显示对象均报错；不是自动刷新或静默跳过。`PopToAsync` 仅接收当前栈中更早的实例，不能返回当前项；中间隐藏项不重播显示生命周期。
+窗口参数是创建参数：新建使用 `OpenAsync<T>(args)`，已有参数化单实例重开省略 args 或传 null，更新数据调用业务方法。已有单实例再次带非 null 参数 Open、Hide 已隐藏对象、Show 已显示对象均报错。`PopToAsync` 仅接收当前栈中更早的实例，不能返回当前项；中间隐藏项不重播显示生命周期。
 
 `ModalContainerNode.OpenAsync<T>` / `CloseAsync(node)` 处理模态窗口。`ShowDialogAsync<T, TResult>` 等待 `DialogNode<TResult>.Complete(result)`，关闭成功后返回结果。
 
@@ -136,7 +138,26 @@ modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
 
 `Track(Task)` 是项目保存并观察异步任务的入口（Demo 示范于 DemoApp），必须观察失败；遮罩被释放后也不能丢弃该任务。弹窗资源仅提供内容，根/外部布局节点允许鼠标穿透，内容面板拦截鼠标；不要再内嵌全屏遮罩。
 
-普通窗口可设置 `DismissRequested = ct => modals.CloseAsync(this, ct)`；结果弹窗可设置为 `Complete(false)` 后返回 `Task.CompletedTask`。未设置时外部点击正常不关闭，`RequestDismissAsync` 返回 false；缺失窗口、操作中请求或重复并发请求直接报错。遮罩创建、动画和清理失败均原样传播。模态操作期间临时阻挡全上下文输入，提交时才改变稳定激活状态；不同模态容器同时取得输入仍不支持，会明确报错。
+普通窗口可设置 `DismissRequested = ct => modals.CloseAsync(this, cancellationToken: ct)`；结果弹窗可设置为 `Complete(false)` 后返回 `Task.CompletedTask`。未设置时外部点击正常不关闭，`RequestDismissAsync` 返回 false；缺失窗口、操作中请求或重复并发请求直接报错。遮罩创建、动画和清理失败均原样传播。模态操作期间临时阻挡全上下文输入，提交时才改变稳定激活状态；不同模态容器同时取得输入仍不支持，会明确报错。
+
+## V5 按次动画开关与上下文选择
+
+```csharp
+await tabs.SwitchAsync("Graphics", playAnimation: false); // 初始显示，生命周期照常执行。
+await stack.PopToAsync(inventory, playAnimation: false);  // 即时返回，仍等待清理。
+
+var fade = GodotTransitions.Fade();
+var slide = GodotTransitions.SlideHorizontal();
+stack.ChildTransition = Transitions.Select(context => context.Phase switch
+{
+    TransitionPhase.PushEnter or TransitionPhase.PopExit => slide,
+    _ => fade
+});
+```
+
+固定配方直接赋值。动态选择只使用 `Transitions.Select(Func<TransitionContext, IUITransition>)`，可按 Phase、Source/Target 的类型或名称、业务状态分支。选择函数同步且只读；进入/退出准备前解析一次，准备后创建执行对象。函数抛错、返回 null 或循环选择均记录并传播错误，不改用其他配方。
+
+Panel Open/Show/Hide/Close、Stack Push/Pop/PopTo、Tab Switch、Modal Open/Close/ShowDialog 均支持默认 true 的 playAnimation，生成的类型化 API 同步透传。false 跳过选择和动画运行，遮罩即时显隐，仍等待资源、生命周期和清理；ShowDialog 的开场及关闭使用同一开关。业务参数与 CancellationToken 建议按名传入，取消参数名称为 cancellationToken。
 
 - 初始化一次；进入/退出可重复；隐藏保留实例，销毁结束子树。
 - 栈保留覆盖项，出栈销毁；Tab 保留所有绑定项；独立面板按实例关闭。

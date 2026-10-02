@@ -132,6 +132,20 @@ public partial class DemoApp : Control
             window.DismissRequested = _ => Task.FromException(new IOException("Intentional original backdrop dismiss exception."));
             await Modals.RequestDismissAsync();
         }
+        else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--failure-selector", "--failure-selector-null", "--failure-selector-cycle" }.Contains(a)))
+        {
+            var mode = OS.GetCmdlineUserArgs().Single(a => a.StartsWith("--failure-selector"));
+            IUITransition? selected = null;
+            selected = Transitions.Select(_ => mode switch
+            {
+                "--failure-selector" => throw new IOException("Intentional original selector exception."),
+                "--failure-selector-null" => null!,
+                "--failure-selector-cycle" => selected!,
+                _ => throw new ArgumentException(mode)
+            });
+            _ui.Register(() => new UINode { Transition = selected }, "res://Scenes/Settings/Graphics.tscn");
+            await _stage.OpenAsync<UINode>();
+        }
         else
         {
             var failures = OS.GetCmdlineUserArgs().Where(a => a.StartsWith("--failure-")).ToArray();
@@ -416,12 +430,56 @@ public partial class DemoApp : Control
             "Reopening a closed backpack reused a disposed instance.");
         GD.Print("PASS V3 hidden close: subtree released, next open creates fresh window");
 
+        await RunTransitionSelectionSelfTestAsync();
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (12 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (15 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
+    }
+
+    private async Task RunTransitionSelectionSelfTestAsync()
+    {
+        await OpenPreferencesAsync(); var preferences = (PreferencesView)_scenario!;
+        var contexts = new List<TransitionContext>(); var tabRecipe = preferences.Tabs.ChildTransition!;
+        preferences.Tabs.ChildTransition = Transitions.Select(c => { contexts.Add(c); return tabRecipe; });
+        await preferences.SelectAsync("Audio", playAnimation: false);
+        Check(contexts.Count == 0 && preferences.Tabs.CurrentName == "Audio", "Instant Tab switch invoked selection or failed to commit.");
+        await preferences.SelectAsync("Graphics");
+        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.Exit, TransitionPhase.Enter })
+            && contexts.All(c => c.Source?.Name == "Audio" && c.Target?.Name == "Graphics"), "Tab selection context lost phases or names.");
+        GD.Print("PASS V5 preferences: initial/instant pages, name-based selection, normal transitions");
+
+        await OpenInventoryAsync(); var stack = ((InventoryWindowView)_scenario!).Body; var inventory = (InventoryView)stack.Current!;
+        contexts.Clear(); var stackRecipe = stack.ChildTransition!;
+        stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return stackRecipe; });
+        await inventory.InspectAsync("Moonstone"); var details = stack.Current!;
+        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.PushExit, TransitionPhase.PushEnter })
+            && contexts.All(c => ReferenceEquals(c.Source, inventory) && ReferenceEquals(c.Target, details)), "Stack selection did not receive source/target phases.");
+        contexts.Clear(); await stack.PushProvenanceViewAsync(); var notes = stack.Current!;
+        Check(contexts.All(c => c.Source is DetailsView && c.Target is ProvenanceView), "Field note transition lost its business types.");
+        contexts.Clear(); await stack.PopAsync();
+        Check(contexts.Select(c => c.Phase).SequenceEqual(new[] { TransitionPhase.PopExit, TransitionPhase.PopEnter }), "Return selection phases.");
+        contexts.Clear(); await stack.PopToAsync(inventory, playAnimation: false);
+        Check(contexts.Count == 0 && ReferenceEquals(stack.Current, inventory) && details.State == NodeState.Disposed && notes.State == NodeState.Disposed,
+            "Instant return selected animation or failed to release intermediate pages.");
+        GD.Print("PASS V5 backpack: phase/type selection, reverse return, instant return cleanup");
+
+        foreach (var mode in new[] { ModalBackdropMode.Shared, ModalBackdropMode.PerModal })
+        {
+            Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track, duration: 2), mode);
+            var opening = Modals.OpenSettingsWindowViewAsync(playAnimation: false);
+            Check(opening.IsCompletedSuccessfully, "Instant modal waited for its node or dim animation."); var window = await opening;
+            var dim = window.GetControl().GetParent().GetChildren().OfType<ColorRect>().Single(c => !c.IsQueuedForDeletion());
+            Check(dim.Visible && dim.Modulate.A == 1 && Modals.Current == window && window.IsInteractive, "Instant backdrop/input final state.");
+            var closing = Modals.CloseAsync(window, playAnimation: false); Check(closing.IsCompletedSuccessfully, "Instant close waited for animation.");
+            await closing; Check(Modals.CurrentBackdrop == null && window.State == NodeState.Disposed && _menu.IsInteractive, "Instant modal cleanup or input restoration.");
+        }
+        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track));
+        var dialog = Modals.ShowConfirmViewAsync(playAnimation: false); ((ConfirmView)Modals.Current!).Complete(false);
+        Check(!await dialog && Modals.Current == null, "Generated instant dialog failed to return the explicit cancel result.");
+        GD.Print("PASS V5 modal: instant shared/per-modal dim, lifecycle/input/cleanup, generated dialog result");
     }
 
     private async Task RunAdapterSelfTestAsync()

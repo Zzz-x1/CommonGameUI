@@ -59,8 +59,8 @@ public abstract class ContainerNode : UINode
         await node.DisposeAsync();
     }
 
-    protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token,
-        TransitionDirection direction = TransitionDirection.None) => TransitionFlow.PrepareAsync(this, exit, enter, direction, token);
+    protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation,
+        TransitionDirection direction = TransitionDirection.None) => TransitionFlow.PrepareAsync(this, exit, enter, direction, playAnimation, token);
 
 }
 
@@ -76,28 +76,23 @@ public class PanelContainerNode : ContainerNode
     private readonly Dictionary<UINode, WindowRecord> _windows = new();
     private readonly Dictionary<Type, UINode> _single = new();
 
-    public Task<T> OpenAsync<T>(CancellationToken cancellationToken = default) where T : UINode =>
-        OpenCoreAsync<T>(null, false, cancellationToken);
-
-    public Task<T> OpenAsync<T>(object args, CancellationToken cancellationToken = default) where T : UINode =>
-        OpenCoreAsync<T>(args, true, cancellationToken);
-
-    private Task<T> OpenCoreAsync<T>(object? args, bool supplied, CancellationToken cancellationToken) where T : UINode =>
+    public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true,
+        CancellationToken cancellationToken = default) where T : UINode =>
         OperateAsync("Open", async ct =>
         {
             ct.ThrowIfCancellationRequested();
-            if (supplied && args == null) throw new ArgumentNullException(nameof(args));
+            var supplied = args != null;
             var mode = Context.GetWindowMode<T>();
             if (mode == WindowInstanceMode.Single && _single.TryGetValue(typeof(T), out var existing))
             {
                 var record = RequireWindow(existing);
                 if (supplied) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
-                if (!record.Shown) await ShowCoreAsync(existing, record, ct);
+                if (!record.Shown) await ShowCoreAsync(existing, record, playAnimation, ct);
                 return (T)existing;
             }
             var node = await Context.CreateAsync<T>(this, args, ct);
             var enter = Describe(node, LifecycleReason.Open, null, node);
-            try { await PrepareChangeAsync(null, enter, ct); }
+            try { await PrepareChangeAsync(null, enter, ct, playAnimation); }
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
             _windows.Add(node, new WindowRecord(typeof(T)));
             if (mode == WindowInstanceMode.Single) _single.Add(typeof(T), node);
@@ -127,38 +122,38 @@ public class PanelContainerNode : ContainerNode
         return record;
     }
 
-    public Task HideAsync(UINode node, CancellationToken cancellationToken = default) =>
+    public Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Hide", async ct =>
         {
             var record = RequireWindow(node);
             if (!record.Shown) throw new InvalidOperationException("Window is already hidden.");
             var exit = Describe(node, LifecycleReason.Hide, node, null);
-            try { await PrepareChangeAsync(exit, null, ct); }
+            try { await PrepareChangeAsync(exit, null, ct, playAnimation); }
             catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
             record.Shown = false;
             CompleteChange(exit, node, exit, null, null);
             return true;
         }, cancellationToken);
 
-    public Task ShowAsync(UINode node, CancellationToken cancellationToken = default) =>
+    public Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Show", async ct =>
         {
             var record = RequireWindow(node);
             if (record.Shown) throw new InvalidOperationException("Window is already shown.");
-            await ShowCoreAsync(node, record, ct);
+            await ShowCoreAsync(node, record, playAnimation, ct);
             return true;
         }, cancellationToken);
 
-    private async Task ShowCoreAsync(UINode node, WindowRecord record, CancellationToken ct)
+    private async Task ShowCoreAsync(UINode node, WindowRecord record, bool playAnimation, CancellationToken ct)
     {
         var enter = Describe(node, LifecycleReason.Show, null, node);
-        try { await PrepareChangeAsync(null, enter, ct); }
+        try { await PrepareChangeAsync(null, enter, ct, playAnimation); }
         catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(false, false); return Task.CompletedTask; }); throw; }
         record.Shown = true;
         CompleteChange(enter, null, null, node, enter);
     }
 
-    public Task CloseAsync(UINode node, CancellationToken cancellationToken = default) =>
+    public Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Close", async ct =>
         {
             var record = RequireWindow(node);
@@ -170,7 +165,7 @@ public class PanelContainerNode : ContainerNode
                 return true;
             }
             var exit = Describe(node, LifecycleReason.Close, node, null);
-            try { await PrepareChangeAsync(exit, null, ct); }
+            try { await PrepareChangeAsync(exit, null, ct, playAnimation); }
             catch (Exception ex) { await Context.CleanupAsync(ex, () => { node.RestoreLocalState(true, true); return Task.CompletedTask; }); throw; }
             RemoveWindow(node);
             await FinishCloseAsync(node, () => CompleteChange(exit, node, exit, null, null));
@@ -194,7 +189,7 @@ public class StackContainerNode : ContainerNode
     public IReadOnlyList<UINode> History => _history.AsReadOnly();
     public UINode? Current => _history.Count == 0 ? null : _history[_history.Count - 1];
 
-    public Task<T> PushAsync<T>(object? args = null, CancellationToken cancellationToken = default) where T : UINode =>
+    public Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode =>
         OperateAsync("Push", async ct =>
         {
             var previous = Current;
@@ -203,7 +198,7 @@ public class StackContainerNode : ContainerNode
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Covered, previous, node);
             try
             {
-                await PrepareChangeAsync(exit, enter, ct, TransitionDirection.Forward);
+                await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Forward);
                 ct.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
@@ -217,24 +212,24 @@ public class StackContainerNode : ContainerNode
             return node;
         }, cancellationToken);
 
-    public Task PopAsync(CancellationToken cancellationToken = default) => OperateAsync("Pop", async ct =>
+    public Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default) => OperateAsync("Pop", async ct =>
     {
         if (Current == null) throw new InvalidOperationException("Cannot pop an empty stack.");
-        await ReturnCoreAsync(_history.Count - 2, ct);
+        await ReturnCoreAsync(_history.Count - 2, playAnimation, ct);
         return true;
     }, cancellationToken);
 
-    public Task PopToAsync(UINode target, CancellationToken cancellationToken = default) => OperateAsync("PopTo", async ct =>
+    public Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) => OperateAsync("PopTo", async ct =>
     {
         if (target == null) throw new ArgumentNullException(nameof(target));
         var index = _history.IndexOf(target);
         if (target.Parent != this || target.State != NodeState.Ready || index < 0 || index == _history.Count - 1)
             throw new InvalidOperationException("Target must be an earlier available instance in this stack's history.");
-        await ReturnCoreAsync(index, ct);
+        await ReturnCoreAsync(index, playAnimation, ct);
         return true;
     }, cancellationToken);
 
-    private async Task ReturnCoreAsync(int targetIndex, CancellationToken ct)
+    private async Task ReturnCoreAsync(int targetIndex, bool playAnimation, CancellationToken ct)
     {
         var snapshot = _history.ToArray();
         var current = snapshot[snapshot.Length - 1];
@@ -244,7 +239,7 @@ public class StackContainerNode : ContainerNode
         var enter = previous == null ? null : Describe(previous, LifecycleReason.Return, current, previous);
         try
         {
-            await PrepareChangeAsync(exit, enter, ct, TransitionDirection.Backward);
+            await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Backward);
             ct.ThrowIfCancellationRequested();
             if (!_history.SequenceEqual(snapshot)) throw new InvalidOperationException("History changed while preparing the return.");
         }
@@ -293,7 +288,7 @@ public class TabContainerNode : ContainerNode
         return true;
     }, cancellationToken);
 
-    public Task SwitchAsync(string name, CancellationToken cancellationToken = default) =>
+    public Task SwitchAsync(string name, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("SwitchTab", async ct =>
         {
             if (!_items.TryGetValue(name, out var next)) throw new KeyNotFoundException($"Tab '{name}' does not exist in '{Name}'.");
@@ -303,7 +298,7 @@ public class TabContainerNode : ContainerNode
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Switch, previous, next);
             try
             {
-                await PrepareChangeAsync(exit, enter, ct);
+                await PrepareChangeAsync(exit, enter, ct, playAnimation);
                 ct.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
@@ -317,13 +312,13 @@ public class TabContainerNode : ContainerNode
             return true;
         }, cancellationToken);
 
-    public async Task SwitchAsync<T>(CancellationToken cancellationToken = default) where T : UINode
+    public async Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
     {
         try
         {
             var names = _items.Where(pair => pair.Value is T).Select(pair => pair.Key).ToArray();
             if (names.Length != 1) throw new InvalidOperationException($"Expected one tab of type {typeof(T).Name}, found {names.Length}; use its name.");
-            await SwitchAsync(names[0], cancellationToken);
+            await SwitchAsync(names[0], playAnimation, cancellationToken);
         }
         catch (Exception ex) { Context.Report(ex, $"SwitchTab<{typeof(T).Name}> {Name}"); throw; }
     }
@@ -413,7 +408,7 @@ public class ModalContainerNode : ContainerNode
         }
     }
 
-    public Task<T> OpenAsync<T>(object? args = null, CancellationToken cancellationToken = default) where T : UINode
+    public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
     {
         object? focus = null;
         return OperateAsync("OpenModal", async ct =>
@@ -437,13 +432,13 @@ public class ModalContainerNode : ContainerNode
                             ?? throw new InvalidOperationException("Backdrop factory returned null.");
                         createdBackdrop = true;
                         backdrop.SetInteractive(false);
-                        await backdrop.ShowAsync(ct);
+                        await backdrop.ShowAsync(playAnimation, ct);
                     }
                     else priorOrder = backdrop.CaptureOrder();
                     backdrop.BringToFront();
                     node.Element?.BringToFront();
                 }
-                await PrepareChangeAsync(null, enter, ct);
+                await PrepareChangeAsync(null, enter, ct, playAnimation);
                 node.Element?.BringToFront();
                 ct.ThrowIfCancellationRequested();
                 if (Context.InputOwner != null && Context.InputOwner.Parent != this)
@@ -476,7 +471,7 @@ public class ModalContainerNode : ContainerNode
         });
     }
 
-    public Task CloseAsync(UINode node, CancellationToken cancellationToken = default) =>
+    public Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("CloseModal", async ct =>
         {
             if (!ReferenceEquals(node, Current)) throw new InvalidOperationException("Only the current modal can be closed.");
@@ -484,9 +479,9 @@ public class ModalContainerNode : ContainerNode
             var exit = Describe(node, LifecycleReason.Close, node, _modals.Count > 1 ? _modals[_modals.Count - 2] : null);
             try
             {
-                await PrepareChangeAsync(exit, null, ct);
+                await PrepareChangeAsync(exit, null, ct, playAnimation);
                 if (CurrentBackdrop is { } backdrop && (BackdropMode == ModalBackdropMode.PerModal || _modals.Count == 1))
-                    await backdrop.HideAsync(ct);
+                    await backdrop.HideAsync(playAnimation, ct);
             }
             catch (Exception ex)
             {
@@ -505,21 +500,21 @@ public class ModalContainerNode : ContainerNode
             return true;
         }, cancellationToken);
 
-    public async Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, CancellationToken cancellationToken = default)
+    public async Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default)
         where T : DialogNode<TResult>
     {
-        var node = await OpenAsync<T>(args, cancellationToken);
+        var node = await OpenAsync<T>(args, playAnimation, cancellationToken);
         try
         {
             var result = await node.WaitForResultAsync(cancellationToken);
-            await CloseAsync(node, cancellationToken);
+            await CloseAsync(node, playAnimation, cancellationToken);
             return result;
         }
         catch (Exception ex)
         {
             Context.Report(ex, $"Dialog {node.Name}");
             if (node.State == NodeState.Ready)
-                await Context.CleanupAsync(ex, () => CloseAsync(node));
+                await Context.CleanupAsync(ex, () => CloseAsync(node, playAnimation));
             throw;
         }
     }
