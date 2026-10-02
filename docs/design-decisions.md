@@ -1003,7 +1003,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 基础 Modal 嵌套和关闭 | Modal Open/Close，额外支持结果等待 | 多层一次返回仍缺失 |
 | 页面生命周期及外部处理器 | V2 生命周期、AddLifecycle/RemoveLifecycle | 外部处理器执行顺序仍有差距，见 15 |
 | 通用、逐页和自定义转场 | Context/Container/Node 配方继承及自定义执行对象 | 配置维度及运行信息仍有差距，见 6—11 |
-| 伙伴页面参与动画 | TransitionContext.Source/Target | 自定义代码能实现；条件选择缺少直接配置入口 |
+| 伙伴页面参与动画 | TransitionContext.Source/Target、V5 Transitions.Select | 已支持同一函数按阶段、来源/目标和业务状态选择配方 |
 | 编辑器动画接入 | Godot AnimationPlayer | 属于 Godot 对应方案，未实现 Unity Timeline 适配 |
 | 基础模态遮罩和外部点击 | 工厂、Shared/PerModal、DismissRequested | 不等同 USN 全部策略与时序，见 13 |
 | 内嵌页面复用和互斥切换 | Tab Bind/Switch | 符合已确认默认工作流；隐藏当前项和动态资源项另列 |
@@ -1035,6 +1035,10 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 来源：[USN 转场章节](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#screen-transition-animation) 对应 7—10；[其他功能](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md#other-features) 对应 3、4、11—13；[SheetContainer 源码](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Sheet/SheetContainer.cs) 对应 6、14、16；[Page 源码](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs) 对应 7、11、15；资源和回调依据见 10.4。这里只记录差距，不据此授权全部实现。
 
 补充语义：14 是隐藏当前项、Current 变为无选中，区别于父容器整体隐藏。16 指加载资源并实例化后纳入 Tab，不把 USN PreloadedAssetLoader 解释成接管已挂载的场景实例。13 的 USN Only First Backdrop 与本工程 Shared 重排并不相同。12 的允许交互不意味着同一容器允许并发操作，USN 也禁止同一容器转场中再次切换。
+
+**15 的 USN 源码补充（2026-10-02，master，仅静态核对）：** [Page.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs) 提供 `AddLifecycleEvent(IPageLifecycleEvent lifecycleEvent, int priority = 0)` 与 RemoveLifecycleEvent，Page 自身在 AfterLoad 以 priority 0 纳入同一个集合；[PageExtensions.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/PageExtensions.cs) 还支持仅注册指定阶段的委托，不要求完整处理器实现。README 中 Modal/Sheet 也有对应接口。它同时支持继承业务回调和外部生命周期组合，AddLifecycle 概念不是本工程独有。
+
+[CompositeLifecycleEvent.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/CompositeLifecycleEvent.cs) 的 Task/IEnumerator 阶段按 priority 从小到大执行，各组完成后才执行下一组；同一 priority 组内并发启动，不保证完成顺序。因此负值在 Page 的可等待阶段之前、正值之后，不应照搬为本工程的注册顺序语义。其同步 Action 重载直接遍历 Dictionary.Values，没有显式按 priority 排序；当前源码不能据此保证 Did 等同步通知也遵循数值优先级。未运行 USN，不据此宣布所有版本有同样表现或引入本工程新 API。本工程 BeforeNode/AfterNode 仍为建议，尚未授权实施。
 
 #### 配置便利、后端特性和有意采用不同方式的部分
 
