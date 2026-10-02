@@ -160,12 +160,17 @@ public class InventoryWindowView : DemoView
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
         var slide = GodotTransitions.SlideHorizontal();
         var fade = GodotTransitions.Fade(0.12);
+        var listExit = GodotTransitions.Fade(.14);
+        var listEnter = GodotTransitions.Fade(.24, delay: .24);
+        var partner = new ItemPartnerTransition();
         var neutral = new GodotTransitionFrame();
         var notesEnter = GodotTransitions.Simple(neutral with { Offset = new Vector2(0, 12), Alpha = 0 }, neutral,
             duration: .18, delay: .03, transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
         var notesExit = GodotTransitions.Simple(neutral, neutral with { Offset = new Vector2(0, -12), Alpha = 0 }, duration: .12);
         Body.ChildTransition = Transitions.Select(c =>
-            c.Node is ProvenanceView ? c.Entering ? notesEnter : notesExit
+            (c.Source is InventoryView && c.Target is DetailsView || c.Source is DetailsView && c.Target is InventoryView)
+                ? c.Node is DetailsView ? partner : c.Entering ? listEnter : listExit
+            : c.Node is ProvenanceView ? c.Entering ? notesEnter : notesExit
             : c.Source is ProvenanceView || c.Target is ProvenanceView ? fade : c.Phase switch
             {
                 TransitionPhase.PushEnter or TransitionPhase.PopExit => slide,
@@ -181,6 +186,7 @@ public class InventoryView : DemoView
 {
     public HashSet<string> Favorites => DemoApp.Instance.GameState.Favorites;
     public string SelectedItem { get; private set; } = "Oakheart Bow";
+    public TextureRect SelectedIcon { get; private set; } = null!;
     public double PreviewSeconds { get; private set; }
     public void Tick(double delta)
     {
@@ -199,7 +205,8 @@ public class InventoryView : DemoView
             await Tabs.BindAsync(name, page, this.GetControl<Control>($"TabContent/{name}"), token);
             Wire($"TabButtons/{name}", () => SelectAsync(name));
             WireToggle($"TabContent/{name}/Enabled", _ => RefreshFavorites());
-            Wire($"TabContent/{name}/Details", () => InspectAsync(name == "Equipment" ? "Oakheart Bow" : "Moonstone"));
+            Wire($"TabContent/{name}/Details", () => InspectFromAsync(name == "Equipment" ? "Oakheart Bow" : "Moonstone",
+                this.GetControl<TextureRect>($"TabContent/{name}/Details/Icon")));
             for (var i = 0; i < 6; i++)
             {
                 var button = this.GetControl<Button>($"TabContent/{name}/Items/Item{i}");
@@ -207,6 +214,7 @@ public class InventoryView : DemoView
             }
         }
         await SelectAsync("Equipment", playAnimation: false, token: token);
+        SelectedIcon = this.GetControl<TextureRect>("TabContent/Equipment/Items/Item0/Icon");
     }
     protected override void OnEntered(LifecycleContext context)
     {
@@ -225,10 +233,18 @@ public class InventoryView : DemoView
             }
         }
     }
-    public Task InspectAsync(string item)
+    public Task InspectAsync(string item, bool playAnimation = true, CancellationToken token = default)
+    {
+        var buttons = this.GetControl<Control>($"TabContent/{Tabs.CurrentName}/Items").GetChildren().OfType<Button>();
+        var button = buttons.Single(b => b.Text.Split(" x")[0] == item);
+        if (!button.Visible) throw new InvalidOperationException("Cannot inspect a hidden item; use the visible inspection action.");
+        return InspectFromAsync(item, button.GetNode<TextureRect>("Icon"), playAnimation, token);
+    }
+    private Task InspectFromAsync(string item, TextureRect icon, bool playAnimation = true, CancellationToken token = default)
     {
         SelectedItem = item;
-        return ((StackContainerNode)Parent!).PushDetailsViewAsync();
+        SelectedIcon = icon;
+        return ((StackContainerNode)Parent!).PushDetailsViewAsync(playAnimation: playAnimation, cancellationToken: token);
     }
     public async Task SelectAsync(string name, bool playAnimation = true, CancellationToken token = default)
     {
@@ -241,16 +257,18 @@ public class InventoryView : DemoView
 [UIResource("res://Scenes/Inventory/Details.tscn")]
 public class DetailsView : DemoView
 {
-    protected override void OnEntered(LifecycleContext context)
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
     {
-        base.OnEntered(context);
+        token.ThrowIfCancellationRequested();
         var inventory = (InventoryView)((StackContainerNode)Parent!).History[0];
         var equipment = inventory.Tabs.CurrentName == "Equipment";
         this.GetControl<CheckButton>("Enabled").SetPressedNoSignal(inventory.Favorites.Contains(inventory.SelectedItem));
         this.GetControl<Label>("Title").Text = inventory.SelectedItem.ToUpperInvariant();
-        this.GetControl<Label>("Description").Text = equipment
+        this.GetControl<Label>("Artwork/Description").Text = equipment
             ? $"RARE / Equipment\n{inventory.SelectedItem} / Ranger collection\n\nCarved from the ancient forest.\nBound to Lyra; a keepsake from her first expedition."
             : $"UNCOMMON / Crafting material\n{inventory.SelectedItem} / Upgrade supplies\n\nA pale crystal found in the northern ruins.\nReserved for the next equipment upgrade.";
+        this.GetControl<TextureRect>("Artwork/Icon").Texture = inventory.SelectedIcon.Texture;
+        return Task.CompletedTask;
     }
     protected override Task OnInitializeAsync(CancellationToken token)
     {

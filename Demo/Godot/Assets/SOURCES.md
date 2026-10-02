@@ -22,3 +22,14 @@ The Nunito Project Authors, **Nunito** variable font.
 `Themes/Adventure.tres` defines the Demo palette, texture slicing, typography, focus ring and control states. It is project presentation, not a core framework style system.
 
 All included assets are local. No runtime downloads or external image dependencies.
+
+## Item portraits / Partner Screen Demo
+
+Icons made by **Lorc** and **Delapouite**, from [game-icons.net](https://game-icons.net), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+
+- Official repository: https://github.com/game-icons/icons ; contributor/license notice retained in `Items/License.txt`.
+- Delapouite (https://delapouite.com): `bow-arrow`, `diamond-ring`, `belt-armor`, `herbs-bundle`, `sewing-string`, `amber-mosquito`.
+- Lorc (https://lorcblog.blogspot.com): `hood`, `boots`, `compass`, `crystal-growth`, `rock`, `dead-wood`.
+- Source SVGs: `https://raw.githubusercontent.com/game-icons/icons/master/{author}/{name}.svg`, with the author and names listed above. Retrieved 2026-10-02, bundled under `Items/`.
+- Modifications: removed the black background rectangle; changed white foreground fill to the Demo's dark teal `#335653`. Original path geometry/viewBox retained. The Demo renders the same modified texture at thumbnail and portrait sizes.
+- Visible attribution is included in the camp menu; this file provides the source, license links and modification notice for redistribution.

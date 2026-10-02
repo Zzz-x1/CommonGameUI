@@ -48,6 +48,11 @@ public partial class DemoApp : Control
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", OpenHomeAsync);
         if (OS.GetCmdlineUserArgs().Contains("--self-test")) await RunSelfTestAsync();
+        else if (OS.GetCmdlineUserArgs().Contains("--capture-partner"))
+        {
+            await CapturePartnerAsync();
+            await _ui.DisposeAsync(); GetTree().Quit();
+        }
         else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--capture", "--capture-settings", "--capture-preferences", "--capture-notes", "--capture-dialogs" }.Contains(a)))
         {
             var preferencesCapture = OS.GetCmdlineUserArgs().Contains("--capture-preferences");
@@ -456,10 +461,11 @@ public partial class DemoApp : Control
 
         await RunTransitionSelectionSelfTestAsync();
         await RunAnimationCapabilitySelfTestAsync();
+        await RunPartnerSelfTestAsync();
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (19 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (21 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
     }
@@ -477,6 +483,7 @@ public partial class DemoApp : Control
         GD.Print("PASS V5 preferences: initial/instant pages, name-based selection, normal transitions");
 
         await OpenInventoryAsync(); var stack = ((InventoryWindowView)_scenario!).Body; var inventory = (InventoryView)stack.Current!;
+        await inventory.SelectAsync("Materials");
         contexts.Clear(); var stackRecipe = stack.ChildTransition!;
         stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return stackRecipe; });
         await inventory.InspectAsync("Moonstone"); var details = stack.Current!;
@@ -616,6 +623,128 @@ public partial class DemoApp : Control
         Check(Mathf.IsEqualApprox(((InventoryWindowView)_scenario!).GetControl<Label>("Actions/Hint").Modulate.A, 1), "Exterior caption did not restore after progress animation.");
         await stack.PopToAsync(stack.History[0]);
         GD.Print("PASS animation drawing: detail reveals notes beneath, sibling and exterior caption restoration");
+    }
+
+    private async Task RunPartnerSelfTestAsync()
+    {
+        await OpenInventoryAsync();
+        var stack = ((InventoryWindowView)_scenario!).Body;
+        var inventory = (InventoryView)stack.Current!;
+        var mount = stack.GetControl();
+        foreach (var pair in new[] { ("Equipment", "Oakheart Bow"), ("Materials", "Iron Ore") })
+        {
+            await inventory.SelectAsync(pair.Item1);
+            var samples = 0;
+            void Verify(TransitionState state)
+            {
+                if (state.Stage != TransitionStage.Playing || state.Progress <= 0 || state.Progress >= 1) return;
+                var details = (DetailsView)state.Context.Node;
+                var small = inventory.SelectedIcon; var large = details.GetControl<TextureRect>("Artwork/Icon");
+                var flying = mount.GetNode<TextureRect>("FlyingItemPortrait");
+                Rect2 Rect(Control c)
+                {
+                    var t = mount.GetGlobalTransformWithCanvas().AffineInverse() * c.GetGlobalTransformWithCanvas();
+                    return new Rect2(t * Vector2.Zero, t * c.Size - t * Vector2.Zero);
+                }
+                var start = Rect(state.Context.Entering ? small : large);
+                var end = Rect(state.Context.Entering ? large : small);
+                var eased = 1 - Mathf.Pow(1 - state.Progress, 3);
+                Check(flying.Position.DistanceTo(start.Position.Lerp(end.Position, eased)) < .01f &&
+                    flying.Size.DistanceTo(start.Size.Lerp(end.Size, eased)) < .01f, "Partner image did not interpolate the actual rectangles.");
+                Check(small.SelfModulate.A == 0 && large.SelfModulate.A == 0 && ReferenceEquals(flying.Texture, small.Texture),
+                    "Partner animation duplicated a portrait or changed its texture.");
+                Check(flying.MouseFilter == MouseFilterEnum.Ignore && mount.GetChildren().Count(n => n.Name == "FlyingItemPortrait") == 1,
+                    "Flying portrait intercepted input or was duplicated.");
+                samples++;
+            }
+            void Hook(TransitionState state)
+            {
+                if (state.Stage == TransitionStage.Preparing && state.Context.Target is DetailsView details)
+                    details.TransitionChanged += Verify;
+            }
+            inventory.TransitionChanged += Hook;
+            await inventory.InspectAsync(pair.Item2);
+            inventory.TransitionChanged -= Hook;
+            var current = (DetailsView)stack.Current!;
+            Check(samples > 0 && current.GetControl<TextureRect>("Artwork/Icon").SelfModulate.A == 1 &&
+                inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
+                "Completed partner entry leaked temporary presentation.");
+            samples = 0;
+            await stack.PopAsync();
+            Check(samples > 0 && ReferenceEquals(stack.Current, inventory) && inventory.SelectedIcon.SelfModulate.A == 1 &&
+                mount.GetNodeOrNull("FlyingItemPortrait") == null, "Partner return did not shrink/restore to the retained item.");
+            current.TransitionChanged -= Verify;
+        }
+        GD.Print("PASS partner portraits: equipment/material textures, live rectangle expansion and reverse return, no duplicates");
+
+        using var cancel = new CancellationTokenSource();
+        DetailsView? canceledDetails = null;
+        void CancelHook(TransitionState state)
+        {
+            if (state.Stage != TransitionStage.Preparing || state.Context.Target is not DetailsView details) return;
+            canceledDetails = details;
+            details.TransitionChanged += s => { if (s.Stage == TransitionStage.Playing && s.Progress > .2f) cancel.Cancel(); };
+        }
+        inventory.TransitionChanged += CancelHook;
+        await ExpectCancellationAsync(inventory.InspectAsync("Iron Ore", token: cancel.Token));
+        inventory.TransitionChanged -= CancelHook;
+        Check(canceledDetails?.State == NodeState.Disposed && ReferenceEquals(stack.Current, inventory) &&
+            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
+            "Canceled partner animation left an overlay, hidden item or history entry.");
+
+        var original = new IOException("Expected partner animation observer failure.");
+        DetailsView? failedDetails = null;
+        void FailHook(TransitionState state)
+        {
+            if (state.Stage != TransitionStage.Preparing || state.Context.Target is not DetailsView details) return;
+            failedDetails = details;
+            details.TransitionChanged += s => { if (s.Stage == TransitionStage.Playing && s.Progress > .2f) throw original; };
+        }
+        inventory.TransitionChanged += FailHook;
+        try { await inventory.InspectAsync("Iron Ore"); throw new InvalidOperationException("Partner fault unexpectedly succeeded."); }
+        catch (IOException ex) { Check(ReferenceEquals(ex, original), "Partner failure replaced the original exception."); }
+        finally { inventory.TransitionChanged -= FailHook; }
+        Check(failedDetails?.State == NodeState.Disposed && ReferenceEquals(stack.Current, inventory) &&
+            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
+            "Failed partner animation did not restore the retained inventory.");
+        await inventory.InspectAsync("Iron Ore");
+        var returningDetails = (DetailsView)stack.Current!;
+        using var cancelReturn = new CancellationTokenSource();
+        void CancelReturn(TransitionState state)
+        { if (state.Stage == TransitionStage.Playing && state.Progress > .2f) cancelReturn.Cancel(); }
+        returningDetails.TransitionChanged += CancelReturn;
+        await ExpectCancellationAsync(stack.PopAsync(cancellationToken: cancelReturn.Token));
+        returningDetails.TransitionChanged -= CancelReturn;
+        Check(ReferenceEquals(stack.Current, returningDetails) && returningDetails.IsVisible && returningDetails.GetControl().Modulate.A == 1 &&
+            returningDetails.GetControl<TextureRect>("Artwork/Icon").SelfModulate.A == 1 &&
+            inventory.SelectedIcon.SelfModulate.A == 1 && mount.GetNodeOrNull("FlyingItemPortrait") == null,
+            "Canceled return lost the open details or leaked a portrait.");
+        await stack.PopAsync();
+        await inventory.InspectAsync("Iron Ore", playAnimation: false);
+        Check(((DetailsView)stack.Current!).GetControl<TextureRect>("Artwork/Icon").Texture == inventory.SelectedIcon.Texture &&
+            mount.GetNodeOrNull("FlyingItemPortrait") == null, "Instant details skipped preparation or created an animation overlay.");
+        await stack.PopAsync(playAnimation: false);
+        GD.Print("PASS partner restoration: entry/return cancellation, original failure rollback and immediate display");
+    }
+
+    private async Task CapturePartnerAsync()
+    {
+        await OpenInventoryAsync();
+        var inventory = ((InventoryWindowView)_scenario!).Inventory;
+        await CaptureAsync("partner-list.png");
+        var entering = inventory.InspectAsync("Oakheart Bow");
+        while (inventory.Parent!.Children.OfType<DetailsView>().Single().TransitionProgress < .25f && !entering.IsCompleted)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await CaptureAsync("partner-expanding.png");
+        await entering;
+        await CaptureAsync("partner-details.png");
+        var stack = (StackContainerNode)inventory.Parent!;
+        var details = (DetailsView)stack.Current!;
+        var returning = stack.PopAsync();
+        while (details.TransitionProgress < .25f && !returning.IsCompleted)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await CaptureAsync("partner-returning.png");
+        await returning;
     }
 
     private async Task RunAdapterSelfTestAsync()

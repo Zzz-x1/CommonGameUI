@@ -27,7 +27,11 @@ V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount �
 
 初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页挂处理器时先构造 `UINode`、同步 `AddLifecycle`，再绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
 
-转场：项目默认 Fade，背包详情推进从右滑入、返回向右滑出，列表使用淡入淡出；涉及手记时两侧淡入淡出。窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包滑动内容。
+转场：项目默认 Fade，背包列表与详情使用物品图标连续展开/缩回，列表和详情文字分阶段淡出/淡入；涉及手记时两侧保留原有淡入淡出。窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包内容。
+
+Partner Screen 示例在独立分支 `demo/partner-screen-transition`。进入 Backpack，点击 Equipment 或 Materials 中任意物品格：对应的 56px 图标连续移动、放大为详情的 176px 图片；点击 Return to inventory，图片缩回刚才点击的格子。下方 Inspect 按钮也有图标，使用该按钮时从按钮里的图标展开，收藏过滤不会导致来源格缺失。详情采用图文并排，标题与返回按钮均留在内容区内。
+
+`Scripts/ItemPartnerTransition.cs` 使用现有 IUITransition/IUITransitionRun 与 Source/Target 获取伙伴，没有新增核心 API。先在 Entering 准备详情数据与纹理，再在播放时等待 Godot 延迟布局，转换两侧矩形到 BodyMount 坐标；临时 TextureRect 使用同一纹理，不拷贝/重挂载业务控件，不接受鼠标输入。两侧原图通过 SelfModulate 的 alpha 隐藏，保留布局；成功、取消和失败都恢复原 tint 并移除临时图像。每帧重新读取矩形，时间进度与缓动值分开。该项目示例限定未旋转、尺寸有效的 UI，不是自动共享元素匹配系统。
 
 V5 使用 `Transitions.Select(context => ...)` 直接按 Phase 和 Source/Target 类型选择背包动画；偏好从 Audio 切到 Graphics 时进入页缩放淡入，其他名称切换淡入淡出。基础 Tab 页仍是 Node，未新增空 View 类。内页首次显示使用 `playAnimation:false`，避免外壳和内部初始页叠加转场；后续玩家操作默认播放动画。自测通过同一 API 验证即时 Tab 切换、即时 PopTo 和两种遮罩的即时开关，不增加技术按钮。
 
@@ -46,9 +50,10 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Preferences
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Notes
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Dialogs
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Partner
 ```
 
-自测覆盖原有 6 类流程、V3 的 3 类流程、V4 的共享遮罩/外部关闭/逐层遮罩、V5 的偏好选择/背包阶段选择/即时模态，以及本轮帧参数/相对坐标与缓动/动画片段/绘制顺序，共 19 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (19 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。
+自测覆盖原有 19 场景，以及 Partner 图像展开/返回与失败恢复两类，共 21 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (21 scenarios)`，退出 0。Partner 断言采样两种不同物品纹理、实际矩形插值、源/目标图像不重复、临时图像不截获输入、进入/返回取消、观察回调原始 IOException、失败后历史恢复和即时显示。既有验证继续检查显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。Partner 截图模式生成列表、展开中、详情和返回中四张原生截图，输出到忽略的 artifacts。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
@@ -81,7 +86,15 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 
 同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
 
-## 验证记录：2026-10-02 / 动画能力补齐
+## 验证记录：2026-10-02 / Partner Screen Demo 分支
+
+- 构建 0 警告、0 错误；核心与生成器 127 项测试通过，未修改核心或引擎适配 API。
+- Godot 4.7.2 .NET headless 和原生 OpenGL 自测均通过 21 场景；新增两类 Partner 场景，故意取消与故意回调失败仍记录并断言原始异常。
+- 原生列表、展开中、详情、返回中截图已目视检查。修正新增图片造成的 VBoxContainer 最小高度溢出：列表精简冗余标签，详情改为图文并排；分阶段淡化文字避免同时重叠。
+- 新增 Lorc/Delapouite 的 CC BY 3.0 图标，修改说明、来源与许可在 Assets/SOURCES.md，菜单显示署名。素材本地化；截图、日志、工具和构建产物不入库。
+- 此分支复刻伙伴图像连续转场机制，没有运行 USN 项目或宣称其示例像素级一致。未验证全部分辨率、任意旋转布局、实体输入设备或导出平台。
+
+## 历史验证记录：2026-10-02 / 动画能力补齐
 
 - 构建 0 警告、0 错误；核心与生成器 127 项测试通过，新增运行状态、取消/异常、观察回调失败、进度范围/单调性及绘制优先级/冻结/恢复测试。
 - Godot headless 和原生 OpenGL 自测均通过 19 场景。新增像素/相对偏移、镜像缩放、透明度、延迟和零时长、Quart Out 采样、AnimationPlayer 中间进度、延迟取消恢复及节点排序的实际引擎断言。非法配置均明确断言原异常。

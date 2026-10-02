@@ -6,13 +6,27 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="."]
 layout_mode = 2
 text = "ITEM DETAILS"
 theme_override_font_sizes/font_size = 28
-[node name="Description" type="Label" parent="."]
+[node name="Artwork" type="HBoxContainer" parent="."]
 layout_mode = 2
+custom_minimum_size = Vector2(0, 184)
+mouse_filter = 2
+theme_override_constants/separation = 24
+[node name="Icon" type="TextureRect" parent="Artwork"]
+layout_mode = 2
+custom_minimum_size = Vector2(176, 176)
+size_flags_vertical = 4
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+[node name="Description" type="Label" parent="Artwork"]
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 2
 text = "Select an item in your backpack."
 theme_override_font_sizes/font_size = 16
 [node name="Enabled" type="CheckButton" parent="."]

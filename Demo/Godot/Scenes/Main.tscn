@@ -81,7 +81,9 @@ No gameplay simulation"
 theme_override_colors/font_color = Color(0.98, 0.94, 0.83, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "KENNEY ADVENTURE / CC0"
+text = "KENNEY ADVENTURE / CC0
+Icons made by Lorc and Delapouite
+game-icons.net / CC BY 3.0"
 [node name="Stage" type="PanelContainer" parent="Frame/Layout/Workspace"]
 layout_mode = 2
 size_flags_horizontal = 3

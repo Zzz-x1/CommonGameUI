@@ -1368,3 +1368,13 @@ Partner Screen 表示本次转场中当前动画节点的另一侧页面，由�
 本工程已有 TransitionContext.Source/Target/Node/Element，可取得另一侧 `ReferenceEquals(context.Node, context.Source) ? context.Target : context.Source`；Transitions.Select 承担条件选择，自定义 IUITransition/IUITransitionRun 承担跨节点表现。当前未内置自动共享元素匹配/插值系统，也不因本次问答新增 PartnerScreen 类型或第二套选择 API。
 
 来源：[USN 条件选择说明](https://github.com/Haruma-K/UnityScreenNavigator#change-transition-animation-according-to-partner-screen)、[伙伴交互动画说明](https://github.com/Haruma-K/UnityScreenNavigator#implement-interactive-animation-with-partner-screen)、[Page.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs)、[Modal.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Modal/Modal.cs)、[TransitionAnimationObject.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/TransitionAnimationObject.cs)。本次为官方文档与源码静态核对，未运行 USN；README 所链 CharacterImageModalTransitionAnimation 示例源码当前返回 404，未将其作为已审计实现引用。
+
+### 11.7 独立分支中的 Partner Screen Demo（2026-10-02）
+
+用户要求创建独立分支并在 Demo 复刻伙伴图片连续转场，已在 `demo/partner-screen-transition` 实现。具体游戏路径是 Backpack 物品格 → 物品详情 → 返回原格；Equipment/Materials 每项使用对应图标，Inspect 按钮从自身图标展开，保留收藏过滤、Tab、手记与单实例窗口行为。本次是基于现有契约的 Demo 实现，不新增 PartnerScreen 类型或共享元素注册/匹配 API，不改核心或 Godot 适配器。
+
+ItemPartnerTransition 从 Source/Target 获取另一侧 InventoryView，详情在 Entering 准备名称、描述与同一图像纹理。动画用临时 TextureRect 在共同 BodyMount 中插值来源 56px 与详情 176px 的位置/大小，每帧读取两侧实际矩形；原控件不克隆、不重挂载，SelfModulate alpha 隐藏原图但保留布局。临时图像忽略输入，置于内容上方，取消/失败/成功均恢复原表现并立即从树中移除。等待新页面延迟布局期间仍显示来源图像的临时实例，避免空白闪帧；列表与详情文字分阶段淡化。项目示例限定无旋转且矩形有限、尺寸为正，非法配置直接失败，不降级为普通淡入。
+
+验证：解决方案构建 0 警告、0 错误；核心/生成器既有 127 项测试通过；Godot 4.7.2 .NET headless 与原生 OpenGL 均通过 21 场景（既有 19 + Partner 展开/返回、恢复两类）。新增实际矩形插值、不同物品纹理、无重复图像/输入截获、进入与返回取消、原始 IOException 传播、失败后的历史恢复与即时操作断言。四张原生流程截图已目视检查；发现的 VBoxContainer 最小高度溢出通过列表精简与详情图文并排解决。
+
+新增 12 张 game-icons.net SVG（Lorc/Delapouite，CC BY 3.0），透明化背景并统一颜色，来源、作者、原许可说明与修改记录在 Demo Assets/SOURCES.md，菜单提供可见署名。只提交本地素材、Godot 导入描述与脚本 UID，不提交导入缓存、截图、日志、构建产物或工具。未运行 USN、未验证所有分辨率/旋转布局/实体输入设备/导出平台，未合并回主分支或推送远程。
