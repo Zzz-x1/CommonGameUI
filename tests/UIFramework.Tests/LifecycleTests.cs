@@ -163,11 +163,11 @@ public class LifecycleTests
         Assert.Equal(new[] { true, false }, seen); Assert.Equal(1, b.Events.Count(e => e == "initialize"));
     }
 
-    private sealed class GateTransition : IUITransition
+    private sealed class GateTransition : IUITransition, IUITransitionRun
     {
-        public void Restore(IUIElement? element, bool visible) { }
+        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
         public readonly TaskCompletionSource<bool> Gate = new();
-        public Task PlayAsync(IUIElement? e, bool entering, CancellationToken token) => Gate.Task.WaitAsync(token);
+        public Task PlayAsync(CancellationToken token) => Gate.Task.WaitAsync(token);
     }
     [Fact] public async Task ParallelContainerCommitDoesNotPublishOtherPendingTransitions()
     {
@@ -179,13 +179,16 @@ public class LifecycleTests
         gate.Gate.SetResult(true); await pending; Assert.True(n.IsActive); Assert.Equal("entered:Open", behavior.Events.Last());
     }
 
-    private sealed class RestoringTransition : IUITransition
+    private sealed class RestoringTransition : IUITransition, IUITransitionRun
     {
         public bool FadedOut, Restored;
         public Exception? RestoreFailure;
-        public Task PlayAsync(IUIElement? e, bool entering, CancellationToken token)
-        { FadedOut = !entering; return Task.CompletedTask; }
-        public void Restore(IUIElement? e, bool visible)
+        public Exception? PlayFailure;
+        private bool _entering;
+        public Task PlayAsync(CancellationToken token)
+        { FadedOut = !_entering; if (PlayFailure != null) throw PlayFailure; return Task.CompletedTask; }
+        public IUITransitionRun Create(TransitionContext context) { _entering = context.Entering; return this; }
+        public void Restore()
         { Restored = true; FadedOut = false; if (RestoreFailure != null) throw RestoreFailure; }
     }
     [Fact] public async Task RollbackRestoresPresentationAndExposesRestoreFailureAsSecondary()
@@ -204,7 +207,8 @@ public class LifecycleTests
         await using var ui = Create(); var tabs = await Attach<TabContainerNode>(ui);
         var sourceTransition = new RestoringTransition(); var targetTransition = new RestoringTransition { RestoreFailure = new Exception("target restore") };
         var source = new CounterView { Transition = sourceTransition }; var primary = new IOException("enter target");
-        var target = new CounterView { Transition = targetTransition, EnterFailure = primary };
+        targetTransition.PlayFailure = primary;
+        var target = new CounterView { Transition = targetTransition };
         await tabs.BindAsync("Source", source); await tabs.BindAsync("Target", target); await tabs.SwitchAsync("Source");
         Assert.Same(primary, await Assert.ThrowsAsync<IOException>(() => tabs.SwitchAsync("Target")));
         Assert.True(sourceTransition.Restored); Assert.True(targetTransition.Restored); Assert.Same(source, tabs.Current); Assert.True(source.IsInteractive);

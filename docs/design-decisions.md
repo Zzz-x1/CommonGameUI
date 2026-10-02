@@ -1,6 +1,6 @@
 # UI 管理框架设计文档
 
-更新日期：2026-10-02（Asia/Shanghai）。当前已实现并验证 V3 单实例窗口、隐藏恢复、目标返回及游戏 UI Demo；实际契约见第 6、7、8.9 节，V3 验收见 8.10。
+更新日期：2026-10-02（Asia/Shanghai）。当前已实现 V4 转场与模态遮罩；转场实际契约见 9.5，遮罩与验收见 9.6。V3 历史验收见 8.10。
 
 ## 目录
 
@@ -393,7 +393,7 @@ V1 范围建议、默认规则、开发阶段及验收标准统一维护在 [V1 
 | PanelContainerNode | 无参/带参 OpenAsync<T>、TryGet<T>、HideAsync、ShowAsync、CloseAsync；注册模式决定容器内 Single/Multiple，隐藏保留，关闭销毁 |
 | StackContainerNode | PushAsync<T>(args, token)、PopAsync(token)、PopToAsync(target, token)、Current、History；覆盖保留，返回恢复原实例，移除项销毁 |
 | TabContainerNode | BindAsync(name, node, embeddedElement, token)、SwitchAsync(name, token)、可选 SwitchAsync<T>(token)、Items、CurrentName；仅绑定既有项 |
-| ModalContainerNode | OpenAsync<T>、CloseAsync(node)、ShowDialogAsync<T,TResult>；仅关闭当前模态，持有输入并恢复焦点 |
+| ModalContainerNode | OpenAsync<T>、CloseAsync(node)、ShowDialogAsync<T,TResult>；仅关闭当前模态，持有输入并恢复焦点；V4 增加 ConfigureBackdrop、RequestDismissAsync、CurrentBackdrop |
 | DialogNode<TResult> | 可选结果契约，Complete(result)；普通模态窗口仍可为一般 UINode，不要求继承此类 |
 | GodotUIElement | owned 动态场景与 borrowed 内嵌 Control 句柄；显隐、输入、排序及按所有权销毁 |
 | Source Generator | UIResource 特性生成模块注册、容器直接调用、类型化参数及弹窗结果便利 API |
@@ -475,7 +475,7 @@ V1 审查发现前后阶段、原因、稳定激活和处理器组合缺失，�
 
 Panel 独立打开/关闭，V3 增加单实例与隐藏恢复；Stack Push 将旧项退出并保留，新项入历史，Pop 移除栈顶并以 Return 恢复旧实例，PopTo 一次返回更早实例；Tab 切换既有项；Modal 覆盖旧项只导致失活，不重放旧项退出/进入。正常显示项 Close/Pop 先发 Exited，再销毁目标，外层任务等清理完成；隐藏窗口 Close 仅清理，不重复退出。
 
-提交前失败或取消恢复框架状态并清理新实例，不发本次成功完成或临时显隐通知，不重执行业务准备；业务前置回调的外部副作用由业务负责。源实例先恢复，再清理失败新实例，避免清理发布临时隐藏。转场必须实现同步 IUITransition.Restore(element, visible)，恢复其修改的透明度等表现状态；不重播动画、不转成成功或换用默认转场。GodotFadeTransition 恢复透明度，恢复异常作为附加原异常暴露。
+提交前失败或取消恢复框架状态并清理新实例，不发本次成功完成或临时显隐通知，不重执行业务准备；业务前置回调的外部副作用由业务负责。源实例先恢复，再清理失败新实例，避免清理发布临时隐藏。V4 的转场由 IUITransition.Create 创建独立 IUITransitionRun，执行对象以同步 Restore() 归还所修改的表现状态；不重播动画、不转成成功或换用默认转场。恢复异常作为附加原异常暴露，旧 V2 转场接口已删除。准备与并行动画的实际时序见 9.5。
 
 提交后同步通知失败保持已提交状态，操作任务以原异常失败；不回滚、重试或重播。常规通知链停止，后续完成阶段不执行；异常日志与测试明确阶段。关闭流程仍清理已关闭节点。后端提交/恢复失败同样可观察，不能保证故障后端实际显示成功。
 
@@ -828,7 +828,7 @@ Demo 的背包窗口外壳、内嵌背包 Tab、详情、物品手记组成实�
 
 ### 9.1 依据与状态（2026-10-02）
 
-用户要求制定 V4，并明确可以参考 UnityScreenNavigator 补齐功能特性。用户已选择 **1、2：完整转场能力、模态遮罩管理**；3—6 不纳入 V4。功能范围已确认，具体 API 与执行契约仍为方案，尚未实现；不把 V3 未选项自动纳入 V4，不创建未经用户指定的独立 V4 开发文档。
+用户要求制定 V4，并明确可以参考 UnityScreenNavigator 补齐功能特性。用户已选择 **1、2：完整转场能力、模态遮罩管理**；3—6 不纳入 V4。用户随后已授权开始实现；具体 API 与执行契约现已落实，见 9.5、9.6；不把 V3 未选项自动纳入 V4，不创建未经用户指定的独立 V4 开发文档。
 
 本轮核对 USN 官方 README 与当前工程代码，未运行 Unity 集成。参考：[转场](https://github.com/Haruma-K/UnityScreenNavigator#screen-transition-animation)、[生命周期](https://github.com/Haruma-K/UnityScreenNavigator#lifecycle-events)、[资源加载](https://github.com/Haruma-K/UnityScreenNavigator#loading-screen-resources)、[其他功能](https://github.com/Haruma-K/UnityScreenNavigator#other-features)。README 是功能依据，不视为每项内部失败语义的源码验证；实施选中项前还须核对相关源码。
 
@@ -845,7 +845,7 @@ Demo 的背包窗口外壳、内嵌背包 Tab、详情、物品手记组成实�
 
 USN 还公开转场期间交互控制及动画进度等选项。本工程已有输入锁、操作守卫与失败恢复；不为了选项数量新增全局配置矩阵、进度诊断系统或允许生命周期重入。
 
-### 9.2 已确认 V4 范围：1、2（具体方案待定）
+### 9.2 已确认 V4 范围：1、2（方案说明，实际契约见 9.5、9.6）
 
 #### 1. 转场能力与配置
 
@@ -855,7 +855,7 @@ USN 还公开转场期间交互控制及动画进度等选项。本工程已有�
 
 默认配置与节点覆盖应有明确优先级。默认 Instant 是主动配置，不是失败后的降级。V4 不做伙伴名称正则匹配、动画组合语言或通用 Timeline 编辑器。绘制先后按具体转场需要处理，不内置项目层级枚举；Godot Container 的布局约束需在滑动实现中考虑，不能直接移动受布局控制的根而宣称通用。
 
-API 方向示意：`node.Transition = ...` 继续为直接配置；`PlayAsync(TransitionContext context, CancellationToken token)` 和对应恢复入口替换旧契约，签名待定。提交前失败/取消恢复动画实际修改的透明度、位置、缩放及临时排序；恢复失败保留原异常。是否并行播放源/目标动画须在实施方案中明确，不顺便开放容器并发或操作排队。
+实际采用 `node.Transition = ...` 直接配置；`IUITransition.Create(TransitionContext)` 创建独立执行对象，执行对象的 PlayAsync/Restore 替换旧契约。提交前失败/取消恢复动画实际修改的透明度、位置、缩放及临时排序；恢复失败保留原异常。V4 并行播放源/目标动画，不开放同容器操作并发或操作排队。
 
 Demo：详情前进/返回、内嵌 Tab 切换、设置与确认弹窗分别体现适合业务的动画。验收原因和源目标正确，PopTo 不动画播放中间页，取消/失败恢复原表现，输入解锁与生命周期提交时序一致。
 
@@ -883,19 +883,19 @@ API 方向：容器同步配置遮罩提供方及共享/逐层方式；业务声
 
 ### 9.4 范围边界与交付要求
 
-用户已确认 V4 只包含 1、2。资源异步加载/预加载、容器操作观察、临时页历史选项、返回请求与页面焦点均延期；工具增强、编辑器、Analyzer、Replace、自动实例池、全局路由和项目默认层级继续不纳入。当前仅记录范围与方案，未修改核心/生成器/Demo，不代表 V4 已开始实施。
+用户已确认 V4 只包含 1、2。资源异步加载/预加载、容器操作观察、临时页历史选项、返回请求与页面焦点均延期；工具增强、编辑器、Analyzer、Replace、自动实例池、全局路由和项目默认层级继续不纳入。用户随后已授权实施，核心、适配器、Demo 与测试已同步迁移，交付见 9.6。
 
 建议实施顺序：确定转场上下文、配置优先级和表现恢复协议 → 重构核心转场契约与 Godot 动画适配 → 确定遮罩提供、共享/逐层、点击请求及所有权协议 → 实现模态遮罩管理 → 迁移 Demo 弹窗资源并补齐业务流程与故障验证。整体遵守无历史兼容要求，不保留旧转场接口或资源自带遮罩的双轨默认行为。
 
 选中项实施前确定最小 API 与失败边界；实现同步更新适配器、受影响生成调用、游戏 Demo、操作说明和测试。验收包括实际业务流程及取消/故障路径；多容器仲裁、实体手柄、性能和导出平台未验证时如实标注，不把一个 Godot Demo 等同所有引擎适配完成。
 
-### 9.5 V4 转场使用方案（建议，尚未实现或确认 API）
+### 9.5 V4 转场使用与执行契约（已实现）
 
 用户要求从使用者角度明确第 1 项的实现与调用方式。建议保持 PushAsync/PopAsync/PopToAsync/SwitchAsync/OpenAsync 等业务入口不变，动画通过同步配置自动参与这些操作，调用方 await 同一个操作即可等待准备、动画、提交及必要清理，不另调用 Play。
 
 #### 配置与常用调用
 
-候选 API（GodotTransitions 属于 Godot 适配器，非纯核心）：
+实际 API（GodotTransitions 属于 Godot 适配器，非纯核心）：
 
 ```csharp
 ui.DefaultTransition = GodotTransitions.Fade(duration: 0.15);
@@ -930,7 +930,7 @@ public StaticPanelView()
 }
 ```
 
-配置变化只影响后续操作；一次操作开始时捕获所用配置，操作中不替换正在执行的动画。参数非法直接报错。配方可以复用，但不能在配方实例上存当前 Node、Tween 或动画前状态，防止多个容器或实例共享配置时互相污染。
+配置变化只影响后续转场；进入/退出准备前捕获所用配置，准备与动画中不替换正在执行的配方。参数非法直接报错。配方可以复用，但不能在配方实例上存当前 Node、Tween 或动画前状态，防止多个容器或实例共享配置时互相污染。
 
 #### 前进、返回与显示对象
 
@@ -940,12 +940,41 @@ Godot 默认目标为 Node 的显示对象；滑动/缩放若根由布局 Contai
 
 #### 执行与自定义扩展
 
-核心提供不可变 TransitionContext，包含当前 Node/Element、Container、Source/Target、生命周期原因、进入/退出阶段和容器给出的方向；尽量复用 LifecycleContext，不重复维护导航状态。建议 IUITransition 表示可复用配方，以同步 Create(context) 创建一次执行对象；执行对象提供 PlayAsync(token)、同步 Restore 和必要同步清理。接口名称/最终成员待定，但逐次状态必须由执行对象持有，不能在共享配方内保存。
+核心提供不可变 TransitionContext，包含当前 Node/Element、Container、Source/Target、生命周期原因、进入/退出阶段和容器给出的方向；尽量复用 LifecycleContext，不重复维护导航状态。IUITransition 表示可复用配方，以同步 Create(context) 创建 IUITransitionRun；执行对象提供 PlayAsync(token) 和同步 Restore()，Restore 同时归还表现并清理播放状态。逐次状态由执行对象持有，不能在共享配方内保存。
 
 正常业务只使用预设；特殊动画实现转场配方与执行对象即可，取得源/目标后可控制伙伴相关效果，业务仍调用容器 API。Godot AnimationPlayer 接入使用指定进入/退出动画及明确的表现恢复约定；不能宣称框架能自动恢复任意脚本/音频/方法轨道副作用。动画查找失败直接报错，不退回 Fade；标准预设负责保存其修改的颜色/位置/缩放等原值。
 
-建议将当前“准备退出并播动画，再准备进入并播动画”重构为：操作守卫和输入锁 → 源退出准备 → 目标进入准备 → 建立各自执行对象并捕获原表现 → 源/目标动画同时播放 → 全部完成后一次提交 → 解锁并发送完成通知 → 必要清理。两项的准备仍依序执行；动画重叠不开放容器操作并发。转场临时绘制顺序由容器处理：Push 目标在前，Return 源在前；与最终排序区分，失败恢复原排序，不添加全局层级预设。
+V4 已将旧“准备退出并播动画，再准备进入并播动画”重构为：操作守卫和输入锁 → 源退出准备 → 目标进入准备 → 建立各自执行对象并捕获原表现 → 源/目标动画同时播放 → 全部完成后一次提交 → 解锁并发送完成通知 → 必要清理。两项的准备仍依序执行；动画重叠不开放容器操作并发。转场临时绘制顺序由容器处理：Push 目标在前，Return 源在前；与最终排序区分，失败恢复原排序，不添加全局层级预设。
 
-任一动画失败/取消，取消另一项并等待其结束，恢复所有已开始执行项的表现及原框架状态，再传播原异常；其他动画/恢复/清理异常同样记录并可获取。一次调用中的所有动画任务必须被观察，不能只等待 Task.WhenAll 而丢失其余原异常。操作取消之后的恢复和必要清理不被同一取消令牌跳过。成功后也归还临时动画状态，不能让入场偏移成为下一次基线或覆盖原 Modulate 颜色；具体完成态与隐藏先后在实现时验证。
+任一动画失败/取消，取消另一项并等待其结束，恢复所有已开始执行项的表现及原框架状态，再传播原异常；其他动画/恢复/清理异常同样记录并可获取。一次调用中的所有动画任务必须被观察，不能只等待 Task.WhenAll 而丢失其余原异常。操作取消之后的恢复和必要清理不被同一取消令牌跳过。成功后也归还临时动画状态，不能让入场偏移成为下一次基线或覆盖原 Modulate 颜色；退出项在恢复动画基线前临时隐藏，随后由容器统一提交最终显隐。
 
-本节是使用方案与执行建议，尚未修改核心代码，不表示用户已确认 ChildTransition、预设命名、并行动画或执行对象接口。
+本节记录用户授权实施后的实际契约，取代此前建议。Source Generator 调用入口未变；旧 IUITransition.PlayAsync(element, entering, token)、Restore(element, visible) 与 GodotFadeTransition 已删除，工程内所有实现同步迁移。
+
+### 9.6 V4 模态遮罩实际契约与交付记录（2026-10-02）
+
+用户已授权实现 V4 的 1、2，两项均已落实。遮罩配置为同步 `ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = Shared)`，要求没有打开项且不在操作中；Shared/PerModal 两种模式。`CurrentBackdrop` 查询当前项的遮罩。未配置提供方的纯核心可以管理无显示的逻辑模态，不自动创造后端显示；Godot 项目显式接入默认可用提供方：
+
+```csharp
+modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
+// 或明确使用 PerModal；Dim 可配置颜色与独立的淡入/淡出时长。
+```
+
+IUIBackdropFactory.CreateAsync(mount, requestDismiss, token) 返回容器独占管理的 IUIBackdrop。提供方负责失败前尚未移交对象的释放；成功返回后容器负责显示、排序和销毁。IUIBackdrop 提供 ShowAsync/HideAsync、同步 Restore(visible)，以及 IUIElement 显隐、输入、排序与 DisposeAsync 契约。Godot Dim 是 owned ColorRect，不是逻辑层级中的项目节点。弹窗资源移除全屏遮罩，仅保留内容；根和全屏布局允许鼠标穿透，内容面板阻挡输入，动画指定 Center 包装层。
+
+Shared 首次打开创建并淡入一张遮罩；再次打开复用并放到当前弹窗下、旧弹窗上，不重复加深背景。关闭顶层时遮罩重新排到恢复项下，最后一层关闭才淡出并释放。PerModal 每层独立创建，排序为遮罩/内容交替，关闭只释放该层。强制节点/容器销毁也等待必要遮罩清理；内容清理失败仍释放遮罩。物理释放沿用 Godot QueueFree 帧末语义。
+
+遮罩动画与窗口动画独立：新遮罩先淡入，随后播放窗口入场；窗口退出后，该操作需释放的遮罩再淡出；共享遮罩的嵌套打开/关闭不重复播放。窗口/页面源目标动画并行，遮罩不参加其源目标列表。这一时序避免缩放全屏背景，且整个容器任务等待所有阶段。若以后调整为同时播放须单独验证，不宣称当前已经并行淡入窗口与遮罩。
+
+`UINode.DismissRequested` 为可选 `Func<CancellationToken, Task>` 业务处理器。普通设置配置为 CloseAsync(this, token)，Confirm 配置为 Complete(false) 并返回已完成任务。`RequestDismissAsync(token)` 返回 Task<bool>：处理器缺省是明确的“不允许外部点击关闭”，返回 false；已处理返回 true；不存在模态、失去输入、操作中或重复并发请求直接报错。异步业务失败原样传播，不转换为 false。该入口只用于模态外部点击，不扩展为未选择的 Esc/返回路由系统。
+
+GodotBackdrops.Dim 要求提供 `Action<Task>` 观察入口。Demo 使用已有 Track，任务由应用持有，在帧入口记录原异常、退出 1 并重新抛出；即使遮罩已 QueueFree 也不丢弃任务。没有 async void、后台任务或遮罩自身销毁时停止观察的机制。没有处理器时遮罩仍拦截鼠标，不穿透背景。
+
+模态准备与转场期间使用计数式上下文临时输入锁，阻挡背景键盘/鼠标而不提前改变 IsActive；在提交或失败结束时归还，容器单独销毁导致操作取消也归还锁。稳定 InputOwner 与生命周期仍在提交点变化。普通 Stack/Tab/Panel 继续只锁其操作容器。祖先显隐与临时输入锁传播到遮罩显示与点击资格。不同模态容器同时争用输入尚无仲裁协议，在捕获焦点/加锁前与提交前都明确检查并报错，不覆盖另一个容器的输入所有者。
+
+IUIElement 增加 CaptureOrder/RestoreOrder，捕获不透明排序快照，Godot 使用兄弟索引；所有后端实现须同步迁移。转场临时排序在成功或失败后恢复，当前模态最终排序由容器负责。节点移除增加可等待的后端附属资源清理阶段，不丢弃遮罩 DisposeAsync 任务。所有附加清理原异常仍通过 UIFailure.GetSecondaryExceptions 暴露。
+
+Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自动反向返回；设置内部页面 Fade；设置/确认 ScaleFade 只作用于内容包装层。设置外部点击关闭，确认外部点击为正常取消；日常演示默认共享遮罩，自测同时覆盖 PerModal。资源与素材复用原 Adventure/Nunito，无新增下载或 Gameplay。
+
+验证：构建 0 警告/0 错误；核心与生成器 **86 项测试通过**（V3 的 59 项 + 27 项 V4 用例）。Godot headless 与原生 OpenGL 自测 **12 场景通过**；适配器专项断言覆盖滑动方向、原 tint/alpha/位置/缩放/pivot 恢复、取消、AnimationPlayer 接入；模态专项覆盖共享/逐层排序、真实 GuiInput 信号回调、正常 false 结果、设置关闭、强制释放与焦点恢复。这里的 GuiInput 回调验证不等于完整的实体鼠标输入设备测试。
+
+**15 个独立故障夹具均退出 1 并记录异常**：原 12 项加 transition-target、backdrop、backdrop-dismiss。设置与嵌套确认原生截图已目视检查，顶部内容清晰且共享遮罩只加深一次背景；截图与日志在被忽略的 artifacts，不入库。未验证全部分辨率、实体手柄、导出平台或其他引擎；AnimationPlayer 任意业务脚本/方法/音频轨道副作用需项目恢复，未承诺自动撤销。Godot 资源加载仍同步，预加载及返回/页面焦点扩展不属于 V4。

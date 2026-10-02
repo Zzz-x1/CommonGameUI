@@ -45,6 +45,13 @@ public sealed class GodotUIElement : IUIElement
         }
     }
     public void BringToFront() { VerifyAlive(); Control.MoveToFront(); }
+    public object CaptureOrder() { VerifyAlive(); return Control.GetIndex(); }
+    public void RestoreOrder(object order)
+    {
+        VerifyAlive();
+        if (order is not int index) throw new ArgumentException("Expected a Godot sibling index.", nameof(order));
+        Control.GetParent().MoveChild(Control, index);
+    }
     public ValueTask DisposeAsync()
     {
         if (_disposed) return default;

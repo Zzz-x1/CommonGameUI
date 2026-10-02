@@ -3,7 +3,7 @@ using Xunit;
 
 namespace UIFramework.Tests;
 
-public sealed class MemoryElement : IUIElement
+public class MemoryElement : IUIElement
 {
     public bool Visible, Interactive;
     public int Disposals;
@@ -16,6 +16,8 @@ public sealed class MemoryElement : IUIElement
         Interactive = value;
     }
     public void BringToFront() { }
+    public object CaptureOrder() => 0;
+    public void RestoreOrder(object order) { }
     public ValueTask DisposeAsync()
     {
         Disposals++;
@@ -68,10 +70,10 @@ public sealed class SlowView : UINode
 {
     protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token) => Task.Delay(Timeout.Infinite, token);
 }
-public sealed class FailureTransition(Exception failure) : IUITransition
+public sealed class FailureTransition(Exception failure) : IUITransition, IUITransitionRun
 {
-        public void Restore(IUIElement? element, bool visible) { }
-    public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) => throw failure;
+        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
+    public Task PlayAsync(CancellationToken token) => throw failure;
 }
 
 public class CoreTests

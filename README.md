@@ -1,18 +1,20 @@
 # UIFramework
 
-纯 C#、渲染无关的层级 UI 管理框架 V3，附持续维护的 Godot C# Demo。
+纯 C#、渲染无关的层级 UI 管理框架 V4，附持续维护的 Godot C# Demo。
 
 ## 工程结构
 
 | 路径 | 内容 |
 | --- | --- |
 | `src/UIFramework.Core` | netstandard2.1 管理内核、默认 Root、节点与容器 |
-| `src/UIFramework.Godot` | Godot Control/PackedScene 适配器与淡入淡出转场 |
+| `src/UIFramework.Godot` | Godot Control/PackedScene 适配器、转场预设、AnimationPlayer 接入与模态遮罩 |
 | `src/UIFramework.Generators` | 注册与类型化调用的 Source Generator，不包含自定义 Analyzer |
 | `Demo/Godot` | Godot 4.7.2 .NET / net10.0 示例项目 |
 | `tests/UIFramework.Tests` | 核心行为与生成结果编译测试 |
 
 设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V3 在 V2 生命周期上加入单实例窗口、隐藏恢复和返回指定历史实例；Demo 使用虚构冒险游戏的纯 UI 场景。V3 实际契约与验收集中于设计文档第 8.9、8.10 节。
+
+V4 增加转场配置、独立执行状态、源/目标并行动画及共享/逐层模态遮罩，实际契约见设计文档第 9.5、9.6 节。没有旧转场接口兼容层；资源预加载、Esc 返回与页面焦点扩展未纳入本版。
 
 ## 运行
 
@@ -112,7 +114,29 @@ await ui.DisposeAsync(); // 场景退出时显式销毁上下文。
 
 V2 的 `OnEnteringAsync/OnExitingAsync` 承担可等待准备，`OnEntered/OnExited` 是提交后的同步通知。`OnActivated/OnDeactivated/OnVisibilityChanged` 表达有效状态变化；`IsActive` 不含临时输入锁，`IsInteractive` 包含。上下文提供原因、源/目标和首次进入标志。独立行为可通过 `AddLifecycle(new MyBehavior())` 在挂载前注册，继承 `NodeLifecycle` 只覆写需要的阶段。完整契约集中于设计文档第 7 节。
 
-旧 `OnEnterAsync/OnExitAsync` 已删除，工程内调用已迁移；没有兼容入口。完成通知失败保持已提交状态并传播原异常，关闭仍执行必要清理。自定义转场实现同步 `IUITransition.Restore` 恢复取消/失败时修改的表现状态，恢复失败也会暴露。
+旧 `OnEnterAsync/OnExitAsync` 已删除，工程内调用已迁移；没有兼容入口。完成通知失败保持已提交状态并传播原异常，关闭仍执行必要清理。自定义转场通过 `IUITransition.Create(context)` 创建一次 `IUITransitionRun`，用 `PlayAsync(token)` 播放、同步 `Restore()` 恢复临时表现并清理动画。成功和失败均恢复，恢复失败同样暴露。
+
+## V4 转场与遮罩
+
+```csharp
+// Godot 配置；其他引擎提供自己的动画实现。
+ui.DefaultTransition = GodotTransitions.Fade(0.15);
+stack.ChildTransition = GodotTransitions.SlideHorizontal(0.20);
+await stack.PushAsync<ItemDetailsView>(); // 源向左退出，目标从右进入。
+await stack.PopAsync();                  // 反向播放并恢复原页面。
+```
+
+节点 `Transition` 覆盖直接管理容器的 `ChildTransition`，再继承 `ui.DefaultTransition`；默认 Instant。配置不穿透到后代容器，不修改业务操作 API。单界面可在构造/初始化中设置 `Transition = GodotTransitions.ScaleFade(targetPath: "Center")`。滑动/缩放目标不能直接受 Godot 布局 Container 控制，应提供内容包装层；未知路径直接报错。Fade 保留原 tint/alpha，滑动/缩放恢复原位置、缩放和 pivot。
+
+```csharp
+var modals = await ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", modalMount);
+modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
+// 每层都加深背景时明确改用 ModalBackdropMode.PerModal。
+```
+
+`Track(Task)` 是项目保存并观察异步任务的入口（Demo 示范于 DemoApp），必须观察失败；遮罩被释放后也不能丢弃该任务。弹窗资源仅提供内容，根/外部布局节点允许鼠标穿透，内容面板拦截鼠标；不要再内嵌全屏遮罩。
+
+普通窗口可设置 `DismissRequested = ct => modals.CloseAsync(this, ct)`；结果弹窗可设置为 `Complete(false)` 后返回 `Task.CompletedTask`。未设置时外部点击正常不关闭，`RequestDismissAsync` 返回 false；缺失窗口、操作中请求或重复并发请求直接报错。遮罩创建、动画和清理失败均原样传播。模态操作期间临时阻挡全上下文输入，提交时才改变稳定激活状态；不同模态容器同时取得输入仍不支持，会明确报错。
 
 - 初始化一次；进入/退出可重复；隐藏保留实例，销毁结束子树。
 - 栈保留覆盖项，出栈销毁；Tab 保留所有绑定项；独立面板按实例关闭。

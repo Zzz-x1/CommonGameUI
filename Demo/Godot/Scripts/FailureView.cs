@@ -29,10 +29,10 @@ public class FailureView : UINode
     }
     protected override Task OnDisposeAsync() => _mode == "cleanup"
         ? Task.FromException(new InvalidOperationException("Intentional original cleanup exception.")) : Task.CompletedTask;
-    private sealed class BrokenTransition : IUITransition
+    private sealed class BrokenTransition : IUITransition, IUITransitionRun
     {
-        public void Restore(IUIElement? element, bool visible) { }
-        public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) =>
+        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
+        public Task PlayAsync(CancellationToken token) =>
             throw new InvalidOperationException("Intentional original transition exception.");
     }
 }

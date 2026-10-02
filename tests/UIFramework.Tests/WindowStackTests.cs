@@ -13,11 +13,11 @@ public class WindowStackTests
     {
         public override Task DisposeAsync(UINode node) { order.Add(number); return Task.CompletedTask; }
     }
-    private sealed class GateTransition : IUITransition
+    private sealed class GateTransition : IUITransition, IUITransitionRun
     {
         public TaskCompletionSource<bool> Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) => Gate.Task.WaitAsync(token);
-        public void Restore(IUIElement? element, bool visible) { }
+        public Task PlayAsync(CancellationToken token) => Gate.Task.WaitAsync(token);
+        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
     }
     private sealed class CleanupView : CounterView
     {

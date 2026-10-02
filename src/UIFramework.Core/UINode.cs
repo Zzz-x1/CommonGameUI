@@ -38,7 +38,15 @@ public class UINode : IAsyncDisposable
     public bool IsActive => CommittedVisible && _interactive && Context.AllowsInput(this) && (Parent?.IsActive ?? true);
     public bool IsInteractive => IsVisible && IsActive && !_inputLocked && (Parent?.IsInteractive ?? true);
     public CancellationToken Lifetime => _lifetime.Token;
-    public IUITransition Transition { get; set; } = new InstantTransition();
+    private IUITransition? _transition;
+    /// <summary>Null explicitly inherits the managing container/context configuration.</summary>
+    public IUITransition? Transition
+    {
+        get => _transition;
+        set { try { _context?.Host.VerifyAccess(); _context?.VerifyMutation(); _transition = value; }
+            catch (Exception ex) { ReportFailure(ex, "Configure transition"); throw; } }
+    }
+    public Func<CancellationToken, Task>? DismissRequested { get; set; }
 
     protected virtual bool InitiallyVisible => false;
     protected virtual Task OnInitializeAsync(CancellationToken token) => Task.CompletedTask;
@@ -77,6 +85,7 @@ public class UINode : IAsyncDisposable
         catch (Exception ex) { ReportFailure(ex, "RemoveLifecycle"); throw; }
     }
     protected virtual Task OnDisposeAsync() => Task.CompletedTask;
+    protected virtual Task OnChildRemovedAsync(UINode child) => Task.CompletedTask;
     protected virtual void OnChildRemoved(UINode child) { }
     internal virtual void SetParameters(object? args)
     {
@@ -157,18 +166,13 @@ public class UINode : IAsyncDisposable
         await OnEnteringAsync(context, ct);
         foreach (var handler in _handlers) await handler.EnteringAsync(context, ct);
         ct.ThrowIfCancellationRequested();
-        StageVisibility(true);
-        await Transition.PlayAsync(Element, true, ct);
-        ct.ThrowIfCancellationRequested();
     }, token);
 
     internal Task PrepareExitAsync(LifecycleContext context, CancellationToken token) => RunAsync("Exiting", async ct =>
     {
         await OnExitingAsync(context, ct);
         foreach (var handler in _handlers) await handler.ExitingAsync(context, ct);
-        await Transition.PlayAsync(Element, false, ct);
         ct.ThrowIfCancellationRequested();
-        StageVisibility(false);
     }, token);
 
     internal void NotifyEntered(LifecycleContext context) => Context.Notify(() =>
@@ -188,26 +192,22 @@ public class UINode : IAsyncDisposable
     {
         _visible = _committedVisible = visible; _interactive = interactive; ApplyState();
     }
-    private void StageVisibility(bool visible) { _visible = visible; ApplyState(); }
+    internal void StageVisibility(bool visible) { _visible = visible; ApplyState(); }
     internal void RestoreLocalState(bool visible, bool active)
     {
         Exception? first = null;
         try { SetLocalState(visible, active); }
         catch (Exception ex) { Context.Report(ex, $"Restore state {Name} ({Id})"); first = ex; }
-        try { Transition.Restore(Element, visible); }
-        catch (Exception ex)
-        {
-            Context.Report(ex, $"Restore transition {Name} ({Id})");
-            if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
-        }
         if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal void ApplyState()
     {
         Element?.SetVisible(IsVisible);
         Element?.SetInteractive(IsInteractive);
+        OnApplyState();
         foreach (var child in _children) child.ApplyState();
     }
+    protected virtual void OnApplyState() { }
 
     protected async Task RunAsync(string operation, Func<CancellationToken, Task> action,
         CancellationToken cancellationToken = default, bool allowInitializing = false)
@@ -293,6 +293,7 @@ public class UINode : IAsyncDisposable
                 finally { Executing.Value = previous; }
             });
         if (Element != null) await Attempt(async () => await Element.DisposeAsync());
+        var formerParent = Parent;
         await Attempt(() =>
         {
             if (Parent != null)
@@ -301,6 +302,7 @@ public class UINode : IAsyncDisposable
             }
             return Task.CompletedTask;
         });
+        if (formerParent != null) await Attempt(() => formerParent.OnChildRemovedAsync(this));
         State = NodeState.Disposed;
         _lifetime.Dispose();
         if (first != null) ExceptionDispatchInfo.Capture(first).Throw();

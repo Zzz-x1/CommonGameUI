@@ -35,6 +35,24 @@ public static class GodotUI
             Console.Error.WriteLine(loggingFailure);
         }
     }
+
+    internal static T Configure<T>(Func<T> create)
+    {
+        try { return create(); }
+        catch (Exception ex) { Report(ex, "Configure Godot UI effect"); throw; }
+    }
+    internal static void Cleanup(Exception? primary, Action cleanup)
+    {
+        try { cleanup(); }
+        catch (Exception ex)
+        {
+            Report(ex, "Restore Godot UI effect");
+            if (primary == null) throw;
+            if (primary.Data[UIFailure.SecondaryExceptionsKey] is not List<Exception> failures)
+                primary.Data[UIFailure.SecondaryExceptionsKey] = failures = new List<Exception>();
+            failures.Add(ex);
+        }
+    }
 }
 
 /// <summary>Convenience APIs for borrowed scene Controls; no resources are loaded or cloned.</summary>

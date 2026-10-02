@@ -6,6 +6,8 @@ public interface IUIElement : IAsyncDisposable
     void SetVisible(bool visible);
     void SetInteractive(bool interactive);
     void BringToFront();
+    object CaptureOrder();
+    void RestoreOrder(object order);
 }
 
 public interface IUIResourceLoader
@@ -34,20 +36,58 @@ public sealed class ConsoleUILog : IUILog
 
 public interface IUITransition
 {
-    Task PlayAsync(IUIElement? element, bool entering, CancellationToken cancellationToken);
-    /// <summary>Restore animation-owned presentation after an aborted operation, without replaying an animation.</summary>
-    void Restore(IUIElement? element, bool visible);
+    IUITransitionRun Create(TransitionContext context);
+}
+
+public interface IUITransitionRun
+{
+    Task PlayAsync(CancellationToken cancellationToken);
+    /// <summary>Release temporary presentation on success or failure. Must not replay animation.</summary>
+    void Restore();
+}
+
+public enum TransitionDirection { None, Forward, Backward }
+
+public sealed class TransitionContext
+{
+    public TransitionContext(LifecycleContext lifecycle, bool entering, TransitionDirection direction)
+    { Lifecycle = lifecycle; Entering = entering; Direction = direction; }
+    public LifecycleContext Lifecycle { get; }
+    public bool Entering { get; }
+    public TransitionDirection Direction { get; }
+    public UINode Node => Lifecycle.Node;
+    public IUIElement? Element => Node.Element;
+    public ContainerNode? Container => Lifecycle.Container;
+    public UINode? Source => Lifecycle.Source;
+    public UINode? Target => Lifecycle.Target;
+    public LifecycleReason Reason => Lifecycle.Reason;
 }
 
 /// <summary>Explicit default, never a fallback after a failed animation.</summary>
-public sealed class InstantTransition : IUITransition
+public sealed class InstantTransition : IUITransition, IUITransitionRun
 {
-    public void Restore(IUIElement? element, bool visible) { }
-    public Task PlayAsync(IUIElement? element, bool entering, CancellationToken cancellationToken)
+    public IUITransitionRun Create(TransitionContext context) => this;
+    public void Restore() { }
+    public Task PlayAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.CompletedTask;
     }
+}
+
+public enum ModalBackdropMode { Shared, PerModal }
+
+/// <summary>Creates an owned display. Backend must observe every dismiss-request task.</summary>
+public interface IUIBackdropFactory
+{
+    Task<IUIBackdrop> CreateAsync(IUIElement? mount, Func<Task> requestDismiss, CancellationToken token);
+}
+
+public interface IUIBackdrop : IUIElement
+{
+    Task ShowAsync(CancellationToken token);
+    Task HideAsync(CancellationToken token);
+    void Restore(bool visible);
 }
 
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]

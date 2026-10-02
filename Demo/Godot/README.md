@@ -15,9 +15,9 @@
 | Backpack | 重复点击入口；Equipment/Materials 切换，点物品格或 Inspect，收藏后返回 | 单实例窗口外壳，重复打开不创建或重播；内部栈保留原背包与选中 Tab |
 | Stow backpack | 在背包或详情/手记页收起，再点击 Backpack | Hide 保留完整实例、控件和内部历史；恢复时不重新初始化，隐藏期间预览暂停 |
 | Read field notes | 从物品详情查看手记，选择 Return to backpack | PopTo 返回原背包，跳过详情页恢复，并释放详情和手记；Return to item details 仍为单步 Pop |
-| Settings | 打开设置，进入画质页，返回，再关闭 | 一个模态外壳/遮罩，内部栈；首次进入与返回提示不同；恢复输入/焦点 |
+| Settings | 打开设置，进入画质页，返回；关闭按钮或点击窗口外部关闭 | 内容缩放淡入、内部页面淡入淡出；容器管理遮罩，恢复输入/焦点 |
 | Compare relics | 打开两张藏品窗口，分别关闭 | 注册明确标记 Multiple，独立多实例，只关闭目标对象 |
-| Return to camp | 可再开一层确认；取消或确认内层，再结束外层 | 嵌套模态结果，只有顶部交互；焦点逐层恢复；外层确认返回营地 |
+| Return to camp | 可再开一层确认；按钮或点击窗口外部取消，再结束外层 | 默认共享一张遮罩，位于顶层窗口下；外部点击返回正常 false；只有顶部交互，焦点逐层恢复 |
 
 背包的 Inspection time 只在选中页面有效激活时更新：详情覆盖或模态阻挡时暂停，返回后继续。阶段、原因、实例 ID 输出普通 Godot 日志，不设专门诊断面板。偏好和收藏由项目 `GameUiState` 保存，跨页面重建保留；只是本地 UI 会话数据，未接入真实渲染设置、磁盘存档或 Gameplay。
 
@@ -26,6 +26,10 @@
 V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount 挂载 Stack；`Inventory.tscn` 是栈内背包页，包含内嵌 Tab；`Details.tscn` 和 `Provenance.tscn` 是多级查看页面。同一 Node 不在两个容器中复用。Camp overview 或切换 Preferences 会隐藏背包外壳；Preferences 自身仍按正常关闭重建。隐藏背包只保留本次 UI 会话，不是磁盘存档。Close 与下一次创建的验证位于自动测试，游戏界面不添加技术清理按钮。
 
 初始化使用 `GodotUI.Create(this)`、`Root.CreateContainerAsync<T>`、`AttachToAsync` 和 Control 版 `BindAsync`。基础页挂处理器时先构造 `UINode`、同步 `AddLifecycle`，再绑定已有 Control。便利挂载借用场景控件；动态 owned 挂载由框架释放。上下文必须显式销毁。
+
+V4 转场：项目默认 Fade，背包详情/手记前进向左滑动、返回向右滑动，窗口收起仍淡出。配置优先级为节点自身、直接管理容器、上下文默认；业务继续使用原容器 API。设置/确认以 Center 内容包装层缩放，遮罩独立淡入/淡出，不跟随内容缩放。BodyMount 裁剪背包滑动内容。
+
+V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared)`。弹窗场景不再自带 ColorRect；资源根/全屏布局忽略鼠标，内容面板阻挡鼠标。设置的 DismissRequested 关闭窗口，确认的 DismissRequested 执行 Complete(false)；应用持有并观察点击产生的任务。逐层加深模式使用 PerModal，自测覆盖，日常演示选择共享模式。
 
 ## 自动验证
 
@@ -37,9 +41,10 @@ V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount �
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Settings
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Preferences
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Notes
+./scripts/Run-Demo.ps1 -Capture -CaptureScene Dialogs
 ```
 
-自测覆盖原有 6 类流程，以及 V3 单实例/隐藏恢复、手记直接返回、隐藏项关闭后重建，共 9 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (9 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁。
+自测覆盖原有 6 类流程、V3 的 3 类流程及 V4 的共享遮罩/外部关闭/逐层遮罩，共 12 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (12 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
@@ -58,11 +63,23 @@ V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount �
 ./scripts/Run-Demo.ps1 -Headless -Failure window-state
 ./scripts/Run-Demo.ps1 -Headless -Failure stack-target
 ./scripts/Run-Demo.ps1 -Headless -Failure return-cleanup
+./scripts/Run-Demo.ps1 -Headless -Failure transition-target
+./scripts/Run-Demo.ps1 -Headless -Failure backdrop
+./scripts/Run-Demo.ps1 -Headless -Failure backdrop-dismiss
 ```
 
 同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
 
-## 验证记录：2026-10-02 / V3
+## 验证记录：2026-10-02 / V4
+
+- 构建 0 警告、0 错误；核心与生成器 86 项测试通过。
+- Godot headless 与原生 OpenGL 自测通过 12 场景；适配器同时验证滑动方向、原表现恢复、取消和 AnimationPlayer。
+- 共享/逐层遮罩排序、GuiInput 信号点击取消、设置外部关闭、强制释放、焦点恢复均通过实际引擎断言。未把信号回调验证当作实体鼠标/手柄设备测试。
+- 15 个故障夹具均打印异常并退出 1；新增动画目标缺失、遮罩创建、外部关闭业务失败。
+- 原生设置与嵌套确认截图已目视检查；共享遮罩不逐层加深背景。素材复用原许可，截图与日志不入库。
+- 未验证所有分辨率、导出平台、实体手柄和其他引擎；资源加载仍同步。AnimationPlayer 的项目副作用由显式恢复回调负责。
+
+## 历史验证记录：2026-10-02 / V3
 
 - Windows 11、.NET SDK 10.0.400、Godot 4.7.2 .NET。
 - 构建 0 警告、0 错误；核心与生成器 59 项测试通过。

@@ -57,33 +57,3 @@ public sealed class GodotSceneLoader : IUIResourceLoader
         catch { control.Free(); throw; }
     }
 }
-
-public sealed class GodotFadeTransition : IUITransition
-{
-    public GodotFadeTransition(double duration = 0.12) => Duration = duration;
-    public double Duration { get; }
-    public void Restore(IUIElement? element, bool visible)
-    {
-        if (!(element is GodotUIElement display)) throw new ArgumentException("Fade requires a Godot display.", nameof(element));
-        display.Control.Modulate = new Color(1, 1, 1, 1);
-    }
-    public async Task PlayAsync(IUIElement? element, bool entering, CancellationToken token)
-    {
-        token.ThrowIfCancellationRequested();
-        if (!(element is GodotUIElement display)) throw new ArgumentException("Fade requires a Godot display.", nameof(element));
-        var control = display.Control;
-        var from = entering ? 0f : 1f;
-        var to = entering ? 1f : 0f;
-        control.Modulate = new Color(1, 1, 1, from);
-        var tree = control.GetTree();
-        var elapsed = 0d;
-        while (elapsed < Duration)
-        {
-            await control.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
-            token.ThrowIfCancellationRequested();
-            elapsed += control.GetProcessDeltaTime();
-            control.Modulate = new Color(1, 1, 1, Mathf.Lerp(from, to, (float)Math.Min(1, elapsed / Duration)));
-        }
-        control.Modulate = new Color(1, 1, 1, to);
-    }
-}

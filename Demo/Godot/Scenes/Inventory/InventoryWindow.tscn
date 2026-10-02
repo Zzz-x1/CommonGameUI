@@ -18,6 +18,7 @@ theme_override_font_sizes/font_size = 14
 layout_mode = 2
 text = "Stow backpack"
 [node name="BodyMount" type="Control" parent="."]
+clip_contents = true
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2

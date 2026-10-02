@@ -27,6 +27,16 @@ public sealed class UIContext : IAsyncDisposable
     public IUIResourceLoader Loader { get; }
     public IUILog Log { get; }
     public UINode? InputOwner { get; private set; }
+    private IUITransition _defaultTransition = new InstantTransition();
+    public IUITransition DefaultTransition
+    {
+        get => _defaultTransition;
+        set
+        {
+            try { Host.VerifyAccess(); VerifyMutation(); _defaultTransition = value ?? throw new ArgumentNullException(nameof(value)); }
+            catch (Exception ex) { Report(ex, "Configure default transition"); throw; }
+        }
+    }
 
     private int _notificationDepth;
     internal void VerifyMutation()
@@ -90,6 +100,15 @@ public sealed class UIContext : IAsyncDisposable
     }
 
     internal void SetInputOwner(UINode? node) { InputOwner = node; Root.ApplyState(); }
+    private int _modalInputBlocks;
+    internal bool IsModalInputBlocked => _modalInputBlocks != 0;
+    internal void BeginModalInputBlock() { _modalInputBlocks++; Root.SetInputLocked(true); }
+    internal void EndModalInputBlock()
+    {
+        if (_modalInputBlocks <= 0) throw new InvalidOperationException("Modal input block is unbalanced.");
+        _modalInputBlocks--;
+        Root.SetInputLocked(_modalInputBlocks != 0);
+    }
 
     public void Register<T>(string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode, new() =>
         Register(() => new T(), resource, windowMode);

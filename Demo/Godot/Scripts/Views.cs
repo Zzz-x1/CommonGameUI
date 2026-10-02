@@ -91,8 +91,10 @@ public class SettingsWindowView : DemoView
     public StackContainerNode Body { get; private set; } = null!;
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = new GodotFadeTransition();
+        Transition = GodotTransitions.ScaleFade(targetPath: "Center");
+        DismissRequested = ct => DemoApp.Instance.Modals.CloseAsync(this, ct);
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("Center/Window/Margin/BodyMount"), token);
+        Body.ChildTransition = GodotTransitions.Fade();
         await Body.PushSettingsViewAsync(token);
     }
 }
@@ -120,7 +122,6 @@ public class GraphicsView : DemoView
 {
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = new GodotFadeTransition();
         var model = DemoApp.Instance.GameState;
         this.GetControl<HSlider>("Value").SetValueNoSignal(model.RenderScale);
         this.GetControl<CheckButton>("Enabled").SetPressedNoSignal(model.Shadows);
@@ -140,8 +141,9 @@ public class InventoryWindowView : DemoView
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
         InitializeCount++;
-        Transition = new GodotFadeTransition();
+        Transition = GodotTransitions.Fade();
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
+        Body.ChildTransition = GodotTransitions.SlideHorizontal();
         Inventory = await Body.PushInventoryViewAsync(token);
         Wire("Actions/Stow", () => DemoApp.Instance.OpenHomeAsync());
     }
@@ -225,7 +227,6 @@ public class DetailsView : DemoView
     }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = new GodotFadeTransition();
         Wire("Notes", () => ((StackContainerNode)Parent!).PushProvenanceViewAsync());
         Wire("Back", () => ((StackContainerNode)Parent!).PopAsync());
         WireToggle("Enabled", favorite =>
@@ -243,7 +244,6 @@ public class ProvenanceView : DemoView
 {
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = new GodotFadeTransition();
         var stack = (StackContainerNode)Parent!;
         var inventory = (InventoryView)stack.History[0];
         this.GetControl<Label>("Description").Text = $"{inventory.SelectedItem.ToUpperInvariant()}\n\n" +
@@ -291,7 +291,8 @@ public class ConfirmView : DialogNode<bool>
     }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = new GodotFadeTransition();
+        Transition = GodotTransitions.ScaleFade(targetPath: "Center");
+        DismissRequested = ct => { ct.ThrowIfCancellationRequested(); Complete(false); return Task.CompletedTask; };
         Wire("Yes", () => Complete(true));
         Wire("No", () => Complete(false));
         Wire("Nested", () => DemoApp.Instance.Track(DemoApp.Instance.ConfirmAsync()));

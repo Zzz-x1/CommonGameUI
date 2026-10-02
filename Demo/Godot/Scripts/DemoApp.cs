@@ -33,12 +33,14 @@ public partial class DemoApp : Control
     private async Task StartAsync()
     {
         _ui = GodotUI.Create(this);
+        _ui.DefaultTransition = GodotTransitions.Fade(0.12);
         _ui.RegisterGeneratedUI();
         _menu = new DemoMenuNode();
         await _menu.AttachToAsync(_ui.Root, "DemoMenu", GetNode<Control>("Frame/Layout/Workspace/Sidebar"));
         _stage = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoStage", _content);
         _cards = await _ui.Root.CreateContainerAsync<PanelContainerNode>("DemoCards", GetNode<Control>("FloatingMount"));
         Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("DemoDialogs", GetNode<Control>("ModalMount"));
+        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
         Wire("Tabs", OpenPreferencesAsync);
         Wire("Inventory", OpenInventoryAsync);
         Wire("Settings", () => Modals.OpenSettingsWindowViewAsync());
@@ -46,12 +48,18 @@ public partial class DemoApp : Control
         Wire("Confirm", ConfirmAsync);
         Wire("Cancel", OpenHomeAsync);
         if (OS.GetCmdlineUserArgs().Contains("--self-test")) await RunSelfTestAsync();
-        else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--capture", "--capture-settings", "--capture-preferences", "--capture-notes" }.Contains(a)))
+        else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--capture", "--capture-settings", "--capture-preferences", "--capture-notes", "--capture-dialogs" }.Contains(a)))
         {
             var preferencesCapture = OS.GetCmdlineUserArgs().Contains("--capture-preferences");
             if (preferencesCapture) await OpenPreferencesAsync(); else await OpenInventoryAsync();
             var settingsCapture = OS.GetCmdlineUserArgs().Contains("--capture-settings");
             var notesCapture = OS.GetCmdlineUserArgs().Contains("--capture-notes");
+            var dialogsCapture = OS.GetCmdlineUserArgs().Contains("--capture-dialogs");
+            if (dialogsCapture)
+            {
+                await Modals.OpenSettingsWindowViewAsync();
+                await Modals.OpenAsync<ConfirmView>();
+            }
             if (settingsCapture)
             {
                 var window = await Modals.OpenSettingsWindowViewAsync();
@@ -64,7 +72,7 @@ public partial class DemoApp : Control
             }
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await CaptureAsync(settingsCapture ? "demo-settings.png" : preferencesCapture ? "demo-preferences.png" : notesCapture ? "demo-notes.png" : "demo.png");
+            await CaptureAsync(dialogsCapture ? "demo-dialogs.png" : settingsCapture ? "demo-settings.png" : preferencesCapture ? "demo-preferences.png" : notesCapture ? "demo-notes.png" : "demo.png");
             await _ui.DisposeAsync();
             GetTree().Quit();
         }
@@ -107,6 +115,22 @@ public partial class DemoApp : Control
             await _inventoryStack.PushAsync<FailureView>();
             await _inventoryStack.PushProvenanceViewAsync();
             await _inventoryStack.PopToAsync(inventory);
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-transition-target"))
+        {
+            _ui.Register(() => new UINode { Transition = GodotTransitions.Fade(targetPath: "MissingAnimationTarget") }, "res://Scenes/Settings/Graphics.tscn");
+            await _stage.OpenAsync<UINode>();
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-backdrop"))
+        {
+            Modals.ConfigureBackdrop(new FailingBackdropFactory(new IOException("Intentional original backdrop creation exception.")));
+            await Modals.OpenSettingsWindowViewAsync();
+        }
+        else if (OS.GetCmdlineUserArgs().Contains("--failure-backdrop-dismiss"))
+        {
+            var window = await Modals.OpenSettingsWindowViewAsync();
+            window.DismissRequested = _ => Task.FromException(new IOException("Intentional original backdrop dismiss exception."));
+            await Modals.RequestDismissAsync();
         }
         else
         {
@@ -328,7 +352,7 @@ public partial class DemoApp : Control
         await settings.Body.PopAsync();
         Check(ReferenceEquals(firstPage, settings.Body.Current), "Settings page restoration.");
         Check(((SettingsView)firstPage!).EnterCount == 3, "Settings completed return lifecycle.");
-        Check(settings.Display.Control.GetNode("Backdrop") != null, "Backdrop is missing.");
+        Check(Modals.CurrentBackdrop != null, "Managed backdrop is missing.");
         await Modals.CloseAsync(settings);
         Check(_inventoryStack.IsInteractive, "Input was not restored.");
         Check(_menu.IsInteractive, "Sidebar input was not restored.");
@@ -345,16 +369,43 @@ public partial class DemoApp : Control
         var outerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
         await WaitUntilAsync(() => Modals.Current is ConfirmView view && view.IsInteractive);
         var outer = (ConfirmView)Modals.Current!;
+        var sharedBackdrop = Modals.CurrentBackdrop!;
         var outerFocus = GetViewport().GuiGetFocusOwner();
         var innerResult = Modals.ShowDialogAsync<ConfirmView, bool>();
         await WaitUntilAsync(() => Modals.Current is ConfirmView view && view != outer && view.IsInteractive);
         var inner = (ConfirmView)Modals.Current!;
+        Check(ReferenceEquals(sharedBackdrop, Modals.CurrentBackdrop), "Nested modal created a second shared backdrop.");
+        var dim = GetNode<Control>("ModalMount/ModalBackdrop");
+        Check(dim.GetIndex() < inner.GetControl().GetIndex() && dim.GetIndex() > outer.GetControl().GetIndex(),
+            "Shared backdrop must sit between the outer and inner dialogs.");
         Check(!outer.IsInteractive, "Nested modal did not block its parent.");
-        inner.Complete(false); Check(!await innerResult, "Nested result.");
+        dim.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left });
+        Check(!await innerResult, "Backdrop click must yield the normal false result.");
         Check(outer.IsInteractive, "Outer modal did not regain input.");
         Check(GetViewport().GuiGetFocusOwner() == outerFocus, "Nested modal focus was not restored.");
         outer.Complete(true); Check(await outerResult, "Outer result.");
         GD.Print("PASS nested modal results");
+        Check(Modals.CurrentBackdrop == null, "Last dialog left a backdrop behind.");
+        GD.Print("PASS V4 shared backdrop: one display, ordering, native click cancellation, final release");
+
+        var clickSettings = await Modals.OpenSettingsWindowViewAsync();
+        Check(await Modals.RequestDismissAsync(), "Settings did not handle its external click request.");
+        Check(clickSettings.State == NodeState.Disposed && Modals.Current == null, "External click did not close settings.");
+        GD.Print("PASS V4 settings external dismissal");
+
+        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track, duration: 0.02), ModalBackdropMode.PerModal);
+        var layeredOuter = await Modals.OpenAsync<ConfirmView>(); var outerBackdrop = Modals.CurrentBackdrop;
+        var layeredInner = await Modals.OpenAsync<ConfirmView>(); var innerBackdrop = Modals.CurrentBackdrop;
+        Check(!ReferenceEquals(outerBackdrop, innerBackdrop), "PerModal reused one backdrop.");
+        var liveDims = GetNode<Control>("ModalMount").GetChildren().OfType<ColorRect>().Where(c => !c.IsQueuedForDeletion()).ToArray();
+        Check(liveDims.Length == 2 && liveDims.All(c => c.Visible), "PerModal must own two visible dim layers.");
+        Check((int)outerBackdrop!.CaptureOrder() < layeredOuter.GetControl().GetIndex()
+            && layeredOuter.GetControl().GetIndex() < (int)innerBackdrop!.CaptureOrder()
+            && (int)innerBackdrop.CaptureOrder() < layeredInner.GetControl().GetIndex(), "PerModal layer order is incorrect.");
+        await Modals.CloseAsync(layeredInner); Check(ReferenceEquals(Modals.CurrentBackdrop, outerBackdrop) && layeredOuter.IsInteractive, "PerModal did not restore outer input/backdrop.");
+        await layeredOuter.DisposeAsync(); Check(Modals.CurrentBackdrop == null && _menu.IsInteractive, "Forced modal disposal left its backdrop/input owner.");
+        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
+        GD.Print("PASS V4 layered backdrops: distinct displays, ordering, nested close and forced release");
 
         await OpenHomeAsync(); await _stage.CloseAsync(inventoryWindow);
         Check(inventoryWindow.State == NodeState.Disposed && inventory.State == NodeState.Disposed,
@@ -368,7 +419,7 @@ public partial class DemoApp : Control
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (9 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (12 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
     }
@@ -392,6 +443,7 @@ public partial class DemoApp : Control
             Check(tabs.Current!.GetType() == typeof(UINode), "Control-only binding requires a business View.");
             Check(ReferenceEquals(tabs.Current.GetControl(), page), "Embedded Control was cloned.");
             Check(ReferenceEquals(tabs.GetControl<Control>("Page"), page), "Typed Control lookup.");
+            await VerifyNativeTransitionsAsync(tabs.Current!, page);
             await tabs.DisposeAsync();
             Check(GodotObject.IsInstanceValid(mount) && !mount.IsQueuedForDeletion(), "Borrowed mount was freed.");
             Check(GodotObject.IsInstanceValid(page) && !page.IsQueuedForDeletion(), "Borrowed page was freed.");
@@ -443,15 +495,55 @@ public partial class DemoApp : Control
         GD.Print("GODOT ADAPTER SELF-TEST PASSED (setup, custom services, binding, ownership, cancellation, original failure)");
     }
 
+    private async Task VerifyNativeTransitionsAsync(UINode node, Control page)
+    {
+        page.Size = new Vector2(100, 70); page.Position = new Vector2(5, 7);
+        var tint = new Color(0.7f, 0.8f, 0.9f, 0.6f); page.Modulate = tint;
+        var position = page.Position; var scale = new Vector2(1.1f, 0.9f); page.Scale = scale;
+        var pivot = new Vector2(3, 4); page.PivotOffset = pivot;
+        var lifecycle = new LifecycleContext(node, node.Parent as ContainerNode, LifecycleReason.Push, null, node);
+        foreach (var direction in new[] { TransitionDirection.Forward, TransitionDirection.Backward })
+        {
+            var run = GodotTransitions.SlideHorizontal(0.02).Create(new(lifecycle, true, direction));
+            var playing = run.PlayAsync(CancellationToken.None);
+            var sign = direction == TransitionDirection.Forward ? 1 : -1;
+            Check(page.Position.IsEqualApprox(position + new Vector2(sign * page.Size.X, 0)), "Slide did not honor the operation direction.");
+            await playing; run.Restore(); Check(page.Position.IsEqualApprox(position), "Slide drifted after restoration.");
+        }
+        var fade = GodotTransitions.Fade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
+        await fade.PlayAsync(CancellationToken.None); fade.Restore(); Check(page.Modulate == tint, "Fade overwrote authored tint/alpha.");
+        var zoom = GodotTransitions.ScaleFade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
+        await zoom.PlayAsync(CancellationToken.None); zoom.Restore();
+        Check(page.Scale == scale && page.PivotOffset == pivot && page.Modulate == tint, "ScaleFade did not restore authored presentation.");
+        using var canceled = new CancellationTokenSource();
+        var rollback = GodotTransitions.ScaleFade(0.2).Create(new(lifecycle, false, TransitionDirection.None));
+        var pending = rollback.PlayAsync(canceled.Token); canceled.Cancel();
+        await ExpectCancellationAsync(pending); rollback.Restore(); Check(page.Scale == scale && page.Modulate == tint, "Canceled scale animation leaked state.");
+
+        var player = new AnimationPlayer { Name = "Animator" }; page.AddChild(player);
+        var library = new AnimationLibrary();
+        library.AddAnimation("enter", new Animation { Length = 0.02 }); library.AddAnimation("exit", new Animation { Length = 0.02 });
+        player.AddAnimationLibrary("", library);
+        var restored = false;
+        var authored = GodotTransitions.Animation("Animator", "enter", "exit", c => { c.Modulate = tint; restored = true; });
+        var animation = authored.Create(new(lifecycle, true, TransitionDirection.None));
+        await animation.PlayAsync(CancellationToken.None); animation.Restore(); Check(restored && !player.IsPlaying(), "AnimationPlayer restoration was not invoked.");
+        GD.Print("PASS V4 native animations: slide directions, tint/position/scale restoration, cancellation, AnimationPlayer");
+    }
+
     private sealed class AdapterFadeNode : UINode
     {
         protected override Task OnInitializeAsync(CancellationToken token)
-        { Transition = new GodotFadeTransition(0.02); return Task.CompletedTask; }
+        { Transition = GodotTransitions.Fade(0.02); return Task.CompletedTask; }
     }
-    private sealed class AdapterFailingTransition(Exception original) : IUITransition
+    private sealed class FailingBackdropFactory(Exception failure) : IUIBackdropFactory
     {
-        public Task PlayAsync(IUIElement? element, bool entering, CancellationToken token) => Task.FromException(original);
-        public void Restore(IUIElement? element, bool visible) { }
+        public Task<IUIBackdrop> CreateAsync(IUIElement? mount, Func<Task> dismiss, CancellationToken token) => Task.FromException<IUIBackdrop>(failure);
+    }
+    private sealed class AdapterFailingTransition(Exception original) : IUITransition, IUITransitionRun
+    {
+        public Task PlayAsync(CancellationToken token) => Task.FromException(original);
+        public IUITransitionRun Create(TransitionContext context) => this; public void Restore() { }
     }
 
     private sealed class AdapterFailureNode(Exception original) : UINode
