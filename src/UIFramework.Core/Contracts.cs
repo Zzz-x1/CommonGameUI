@@ -48,9 +48,23 @@ public interface IUITransitionRun
 
 public enum TransitionDirection { None, Forward, Backward }
 public enum TransitionPhase { Enter, Exit, PushEnter, PushExit, PopEnter, PopExit }
+public enum TransitionStage { Preparing, Playing, Completed, Canceled, Failed }
+
+/// <summary>One item's transition snapshot. Progress describes animation time, not resource loading.</summary>
+public sealed class TransitionState
+{
+    internal TransitionState(TransitionContext context, TransitionStage stage, float progress)
+    { Context = context; Stage = stage; Progress = progress; }
+    public TransitionContext Context { get; }
+    public TransitionStage Stage { get; }
+    public float Progress { get; }
+    public bool IsRunning => Stage == TransitionStage.Preparing || Stage == TransitionStage.Playing;
+}
 
 public sealed class TransitionContext
 {
+    private Action<float>? _reportProgress;
+    private bool _managed;
     public TransitionContext(LifecycleContext lifecycle, bool entering, TransitionDirection direction)
     { Lifecycle = lifecycle; Entering = entering; Direction = direction; }
     public LifecycleContext Lifecycle { get; }
@@ -72,6 +86,22 @@ public sealed class TransitionContext
     public UINode? Source => Lifecycle.Source;
     public UINode? Target => Lifecycle.Target;
     public LifecycleReason Reason => Lifecycle.Reason;
+    /// <summary>Custom runs report normalized, monotonic animation time. Easing must not alter this value.</summary>
+    public void ReportProgress(float progress)
+    {
+        try
+        {
+            Node.Context.Host.VerifyAccess();
+            Node.Context.VerifyMutation();
+            if (float.IsNaN(progress) || float.IsInfinity(progress) || progress < 0 || progress > 1)
+                throw new ArgumentOutOfRangeException(nameof(progress));
+            if (_managed && _reportProgress == null)
+                throw new InvalidOperationException("Progress can only be reported during playback.");
+            _reportProgress?.Invoke(progress);
+        }
+        catch (Exception ex) { Node.ReportFailure(ex, "Report transition progress"); throw; }
+    }
+    internal void SetProgressReporter(Action<float>? report) { _managed = true; _reportProgress = report; }
 }
 
 /// <summary>Explicit default, never a fallback after a failed animation.</summary>

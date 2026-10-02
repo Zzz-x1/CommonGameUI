@@ -40,6 +40,11 @@ public abstract class DemoView : UINode
         button.Toggled += Handler;
         _disconnect.Add(() => button.Toggled -= Handler);
     }
+    protected void ObserveTransition(Action<TransitionState> observer)
+    {
+        TransitionChanged += observer;
+        _disconnect.Add(() => TransitionChanged -= observer);
+    }
     protected override Task OnDisposeAsync()
     {
         foreach (var disconnect in _disconnect) disconnect();
@@ -55,7 +60,8 @@ public class PreferencesView : DemoView
     {
         Tabs = await this.CreateContainerAsync<TabContainerNode>("Tabs", this.GetControl<Control>("TabContent"), token);
         var fade = GodotTransitions.Fade(0.10);
-        var scale = GodotTransitions.ScaleFade(0.12, fromScale: 0.98f);
+        var scale = GodotTransitions.ScaleFade(0.16, fromScale: 0.98f, delay: 0.02,
+            transition: Tween.TransitionType.Back, ease: Tween.EaseType.Out);
         Tabs.ChildTransition = Transitions.Select(c => c.Phase == TransitionPhase.Enter &&
             c.Source?.Name == "Audio" && c.Target?.Name == "Graphics" ? scale : fade);
         foreach (var name in new[] { "Graphics", "Audio", "Controls" })
@@ -95,7 +101,12 @@ public class SettingsWindowView : DemoView
     public StackContainerNode Body { get; private set; } = null!;
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
-        Transition = GodotTransitions.ScaleFade(targetPath: "Center");
+        var neutral = new GodotTransitionFrame();
+        var enter = GodotTransitions.Simple(neutral with { Alpha = 0, Scale = Vector2.One * .96f, Offset = new Vector2(0, 12) },
+            neutral, duration: .18, delay: .02, targetPath: "Center", transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
+        var exit = GodotTransitions.Simple(neutral, neutral with { Alpha = 0, Scale = Vector2.One * .98f },
+            duration: .12, targetPath: "Center");
+        Transition = Transitions.Select(c => c.Entering ? enter : exit);
         DismissRequested = ct => DemoApp.Instance.Modals.CloseAsync(this, cancellationToken: ct);
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("Center/Window/Margin/BodyMount"), token);
         Body.ChildTransition = GodotTransitions.Fade();
@@ -149,8 +160,13 @@ public class InventoryWindowView : DemoView
         Body = await this.CreateContainerAsync<StackContainerNode>("Body", this.GetControl<Control>("BodyMount"), token);
         var slide = GodotTransitions.SlideHorizontal();
         var fade = GodotTransitions.Fade(0.12);
+        var neutral = new GodotTransitionFrame();
+        var notesEnter = GodotTransitions.Simple(neutral with { Offset = new Vector2(0, 12), Alpha = 0 }, neutral,
+            duration: .18, delay: .03, transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
+        var notesExit = GodotTransitions.Simple(neutral, neutral with { Offset = new Vector2(0, -12), Alpha = 0 }, duration: .12);
         Body.ChildTransition = Transitions.Select(c =>
-            c.Source is ProvenanceView || c.Target is ProvenanceView ? fade : c.Phase switch
+            c.Node is ProvenanceView ? c.Entering ? notesEnter : notesExit
+            : c.Source is ProvenanceView || c.Target is ProvenanceView ? fade : c.Phase switch
             {
                 TransitionPhase.PushEnter or TransitionPhase.PopExit => slide,
                 _ => fade
@@ -238,6 +254,12 @@ public class DetailsView : DemoView
     }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
+        // Opening field notes reveals them beneath the departing detail page.
+        TransitionOrder = 10;
+        var hint = Parent!.Parent!.GetControl<Label>("Actions/Hint");
+        var tint = hint.Modulate;
+        ObserveTransition(state => hint.Modulate = state.Stage == TransitionStage.Playing
+            ? new Color(tint.R, tint.G, tint.B, tint.A * (1 - .35f * state.Progress)) : tint);
         Wire("Notes", () => ((StackContainerNode)Parent!).PushProvenanceViewAsync());
         Wire("Back", () => ((StackContainerNode)Parent!).PopAsync());
         WireToggle("Enabled", favorite =>

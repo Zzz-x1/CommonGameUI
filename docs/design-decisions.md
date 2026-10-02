@@ -1002,7 +1002,7 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | Page 历史、逐层返回、返回指定历史项 | Stack Push/Pop/PopTo | 使用具体实例，未复制数量/字符串 ID 全部重载 |
 | 基础 Modal 嵌套和关闭 | Modal Open/Close，额外支持结果等待 | 多层一次返回仍缺失 |
 | 页面生命周期及外部处理器 | V2 生命周期、AddLifecycle/RemoveLifecycle | 外部处理器执行顺序仍有差距，见 15 |
-| 通用、逐页和自定义转场 | Context/Container/Node 配方继承及自定义执行对象 | 配置维度及运行信息仍有差距，见 6—11 |
+| 通用、逐页和自定义转场 | Context/Container/Node 配方继承及自定义执行对象 | 6—11 动画能力已由 V5 与本轮补齐；后端编辑器配置仍待规划 |
 | 伙伴页面参与动画 | TransitionContext.Source/Target、V5 Transitions.Select | 已支持同一函数按阶段、来源/目标和业务状态选择配方 |
 | 编辑器动画接入 | Godot AnimationPlayer | 属于 Godot 对应方案，未实现 Unity Timeline 适配 |
 | 基础模态遮罩和外部点击 | 工厂、Shared/PerModal、DismissRequested | 不等同 USN 全部策略与时序，见 13 |
@@ -1023,9 +1023,9 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 | 5 | 容器整体操作前后回调 | 只有节点生命周期与状态通知 | 外壳统一同步标题/返回按钮 |
 | 6 | 单次操作选择是否播放动画 | V5 已实现容器操作的 playAnimation 选项，生成 API 和遮罩同步透传 | 首次恢复菜单立即显示，之后操作正常动画；不临时改共享配方 |
 | 7、8 | 根据转场上下文选择动画 | V5 已实现 Transitions.Select 与 TransitionContext.Phase | 阶段、来源/目标等条件由同一函数判断，覆盖推进/返回差异和不同来源的进入表现 |
-| 9 | 转场绘制顺序配置 | 支持固定 Push 目标在前、Return 源在前；没有项目覆盖策略 | 旧页覆盖新页退出，而不是始终由新页盖住旧页 |
-| 10 | 动画参数配置 | Godot 预设有时长、部分缩放；没有延迟、缓动选择及通用起止位置/缩放/透明度配置 | 美术调整移动与淡入节奏，不为每套参数写自定义配方 |
-| 11 | 转场状态、类型、进度及变化通知 | 当前没有对应公开运行信息；内部操作守卫不等于公共查询 | 窗口动画期间协调外壳装饰/按钮状态；这是运行能力，不能自动视为诊断系统 |
+| 9 | 转场绘制顺序配置 | 本轮补齐 Node.TransitionOrder；高值在转场中置前，同值保留原推进/返回默认 | 旧页覆盖新页退出，而不是始终由新页盖住旧页 |
+| 10 | 动画参数配置 | 本轮补齐 Godot Simple 起止帧、延迟、Tween 缓动，预设支持同样时序配置 | 美术调整移动与淡入节奏，不为每套参数写自定义配方 |
+| 11 | 转场状态、类型、进度及变化通知 | 本轮补齐 Node 状态/阶段/进度和 TransitionChanged，配方可报告进度 | 窗口动画期间协调外壳装饰/按钮状态；这是运行能力，不能自动视为诊断系统 |
 | 12 | 转场输入控制策略 | 普通容器锁局部，模态临时锁全局；无法配置全部/局部锁及允许转场期交互 | 主内容换页时允许独立侧栏继续交互 |
 | 13 | 更多遮罩策略及时序 | Shared 会移到顶层下，PerModal 每层创建；没有始终位于首层下及动画前/后重排的全套选项 | 某项目希望嵌套弹窗不再暗化底层弹窗，或旧弹窗退出后才移动遮罩 |
 | 14 | 隐藏当前 Tab 项并进入无选中状态 | Tab 只能 Switch；隐藏整个父容器不会清空 Current | 某互斥侧栏收起当前页面，但保留外壳和全部页面实例 |
@@ -1115,7 +1115,7 @@ USN README 的生命周期章节为 Page/Modal/Sheet 提供容器 Before/After �
 
 ### 10.5 边界与交付
 
-焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab 与 9—13 的其他转场配置仍保留为后续差距；6—8 已实现。内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
+焦点记忆、返回输入路由、窗口置前、多个模态容器仲裁、编辑器与绑定生成不作为此次主范围。动态资源 Tab、12/13 的输入和遮罩策略仍保留为后续差距；6—8 已由 V5 实现，9—11 的后续补齐见第 11 节。内嵌 Tab 不因 USN 的动态 Sheet 工作流而被替代。Analyzer、诊断分析和 Replace 仍不引入。
 
 用户选择后：定稿选中契约 → 重构核心与 Godot → 迁移受影响的生成器入口 → 更新游戏 UI Demo/操作说明 → 核心行为与故障测试、引擎验证 → 更新本文并自动本地提交。不保留旧加载接口转发兼容层。
 
@@ -1285,3 +1285,71 @@ Demo 使用已有设置内嵌页面验证名称选择与单次即时切换，背
 - Demo 的内页初始化使用 playAnimation:false；偏好 Audio→Graphics 的进入使用缩放淡入，其他切换淡入淡出；背包列表/详情按推进和返回阶段组合滑动/淡入淡出，涉及手记时淡入淡出。自测验证即时切换，日常交互保留动画，不添加技术按钮。
 - 偏好与手记原生截图已目视检查，无新增素材；复用既有已许可资源。日志与截图保存在被忽略的 artifacts，工具和构建产物不入库。
 - 未验证全部分辨率、实体手柄、导出平台与其他引擎。Godot 资源加载仍同步；预加载、动态 Tab、其他 USN 差距继续待定。本次只读守卫约束框架变更，不能阻止闭包直接修改项目自己的状态，选择函数应保持纯查询。
+
+## 11. 对比 USN 补齐动画能力（2026-10-02）
+
+用户授权先对比 USN 补全动画能力。本轮已实现 9、10、11，继续沿用已实现的 6、7、8 和自定义配方、Godot AnimationPlayer 接入。输入策略（12）、更多遮罩策略（13）、生命周期处理器顺序（15）及资源流程等继续待定，不因本次授权混入。实际验收见 11.5，不新建未指定的版本文档。
+
+### 11.1 调研与取舍
+
+核对 USN master 的 [README](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/README.md)、[Page.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Page/Page.cs)、[SimpleTransitionAnimationObject.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/SimpleTransitionAnimationObject.cs)、[SimpleTransitionAnimationBehaviour.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/SimpleTransitionAnimationBehaviour.cs) 和 [SheetAlignment.cs](https://github.com/Haruma-K/UnityScreenNavigator/blob/master/Assets/UnityScreenNavigator/Runtime/Core/Shared/SheetAlignment.cs)。只作官方文档/源码审计，未运行 USN 项目。
+
+| USN 动画能力 | 本工程对应 |
+| --- | --- |
+| 默认、逐页、阶段和伙伴页面选择 | 既有 Context/Container/Node 配方继承与唯一 Transitions.Select；不复制配置槽或正则规则表 |
+| playAnimation 单次开关 | 既有容器及生成 API，false 不选择/创建/播放配方 |
+| RenderingOrder | 新增 Node.TransitionOrder，转场期间比较源/目标优先级并在结束恢复原显示顺序 |
+| 简单动画的 Delay/Duration/Ease、Before/After 位置/缩放/透明度 | GodotTransitionFrame + GodotTransitions.Simple；预设同样接受 delay/transition/ease |
+| Left/Top/Right/Bottom/Center 对齐 | RelativeOffset 使用目标原始 Size 的倍数，任意二维位置即可覆盖五种方向，无需再建立枚举；Godot 向下为正 Y |
+| IsTransitioning、动画类型、进度与通知 | Node 的 IsTransitioning、CurrentTransitionPhase、TransitionProgress、TransitionState 和 TransitionChanged |
+| 自定义伙伴动画与 Timeline | IUITransition/IUITransitionRun + Source/Target，自定义进度通过 context.ReportProgress；Godot AnimationPlayer 是当前后端的编辑器动画对应能力 |
+
+SimpleTransitionAnimationObject 当前源码 Duration 返回 _duration，而 Behaviour 返回 _delay + _duration，二者不一致；不照搬这个细节。本工程等待总时长严格为 delay + duration。Unity Inspector/Timeline 组件与完整 Unity 适配不在交付范围，不能宣称所有 USN 编辑器功能已覆盖。Godot 使用 [Tween.InterpolateValue](https://docs.godotengine.org/en/stable/classes/class_tween.html#class-tween-method-interpolate-value) 计算缓动，不为同一 Control 属性并行创建多个引擎 Tween。
+
+### 11.2 绘制顺序
+
+`UINode.TransitionOrder` 为同步可配置 int，默认 0；源/目标值不同，高值临时置前，相同时保持 Stack Push 目标置前、Pop/PopTo 源置前、Tab 目标置前的现有行为。值与配方一样在进入/退出准备前冻结。单侧转场没有另一侧可比较，Modal 的稳定叠层与遮罩顺序不因此改变。它只解决转场重叠表现，不建立全局 UI 层级、项目固定枚举或永久绘制优先级。playAnimation:false 不捕获/修改/恢复仅用于动画的临时顺序。
+
+例如详情页配置 TransitionOrder=10，手记页默认 0，详情推进手记时详情保持在上方淡出，露出已经准备的手记；动画结束恢复原 sibling 顺序。成功、取消、选择/Create/播放/恢复失败继续沿用原异常及清理协议，不隐藏排序失败。
+
+### 11.3 Godot 简单动画
+
+`GodotTransitionFrame` 为不可变记录，包含 Offset（像素偏移）、RelativeOffset（目标当前 Size 倍数）、Scale（Vector2，默认 One）、Alpha（默认 1）。位移对捕获的原四边锚点偏移量加同一向量，并恢复原偏移量，不保存/恢复可能仍受布局调整的绝对 Position；RelativeOffset 和中心 pivot 使用当前 Size，跟随布局/窗口尺寸变化，避免动态 VBoxContainer 在首帧布局未稳定时漂移或扩张。缩放/透明度乘以原 Scale/Modulate.A，保留美术资源原值；Scale 改变时临时采用中心 pivot，结束恢复原 pivot。Offset 与 RelativeOffset 可以叠加；没有改变的属性轨道不写入，避免影响布局或业务 tint。
+
+```csharp
+var neutral = new GodotTransitionFrame();
+var enter = GodotTransitions.Simple(
+    neutral with { Offset = new Vector2(0, 16), Scale = Vector2.One * .96f, Alpha = 0 },
+    neutral, duration: .20, delay: .03, targetPath: "Center",
+    transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
+var exit = GodotTransitions.Simple(neutral, neutral with { Alpha = 0 }, duration: .12, targetPath: "Center");
+node.Transition = Transitions.Select(c => c.Entering ? enter : exit);
+```
+
+Simple 的 from/to 明确表达时间起止，不自动根据 Entering 反转；阶段分支仍由唯一 Select 表达。Fade/SlideHorizontal/ScaleFade 保留便捷调用，追加 delay、transition（默认 Cubic）、ease（默认 InOut）；SlideHorizontal 继续要求 Stack 方向，Simple 则可用于任意容器的上下/左右移动。选择所需 Tween 枚举属于后端参数，不进入渲染无关核心。
+
+时长/延迟必须有限且非负，总和有限；零时长也等待明确的延迟，然后到达终点。帧参数必须有限，Alpha 在 0..1，Scale 允许零或负值表达折叠和镜像；路径/缓动枚举无效直接报错。缓动可能合法越过端点（如 Back/Elastic），动画进度仍按时间单调报告；不以缓动值作为进度。移动/缩放目标不能直接受 Godot Container 布局控制，仍需包装层。自定义终点是临时动画表现，框架完成和失败时都恢复捕获基线，不用它永久修改资源样式。
+
+AnimationPlayer 继续要求非循环、未被其他播放占用的动画，新增正且有限的 SpeedScale 校验、进度报告和 AnimationFinished 完成确认。播放中被停止、换片段或速度非法直接失败，不把提前停止当成功。副作用仍由项目 restore 回调处理，不承诺自动撤销方法/音频轨道。
+
+### 11.4 运行状态与观察
+
+Node 提供 `bool IsTransitioning`、`TransitionPhase? CurrentTransitionPhase`、`float TransitionProgress`、`TransitionState? TransitionState` 和同步 `event Action<TransitionState> TransitionChanged`。快照包含 Context、Stage、Progress、IsRunning。Stage 为 Preparing、Playing、Completed、Canceled、Failed；阶段仍使用已有六种 TransitionPhase。没有进度条服务或诊断分析系统。
+
+进入/退出准备前发布 Preparing(0)，选择失败也结束为 Failed；动画执行前发布 Playing(0)，后端按时间报告中间进度。配方和表现恢复成功后发布 Completed(1)；准备/播放/恢复/观察失败和取消保持最后进度，并明确发布 Failed/Canceled，不假装完成。状态在动画流程结束时结束，不包含资源加载、提交后的业务通知或销毁等待，也不表示整个容器操作已经成功；最终结果仍以 await 容器 API 为准。新资源初始化时尚未进入转场，HasEntered 与转场信息分别承担生命周期与动画职责。
+
+playAnimation:false 仍有 Preparing→Completed，以便外部观察切换准备；没有 Playing 或中间动画进度，必要生命周期仍可等待。没有显示变化的已显示 Single 重开不发布新转场。终态保留最后快照/进度供查询，IsTransitioning=false、CurrentTransitionPhase=null；新一轮重新从 0 开始。
+
+自定义 IUITransitionRun 使用 `context.ReportProgress(float)` 报告 0..1 的有限单调时间值，不得在选择/准备/终态后报告。未报告中间值的自定义配方只提供开始和最终完成，不伪造平滑进度；框架管理的上下文在结束后拒绝过期报告。手动构造 Context 用于独立执行配方时，没有框架状态观察者，但参数与宿主访问仍校验。
+
+观察回调同步且只读框架状态，可以更新项目自己的渲染装饰；不能从回调改框架配置或嵌套容器操作。回调异常记录并传播，使尚未提交的操作失败并恢复；结束回调失败不能掩盖先前播放失败，附加原异常通过 UIFailure 查询且记录。各动画项分别提供状态，不把两个并行动画或资源等待加权成虚构的整体百分比。
+
+### 11.5 Demo 与验收
+
+Demo 使用真实设置、偏好、背包与手记流程：设置采用上移/缩放/淡入组合与短延迟；Audio→Graphics 使用 Back Out 缓动；详情保持在手记上方淡出，手记轻微上移淡入；背包外壳 Hint 随详情动画进度淡化，终态恢复。无新技术按钮、诊断面板或 Gameplay，复用既有已许可素材。
+
+- 解决方案构建 0 警告、0 错误；核心与生成器 **127 项测试通过**（原 108 项 + 19 项运行状态、进度、观察失败和绘制顺序用例）。覆盖状态重置、取消/准备/播放/恢复失败、原始异常及附加清理失败、只读观察守卫、非法/倒退/过期进度、源/目标排序与冻结、false 不操作临时顺序。
+- Godot 4.7.2 .NET 的 headless 与原生 OpenGL 自测均通过 **19 场景**（原 15 + 4 动画流程）。实际断言像素/相对偏移、起止缩放/镜像与 alpha、零时长加延迟、线性/Quart Out 采样、中间状态、AnimationPlayer 进度、延迟取消恢复、兄弟顺序和外壳装饰恢复；无效时长/延迟/枚举/帧参数直接记录并抛出。
+- **22 个独立故障夹具**均记录预期异常并退出 1；原 18 项加 animation-parameters、animation-progress、animation-observer、animation-interrupted。分别覆盖无效配置、非法报告、观察回调原始 IOException 和编辑器动画提前停止；没有默认配方回退、静默成功或无观察的异步失败。
+- 原生截图检查发现动态 VBoxContainer 的位移动画曾因保存绝对 Position 破坏锚点布局，已按 11.3 重构为锚点偏移播放/恢复，并加入手记位置归零、大小与挂载匹配的实际引擎回归断言。设置、手记、偏好最终原生截图已目视检查；截图、日志、构建产物和工具不入库。
+- 仅核对 USN 官方文档/源码，未运行其 Unity 项目；没有交付 Unity Timeline/Inspector 适配。未验证所有分辨率、实体手柄、导出平台或其他引擎；不将 Godot 验收当作所有后端能力已完成。资源加载仍同步。

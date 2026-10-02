@@ -132,6 +132,30 @@ public partial class DemoApp : Control
             window.DismissRequested = _ => Task.FromException(new IOException("Intentional original backdrop dismiss exception."));
             await Modals.RequestDismissAsync();
         }
+        else if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--failure-animation-")))
+        {
+            var mode = OS.GetCmdlineUserArgs().Single(a => a.StartsWith("--failure-animation-"));
+            if (mode == "--failure-animation-parameters")
+                GodotTransitions.Simple(new GodotTransitionFrame { Alpha = float.NaN }, new GodotTransitionFrame());
+            else if (mode == "--failure-animation-interrupted")
+            {
+                _ui.Register<InterruptedAnimationNode>("res://Scenes/Settings/Graphics.tscn");
+                await _stage.OpenAsync<InterruptedAnimationNode>();
+            }
+            else
+            {
+                _ui.Register(() =>
+                {
+                    var node = new UINode();
+                    if (mode == "--failure-animation-progress") node.Transition = new InvalidProgressTransition();
+                    else if (mode == "--failure-animation-observer") node.TransitionChanged += s =>
+                    { if (s.Stage == TransitionStage.Playing) throw new IOException("Intentional original animation observer exception."); };
+                    else throw new ArgumentException(mode);
+                    return node;
+                }, "res://Scenes/Settings/Graphics.tscn");
+                await _stage.OpenAsync<UINode>();
+            }
+        }
         else if (OS.GetCmdlineUserArgs().Any(a => new[] { "--failure-selector", "--failure-selector-null", "--failure-selector-cycle" }.Contains(a)))
         {
             var mode = OS.GetCmdlineUserArgs().Single(a => a.StartsWith("--failure-selector"));
@@ -431,10 +455,11 @@ public partial class DemoApp : Control
         GD.Print("PASS V3 hidden close: subtree released, next open creates fresh window");
 
         await RunTransitionSelectionSelfTestAsync();
+        await RunAnimationCapabilitySelfTestAsync();
         await CancelLoadingAsync();
         await _ui.DisposeAsync();
         Check(_ui.Root.Children.Count == 0, "Root cleanup left children.");
-        GD.Print("GODOT DEMO SELF-TEST PASSED (15 scenarios)");
+        GD.Print("GODOT DEMO SELF-TEST PASSED (19 scenarios)");
         _exiting = true;
         GetTree().Quit(0);
     }
@@ -480,6 +505,117 @@ public partial class DemoApp : Control
         var dialog = Modals.ShowConfirmViewAsync(playAnimation: false); ((ConfirmView)Modals.Current!).Complete(false);
         Check(!await dialog && Modals.Current == null, "Generated instant dialog failed to return the explicit cancel result.");
         GD.Print("PASS V5 modal: instant shared/per-modal dim, lifecycle/input/cleanup, generated dialog result");
+    }
+
+    private async Task RunAnimationCapabilitySelfTestAsync()
+    {
+        await OpenPreferencesAsync(); var preferences = (PreferencesView)_scenario!;
+        var audio = preferences.Tabs.Items["Audio"]; var control = audio.GetControl();
+        var position = control.Position; var scale = control.Scale; var pivot = control.PivotOffset; var tint = control.Modulate;
+        var neutral = new GodotTransitionFrame();
+        var start = neutral with { Offset = new Vector2(0, 20), Scale = Vector2.One * .9f, Alpha = .2f };
+        audio.Transition = GodotTransitions.Simple(start, neutral, duration: .4, delay: .2, transition: Tween.TransitionType.Linear);
+        var states = new List<TransitionState>(); audio.TransitionChanged += states.Add;
+        var switching = preferences.SelectAsync("Audio");
+        Check(audio.IsTransitioning && audio.CurrentTransitionPhase == TransitionPhase.Enter
+            && control.Position.IsEqualApprox(position + start.Offset) && control.Scale.IsEqualApprox(scale * .9f)
+            && Mathf.IsEqualApprox(control.Modulate.A, tint.A * .2f), "Simple initial pose or public state.");
+        await WaitUntilAsync(() => audio.TransitionProgress > 0);
+        var active = Mathf.Clamp((audio.TransitionProgress * .6f - .2f) / .4f, 0, 1);
+        Check(control.Position.IsEqualApprox(position + start.Offset * (1 - active))
+            && control.Scale.IsEqualApprox(scale * Mathf.Lerp(.9f, 1, active))
+            && Mathf.IsEqualApprox(control.Modulate.A, tint.A * Mathf.Lerp(.2f, 1, active)), "Delay/time/linear interpolation mismatch.");
+        await switching;
+        Check(!audio.IsTransitioning && audio.TransitionState!.Stage == TransitionStage.Completed && audio.TransitionProgress == 1
+            && control.Position == position && control.Scale == scale && control.PivotOffset == pivot && control.Modulate == tint,
+            "Simple animation did not restore authored presentation.");
+        Check(states.Any(s => s.Stage == TransitionStage.Preparing) && states.Count(s => s.Stage == TransitionStage.Playing) > 2,
+            "Animation state did not publish intermediate progress.");
+        audio.TransitionChanged -= states.Add; audio.Transition = null;
+        GD.Print("PASS animation parameters: delay, pixel offset, scale/alpha, linear progress and restoration");
+
+        var frame = neutral with { RelativeOffset = new Vector2(-1, 1), Offset = new Vector2(3, -4), Scale = new Vector2(.8f, -1.1f), Alpha = .4f };
+        var lifecycle = new LifecycleContext(audio, preferences.Tabs, LifecycleReason.Switch, null, audio);
+        var instant = GodotTransitions.Simple(neutral, frame, duration: 0).Create(new(lifecycle, true, TransitionDirection.None));
+        await instant.PlayAsync(CancellationToken.None);
+        Check(control.Position.IsEqualApprox(position + frame.RelativeOffset * control.Size + frame.Offset)
+            && control.Scale.IsEqualApprox(scale * frame.Scale) && Mathf.IsEqualApprox(control.Modulate.A, tint.A * frame.Alpha),
+            "Simple final relative pose.");
+        instant.Restore(); Check(control.Position == position && control.Scale == scale && control.Modulate == tint, "Simple endpoint restoration.");
+        var delayed = GodotTransitions.Simple(neutral, frame, duration: 0, delay: .10).Create(new(lifecycle, true, TransitionDirection.None));
+        var delayedPlay = delayed.PlayAsync(CancellationToken.None);
+        Check(!delayedPlay.IsCompleted && control.Position == position, "Zero-duration animation ignored its explicit delay.");
+        await delayedPlay; delayed.Restore();
+        void Reject<T>(Action configure) where T : Exception
+        {
+            try { configure(); }
+            catch (T) { return; } // The exact expected configuration error is asserted; the adapter already logs it.
+            throw new InvalidOperationException($"Expected {typeof(T).Name} for invalid animation configuration.");
+        }
+        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(duration: -1));
+        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(delay: double.NaN));
+        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Fade(transition: (Tween.TransitionType)999));
+        Reject<ArgumentNullException>(() => GodotTransitions.Simple(null!, neutral));
+        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Simple(neutral with { RelativeOffset = new Vector2(float.PositiveInfinity, 0) }, neutral));
+        Reject<ArgumentOutOfRangeException>(() => GodotTransitions.Simple(neutral with { Scale = new Vector2(float.NaN, 1) }, neutral));
+        var easingChecks = 0;
+        var eased = GodotTransitions.Simple(neutral with { Offset = new Vector2(100, 0) }, neutral,
+            duration: .2, transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
+        audio.Transition = eased;
+        void VerifyEase(TransitionState s)
+        {
+            if (s.Stage != TransitionStage.Playing || s.Progress <= 0 || s.Progress >= 1) return;
+            var factor = 1 - Mathf.Pow(1 - s.Progress, 4);
+            // Native easing uses double time; public progress is float. Allow sub-pixel rounding, not a different curve.
+            Check(control.Position.DistanceTo(position + new Vector2(100 * (1 - factor), 0)) < .001f,
+                $"Selected easing mismatch: progress={s.Progress}, actual={control.Position}, expected={position + new Vector2(100 * (1 - factor), 0)}.");
+            easingChecks++;
+        }
+        audio.TransitionChanged += VerifyEase; await preferences.SelectAsync("Graphics");
+        audio.TransitionChanged -= VerifyEase; audio.Transition = null; Check(easingChecks > 0, "No native intermediate easing samples.");
+        GD.Print("PASS animation frames: relative endpoints, zero duration, Quart Out easing and independent runs");
+
+        var graphics = preferences.Tabs.Items["Graphics"]; var player = new AnimationPlayer { Name = "CapabilityAnimator" };
+        graphics.GetControl().AddChild(player); var library = new AnimationLibrary();
+        library.AddAnimation("enter", new Animation { Length = .12 }); library.AddAnimation("exit", new Animation { Length = .12 });
+        player.AddAnimationLibrary("", library);
+        graphics.Transition = GodotTransitions.Animation("CapabilityAnimator", "enter", "exit", _ => { });
+        var clipStates = new List<TransitionState>(); graphics.TransitionChanged += clipStates.Add;
+        await preferences.SelectAsync("Audio");
+        Check(clipStates.Any(s => s.Stage == TransitionStage.Playing && s.Progress > 0 && s.Progress < 1)
+            && graphics.TransitionState!.Stage == TransitionStage.Completed && !player.IsPlaying(), "AnimationPlayer progress/completion.");
+        graphics.TransitionChanged -= clipStates.Add; graphics.Transition = null; player.QueueFree();
+        var graphicsControl = graphics.GetControl(); var graphicsPosition = graphicsControl.Position;
+        graphics.Transition = GodotTransitions.Simple(neutral with { Offset = new Vector2(0, 30), Alpha = 0 }, neutral, duration: .2, delay: 1);
+        using (var cancel = new CancellationTokenSource())
+        {
+            var pending = preferences.SelectAsync("Graphics", token: cancel.Token); cancel.Cancel();
+            await ExpectCancellationAsync(pending);
+            Check(graphics.TransitionState!.Stage == TransitionStage.Canceled && !graphics.IsTransitioning
+                && preferences.Tabs.CurrentName == "Audio" && audio.IsInteractive && graphicsControl.Position == graphicsPosition,
+                "Canceled delayed animation leaked state, position or changed selection.");
+        }
+        graphics.Transition = null;
+        GD.Print("PASS animation clips: native AnimationPlayer progress and observed completion");
+
+        await OpenInventoryAsync(); var stack = ((InventoryWindowView)_scenario!).Body;
+        var details = await stack.PushDetailsViewAsync(); var sorted = false;
+        void VerifyOrder(TransitionState s)
+        {
+            if (s.Stage != TransitionStage.Playing || s.Context.Target is not ProvenanceView notes) return;
+            Check(details.GetControl().GetIndex() > notes.GetControl().GetIndex(), "Detail page did not remain above entering field notes.");
+            sorted = true;
+        }
+        details.TransitionChanged += VerifyOrder; var notesPage = await stack.PushProvenanceViewAsync();
+        details.TransitionChanged -= VerifyOrder;
+        Check(sorted && notesPage.GetControl().GetIndex() > details.GetControl().GetIndex(), "Temporary drawing order was not restored.");
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var noteControl = notesPage.GetControl(); var noteMount = noteControl.GetParent<Control>();
+        Check(noteControl.Visible && noteControl.Modulate.A == 1 && noteControl.Position.IsEqualApprox(Vector2.Zero)
+            && noteControl.Size.IsEqualApprox(noteMount.Size), "Anchored field notes drifted or expanded after animation.");
+        Check(Mathf.IsEqualApprox(((InventoryWindowView)_scenario!).GetControl<Label>("Actions/Hint").Modulate.A, 1), "Exterior caption did not restore after progress animation.");
+        await stack.PopToAsync(stack.History[0]);
+        GD.Print("PASS animation drawing: detail reveals notes beneath, sibling and exterior caption restoration");
     }
 
     private async Task RunAdapterSelfTestAsync()
@@ -589,6 +725,28 @@ public partial class DemoApp : Control
         GD.Print("PASS V4 native animations: slide directions, tint/position/scale restoration, cancellation, AnimationPlayer");
     }
 
+    private sealed class InvalidProgressTransition : IUITransition
+    {
+        public IUITransitionRun Create(TransitionContext context) => new Run(context);
+        private sealed class Run(TransitionContext context) : IUITransitionRun
+        {
+            public Task PlayAsync(CancellationToken token) { context.ReportProgress(2); return Task.CompletedTask; }
+            public void Restore() { }
+        }
+    }
+    private sealed class InterruptedAnimationNode : UINode
+    {
+        protected override Task OnInitializeAsync(CancellationToken token)
+        {
+            var player = new AnimationPlayer { Name = "InterruptedAnimator" }; this.GetControl().AddChild(player);
+            var library = new AnimationLibrary();
+            library.AddAnimation("enter", new Animation { Length = 1 }); library.AddAnimation("exit", new Animation { Length = 1 });
+            player.AddAnimationLibrary("", library);
+            Transition = GodotTransitions.Animation("InterruptedAnimator", "enter", "exit", _ => { });
+            TransitionChanged += s => { if (s.Stage == TransitionStage.Playing && s.Progress > 0) player.Stop(); };
+            return Task.CompletedTask;
+        }
+    }
     private sealed class AdapterFadeNode : UINode
     {
         protected override Task OnInitializeAsync(CancellationToken token)

@@ -11,12 +11,33 @@ internal static class TransitionFlow
         // Freeze recipes before business preparation; execution state is created afterwards.
         var exitContext = exit == null ? null : new TransitionContext(exit, false, direction);
         var enterContext = enter == null ? null : new TransitionContext(enter, true, direction);
+        var items = new[] { exitContext, enterContext }.Where(item => item != null).Cast<TransitionContext>().ToArray();
+        var sourceOrder = exit?.Node.TransitionOrder ?? 0;
+        var targetOrder = enter?.Node.TransitionOrder ?? 0;
         IUITransition Resolve(TransitionContext item) => context.Query(
             () => Transitions.Resolve(item.Node.Transition ?? container.ChildTransition ?? context.DefaultTransition, item),
             $"Select transition {item.Node.GetType().Name}/{item.Node.Name} ({item.Node.Id}) {item.Phase}");
         var runs = new List<IUITransitionRun>();
         var orders = new List<(IUIElement Element, object Order)>();
         var restoreCount = 0;
+        void Finish(TransitionStage stage, Exception? primary)
+        {
+            Exception? failure = primary;
+            foreach (var item in items)
+            {
+                item.SetProgressReporter(null);
+                try
+                {
+                    item.Node.PublishTransition(item, stage, stage == TransitionStage.Completed ? 1 : item.Node.TransitionProgress);
+                }
+                catch (Exception ex)
+                {
+                    context.Report(ex, "Finish transition notification");
+                    if (failure == null) failure = ex; else if (!ReferenceEquals(ex, failure)) UIFailure.AddSecondary(failure, ex);
+                }
+            }
+            if (primary == null && failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+        }
         void Restore(Exception? primary)
         {
             Exception? failure = primary;
@@ -36,6 +57,11 @@ internal static class TransitionFlow
         }
         try
         {
+            foreach (var item in items)
+            {
+                item.SetProgressReporter(null);
+                item.Node.PublishTransition(item, TransitionStage.Preparing, 0);
+            }
             var exitRecipe = playAnimation && exitContext != null ? Resolve(exitContext) : null;
             var enterRecipe = playAnimation && enterContext != null ? Resolve(enterContext) : null;
             if (exit != null) await exit.Node.PrepareExitAsync(exit, token);
@@ -45,6 +71,7 @@ internal static class TransitionFlow
             {
                 enter?.Node.StageVisibility(true);
                 exit?.Node.StageVisibility(false);
+                Finish(TransitionStage.Completed, null);
                 return;
             }
             foreach (var node in new[] { exit?.Node, enter?.Node })
@@ -57,8 +84,26 @@ internal static class TransitionFlow
                     ?? throw new InvalidOperationException("Transition factory returned null."));
                 enter.Node.StageVisibility(true);
             }
-            if (direction == TransitionDirection.Backward) exit?.Node.Element?.BringToFront();
+            if (exit != null && enter != null && sourceOrder != targetOrder)
+            {
+                if (sourceOrder > targetOrder) exit.Node.Element?.BringToFront();
+                else enter.Node.Element?.BringToFront();
+            }
+            else if (direction == TransitionDirection.Backward) exit?.Node.Element?.BringToFront();
             else enter?.Node.Element?.BringToFront();
+
+            foreach (var item in items)
+            {
+                item.SetProgressReporter(progress =>
+                {
+                    if (item.Node.TransitionState?.Stage != TransitionStage.Playing)
+                        throw new InvalidOperationException("Progress can only be reported during playback.");
+                    if (progress < item.Node.TransitionProgress)
+                        throw new InvalidOperationException("Transition progress cannot move backwards.");
+                    if (progress != item.Node.TransitionProgress) item.Node.PublishTransition(item, TransitionStage.Playing, progress);
+                });
+                item.Node.PublishTransition(item, TransitionStage.Playing, 0);
+            }
 
             using var cancel = CancellationTokenSource.CreateLinkedTokenSource(token);
             Exception? first = null;
@@ -81,10 +126,12 @@ internal static class TransitionFlow
             token.ThrowIfCancellationRequested();
             exit?.Node.StageVisibility(false);
             Restore(null);
+            Finish(TransitionStage.Completed, null);
         }
         catch (Exception ex)
         {
             Restore(ex);
+            Finish(ex is OperationCanceledException ? TransitionStage.Canceled : TransitionStage.Failed, ex);
             throw;
         }
     }

@@ -18,6 +18,8 @@ V4 增加转场配置、独立执行状态、源/目标并行动画及共享/逐
 
 V5 增加逐次 playAnimation 开关与统一的 Transitions.Select 包装函数，阶段及来源条件由普通 C# 表达；实际契约与验收见设计文档第 10.6、10.7 节。
 
+后续对照 USN 补齐转场绘制优先级、延迟/缓动/起止帧参数及运行状态/进度通知，实际契约与验收集中于设计文档第 11 节。
+
 ## 运行
 
 需要 .NET 10 SDK 和 Godot 4.7.2 .NET。下载的便携引擎放在 `.tools`，不进入项目源码，也不修改系统安装。
@@ -158,6 +160,27 @@ stack.ChildTransition = Transitions.Select(context => context.Phase switch
 固定配方直接赋值。动态选择只使用 `Transitions.Select(Func<TransitionContext, IUITransition>)`，可按 Phase、Source/Target 的类型或名称、业务状态分支。选择函数同步且只读；进入/退出准备前解析一次，准备后创建执行对象。函数抛错、返回 null 或循环选择均记录并传播错误，不改用其他配方。
 
 Panel Open/Show/Hide/Close、Stack Push/Pop/PopTo、Tab Switch、Modal Open/Close/ShowDialog 均支持默认 true 的 playAnimation，生成的类型化 API 同步透传。false 跳过选择和动画运行，遮罩即时显隐，仍等待资源、生命周期和清理；ShowDialog 的开场及关闭使用同一开关。业务参数与 CancellationToken 建议按名传入，取消参数名称为 cancellationToken。
+
+## 动画参数、顺序与运行信息
+
+```csharp
+var neutral = new GodotTransitionFrame();
+var enter = GodotTransitions.Simple(
+    neutral with { Offset = new Vector2(0, 16), Scale = Vector2.One * .96f, Alpha = 0 },
+    neutral, duration: .20, delay: .03, targetPath: "Center",
+    transition: Tween.TransitionType.Quart, ease: Tween.EaseType.Out);
+var exit = GodotTransitions.Simple(neutral, neutral with { Alpha = 0 }, duration: .12, targetPath: "Center");
+node.Transition = Transitions.Select(c => c.Entering ? enter : exit);
+
+node.TransitionOrder = 10; // 与另一项比较，高值在转场期间显示于上方。
+node.TransitionChanged += state => UpdateExteriorDecoration(state);
+```
+
+Simple 的 from/to 是明确的起止帧，不自动反转；Offset 是像素位移，RelativeOffset 是当前目标 Size 倍数，Scale/Alpha 乘以资源原值。Fade、SlideHorizontal、ScaleFade 同样支持 delay、transition、ease。位移播放和恢复使用原锚点偏移，保留布局与窗口尺寸变化；缩放恢复原 pivot。配置无效直接报错，所有表现均在完成或失败后恢复。
+
+Node 提供 IsTransitioning、CurrentTransitionPhase、TransitionProgress 和包含 Context/Stage/Progress 的 TransitionState 快照。Stage 区分 Preparing/Playing/Completed/Canceled/Failed；自定义运行对象通过 `context.ReportProgress(value)` 报告有限且单调的 0..1 动画时间。进度包含动画延迟，不包含资源加载；自定义配方不报告时只提供起止信息，未伪造中间值。false 操作为 Preparing→Completed，没有动画播放阶段。
+
+观察回调同步且只读框架，可以调整项目自己的装饰表现；异常继续传播。动画完成不代表提交后通知和清理已成功，最终结果仍以 await 容器 API 为准。此处提供运行能力，没有引入诊断分析系统。遮罩策略和输入策略继续使用原有契约，本次没有扩展。
 
 - 初始化一次；进入/退出可重复；隐藏保留实例，销毁结束子树。
 - 栈保留覆盖项，出栈销毁；Tab 保留所有绑定项；独立面板按实例关闭。

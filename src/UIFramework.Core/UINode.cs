@@ -38,6 +38,25 @@ public class UINode : IAsyncDisposable
     public bool IsActive => CommittedVisible && _interactive && Context.AllowsInput(this) && (Parent?.IsActive ?? true);
     public bool IsInteractive => IsVisible && IsActive && !_inputLocked && (Parent?.IsInteractive ?? true);
     public CancellationToken Lifetime => _lifetime.Token;
+    private int _transitionOrder;
+    /// <summary>Higher values draw on top during paired transitions; equal values use the container's default.</summary>
+    public int TransitionOrder
+    {
+        get => _transitionOrder;
+        set { try { _context?.Host.VerifyAccess(); _context?.VerifyMutation(); _transitionOrder = value; }
+            catch (Exception ex) { ReportFailure(ex, "Configure transition order"); throw; } }
+    }
+    public TransitionState? TransitionState { get; private set; }
+    public bool IsTransitioning => TransitionState?.IsRunning == true;
+    public TransitionPhase? CurrentTransitionPhase => IsTransitioning ? TransitionState!.Context.Phase : null;
+    public float TransitionProgress => TransitionState?.Progress ?? 0;
+    public event Action<TransitionState>? TransitionChanged;
+    internal void PublishTransition(TransitionContext context, TransitionStage stage, float progress)
+    {
+        var state = new TransitionState(context, stage, progress);
+        TransitionState = state;
+        Context.Notify(() => TransitionChanged?.Invoke(state), $"Transition {Name} ({Id}) {stage}");
+    }
     private IUITransition? _transition;
     /// <summary>Null explicitly inherits the managing container/context configuration.</summary>
     public IUITransition? Transition

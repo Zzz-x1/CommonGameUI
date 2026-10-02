@@ -31,6 +31,8 @@ V3 资源层级：`InventoryWindow.tscn` 是单实例窗口外壳，BodyMount �
 
 V5 使用 `Transitions.Select(context => ...)` 直接按 Phase 和 Source/Target 类型选择背包动画；偏好从 Audio 切到 Graphics 时进入页缩放淡入，其他名称切换淡入淡出。基础 Tab 页仍是 Node，未新增空 View 类。内页首次显示使用 `playAnimation:false`，避免外壳和内部初始页叠加转场；后续玩家操作默认播放动画。自测通过同一 API 验证即时 Tab 切换、即时 PopTo 和两种遮罩的即时开关，不增加技术按钮。
 
+动画补齐：设置采用 Simple 的像素位移、缩放、透明度组合及短延迟；Audio→Graphics 使用 Back Out 缓动。详情的 TransitionOrder=10，手记默认 0，详情淡出时露出下方轻微上移淡入的手记；完成后恢复原 sibling 顺序。背包外壳 Hint 随详情的 TransitionChanged 进度淡化，终态恢复原 tint；它是实际界面装饰，不是进度诊断面板。位移恢复锚点偏移而不是尚未稳定的绝对位置，防止新加载 VBoxContainer 页面产生漂移。
+
 V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared)`。弹窗场景不再自带 ColorRect；资源根/全屏布局忽略鼠标，内容面板阻挡鼠标。设置的 DismissRequested 关闭窗口，确认的 DismissRequested 执行 Complete(false)；应用持有并观察点击产生的任务。逐层加深模式使用 PerModal，自测覆盖，日常演示选择共享模式。
 
 ## 自动验证
@@ -46,7 +48,7 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Capture -CaptureScene Dialogs
 ```
 
-自测覆盖原有 6 类流程、V3 的 3 类流程、V4 的共享遮罩/外部关闭/逐层遮罩，以及 V5 的偏好选择/背包阶段选择/即时模态，共 15 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (15 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。
+自测覆盖原有 6 类流程、V3 的 3 类流程、V4 的共享遮罩/外部关闭/逐层遮罩、V5 的偏好选择/背包阶段选择/即时模态，以及本轮帧参数/相对坐标与缓动/动画片段/绘制顺序，共 19 场景，成功输出 `GODOT DEMO SELF-TEST PASSED (19 scenarios)`，退出 0。验证显示对象没有克隆、窗口只初始化一次、历史目标和 Tab/选中项保持、中间项未再次进入且最终销毁；即时显示仍完成生命周期、输入交接和清理。
 
 适配器自测还验证服务替换、默认 Root、Control-only 基础节点、实例/所有权、取消、初始化原始失败和淡出后的转场恢复。预期取消及故意初始化失败仍打印原异常，测试明确断言，未当成技术故障忽略。取消加载保留在自测中，游戏菜单不包含技术测试按钮。
 
@@ -71,11 +73,23 @@ V4 遮罩：`Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMo
 ./scripts/Run-Demo.ps1 -Headless -Failure selector
 ./scripts/Run-Demo.ps1 -Headless -Failure selector-null
 ./scripts/Run-Demo.ps1 -Headless -Failure selector-cycle
+./scripts/Run-Demo.ps1 -Headless -Failure animation-parameters
+./scripts/Run-Demo.ps1 -Headless -Failure animation-progress
+./scripts/Run-Demo.ps1 -Headless -Failure animation-observer
+./scripts/Run-Demo.ps1 -Headless -Failure animation-interrupted
 ```
 
 同步信号成功时不创建空任务；信号错误进入统一帧观察入口。异步任务保存并观察，异常记录、重新抛出且结束失败运行，没有 async void 或 fire-and-forget 隐藏异常。
 
-## 验证记录：2026-10-02 / V5
+## 验证记录：2026-10-02 / 动画能力补齐
+
+- 构建 0 警告、0 错误；核心与生成器 127 项测试通过，新增运行状态、取消/异常、观察回调失败、进度范围/单调性及绘制优先级/冻结/恢复测试。
+- Godot headless 和原生 OpenGL 自测均通过 19 场景。新增像素/相对偏移、镜像缩放、透明度、延迟和零时长、Quart Out 采样、AnimationPlayer 中间进度、延迟取消恢复及节点排序的实际引擎断言。非法配置均明确断言原异常。
+- 22 个故障夹具均打印异常并退出 1；新增非法帧参数、非法进度、观察回调原始失败与 AnimationPlayer 被提前停止。
+- 手记截图发现的锚点布局漂移已通过偏移播放/恢复重构修复，并加入页面位置/大小与父挂载匹配的回归断言；原生设置、手记与偏好截图已目视检查。复用原素材，日志和截图不入库。
+- 未运行 USN 项目、验证所有分辨率、实体手柄、导出平台或其他引擎。没有新增输入/遮罩策略或生命周期处理器顺序；Godot 加载仍同步。
+
+## 历史验证记录：2026-10-02 / V5
 
 - 构建 0 警告、0 错误；核心与生成器 108 项测试通过，生成方法已编译执行验证参数、动画开关、取消和结果透传。
 - Godot headless 与原生 OpenGL 自测通过 15 场景；新增选择函数阶段/来源、即时内页、即时返回清理，以及 Shared/PerModal 即时遮罩的实际引擎断言。
