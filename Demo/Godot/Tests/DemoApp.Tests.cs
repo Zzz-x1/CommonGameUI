@@ -255,6 +255,7 @@ public partial class DemoApp
         var saved = new ClientStore(ProjectSettings.GlobalizePath("user://client-test/save.json"));
         Pass(saved.State.Gold == Store.State.Gold && saved.State.Levels[0] == Store.State.Levels[0], "client persisted");
         await RunAnimationBoundaryTestsAsync(Pass);
+        await RunInputAnimationTestsAsync(Pass);
         await RunRevealTestsAsync(Pass);
         await RunSourceBranchTestsAsync(Pass);
         await RunAdapterSelfTestAsync();

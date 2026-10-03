@@ -32,17 +32,18 @@ public abstract class ClientView : UINode
     {
         foreach (var button in Descendants(Root).OfType<Button>())
         {
+            var original = button.SelfModulate;
             void Animate(Color color)
             {
                 if (_feedback.Remove(button, out var previous))
                     previous.Kill();
                 var tween = Root.CreateTween();
-                tween.TweenProperty(button, "modulate", color, .12);
+                tween.TweenProperty(button, "self_modulate", color, .12);
                 _feedback[button] = tween;
             }
 
-            void Enter() => Animate(new Color(1.02f, 1.02f, .92f));
-            void Leave() => Animate(Colors.White);
+            void Enter() => Animate(original * new Color(1.02f, 1.02f, .92f));
+            void Leave() => Animate(original);
             button.MouseEntered += Enter;
             button.MouseExited += Leave;
             _disconnect.Add(() =>

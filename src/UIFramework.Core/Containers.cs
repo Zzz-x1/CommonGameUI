@@ -651,6 +651,7 @@ public class DialogNode<TResult> : UINode, IDialogResult
         try
         {
             Context.Host.VerifyAccess();
+            Context.VerifyMutation();
             if (State != NodeState.Ready || !IsInteractive) throw new InvalidOperationException("Dialog is not active.");
             if (!_result.TrySetResult(result)) throw new InvalidOperationException("Dialog already completed.");
         }

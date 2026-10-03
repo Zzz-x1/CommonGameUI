@@ -180,9 +180,23 @@ public partial class DemoApp : Control
         GetTree().Quit();
     }
 
+    private bool CanHandleGlobalInput
+    {
+        get
+        {
+            if (_exiting || Busy || SkipCinematic != null || Modals is not { IsInteractive: true })
+                return false;
+            if (Modals.Current != null)
+                return Modals.Current.IsInteractive;
+            if (Floating is not { IsInteractive: true })
+                return false;
+            return _login is { IsInteractive: true } || Shell is { IsInteractive: true } && Shell.Pages.IsInteractive;
+        }
+    }
+
     public override void _Notification(int what)
     {
-        if (what == NotificationWMCloseRequest && !_exiting && !Busy && SkipCinematic == null)
+        if (what == NotificationWMCloseRequest && CanHandleGlobalInput)
             Track(RequestQuitAsync());
     }
 
@@ -194,7 +208,7 @@ public partial class DemoApp : Control
 
     public override void _UnhandledKeyInput(InputEvent e)
     {
-        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && !Busy && SkipCinematic == null)
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && CanHandleGlobalInput)
         {
             Track(BackAsync());
             GetViewport().SetInputAsHandled();

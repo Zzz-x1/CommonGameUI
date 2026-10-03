@@ -215,4 +215,21 @@ public class LifecycleTests
         Assert.Contains(targetTransition.RestoreFailure, UIFailure.GetSecondaryExceptions(primary));
     }
 
+    [Fact] public async Task ReadOnlyLifecycleCannotCompleteDialogResult()
+    {
+        await using var ui = Create();
+        var modals = await Attach<ModalContainerNode>(ui);
+        var dialog = new BoolDialog();
+        dialog.AddLifecycle(new RecordingLifecycle { OnActive = _ => dialog.Complete(true) });
+        ui.Register(() => dialog);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => modals.OpenAsync<BoolDialog>());
+        Assert.Contains("Read-only callbacks", failure.Message);
+        Assert.Same(dialog, modals.Current);
+        Assert.True(dialog.IsInteractive);
+        // The rejected notification must not publish a result; an external event can still answer.
+        dialog.Complete(false);
+        await modals.CloseAsync(dialog);
+    }
+
 }
