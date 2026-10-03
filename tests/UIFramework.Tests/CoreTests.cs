@@ -54,13 +54,14 @@ public sealed class TestHost : IUIHost, IUILog, IUIResourceLoader
 public sealed class MemoryResource(TestHost host) : IUIResource
 {
     public int Disposals;
+    public Action? OnDispose;
     public Exception? InstantiateFailure, DisposeFailure;
     public IUIElement Instantiate(IUIElement? mount)
     {
         if (InstantiateFailure != null) throw InstantiateFailure;
         var element = new MemoryElement(); host.Loaded.Add(element); return element;
     }
-    public void Dispose() { Disposals++; if (DisposeFailure != null) throw DisposeFailure; }
+    public void Dispose() { Disposals++; OnDispose?.Invoke(); if (DisposeFailure != null) throw DisposeFailure; }
 }
 
 public class CounterView : UINode

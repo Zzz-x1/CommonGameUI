@@ -215,7 +215,13 @@ public sealed class UIContext : IAsyncDisposable
         Host.VerifyAccess(); VerifyMutation();
         // Root validates reentrant disposal before a context disposal task is retained.
         var root = Root.DisposeAsync();
-        return new ValueTask(_disposeTask ??= DisposeCoreAsync(root));
+        if (_disposeTask == null)
+        {
+            var completion = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _disposeTask = completion.Task.Unwrap();
+            completion.SetResult(DisposeCoreAsync(root));
+        }
+        return new ValueTask(_disposeTask);
     }
     private async Task DisposeCoreAsync(ValueTask root)
     {

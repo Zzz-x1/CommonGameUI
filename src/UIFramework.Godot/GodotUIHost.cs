@@ -28,7 +28,8 @@ public sealed class GodotUIHost : IUIHost, IUILog
         VerifyAccess();
         // A disappeared focus target is a normal condition after closing its owning screen.
         if (focus is Control control && GodotObject.IsInstanceValid(control) && !control.IsQueuedForDeletion()
-            && control.IsVisibleInTree() && control.FocusMode != Control.FocusModeEnum.None) control.GrabFocus();
+            && control.IsVisibleInTree() && control.FocusMode != Control.FocusModeEnum.None
+            && (control is not BaseButton button || !button.Disabled)) control.GrabFocus();
     }
     public void Error(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
 }

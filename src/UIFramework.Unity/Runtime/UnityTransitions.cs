@@ -139,11 +139,13 @@ namespace UIFramework.Unity
             public async Task PlayAsync(CancellationToken token)
             {
                 var host = (UnityUIHost)_context.Node.Context.Host;
-                await host.NextFrameAsync();
                 token.ThrowIfCancellationRequested();
                 _player[_name].wrapMode = WrapMode.ClampForever;
                 _player[_name].speed = 0;
                 _player.Play(_name);
+                _player[_name].time = 0;
+                _player.Sample();
+                _context.ReportProgress(0);
                 var started = Time.realtimeSinceStartupAsDouble;
                 float elapsed;
                 do

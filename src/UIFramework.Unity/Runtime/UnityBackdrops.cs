@@ -54,12 +54,13 @@ namespace UIFramework.Unity
             private async Task ChangeAsync(bool show, bool animate, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
-                _display.SetVisible(true);
+                var wasVisible = _display.Rect.gameObject.activeSelf;
                 var original = _group.alpha;
                 var start = Time.realtimeSinceStartupAsDouble;
                 Exception primary = null;
                 try
                 {
+                    _display.SetVisible(true);
                     float progress;
                     do
                     {
@@ -68,8 +69,14 @@ namespace UIFramework.Unity
                         _group.alpha = show ? progress : 1 - progress;
                         if (progress < 1) await _display.Host.NextFrameAsync();
                     } while (progress < 1);
+                    _display.SetVisible(show);
                 }
-                catch (Exception ex) { primary = ex; throw; }
+                catch (Exception ex)
+                {
+                    primary = ex;
+                    UnityUI.Cleanup(ex, () => _display.SetVisible(wasVisible));
+                    throw;
+                }
                 finally { UnityUI.Cleanup(primary, () => _group.alpha = original); }
             }
             public void Restore(bool visible) => _display.SetVisible(visible);

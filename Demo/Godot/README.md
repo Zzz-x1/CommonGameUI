@@ -44,6 +44,8 @@
 
 外壳使用 Panel，业务页面使用 Stack；返回 Pop，回大厅 PopTo。分类优先绑定已有实例并按名称 Switch，活动目标 Hide 保留实例。商店嵌套确认 CloseTo 原详情；确认结果使用 DialogNode<bool>；对比窗是两个独立实例。注册使用 Source Generator。没有新增核心路由、输入策略、动态 Tab 或动画编排机制。
 
+生成器的注册入口位于 `UIFramework.Generated`，类型化调用位于各节点所属业务命名空间；跨模块调用时导入对应命名空间，同名节点可使用限定的 `GeneratedUICalls` 静态调用或核心泛型 API。
+
 ## 动画制作
 
 在 Godot 编辑器选中场景内 `AnimationPlayer`，预览或编辑 `enter`／`exit`：

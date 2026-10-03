@@ -29,39 +29,47 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                     .Append(SymbolDisplay.FormatLiteral(node.Resource, true))
                     .Append(", windowMode: (global::UIFramework.WindowInstanceMode)").Append(node.WindowMode).Append(");\n");
             }
-            source.Append("}\n}\npublic static class GeneratedUICalls {\n");
-            foreach (var node in nodes)
+            source.Append("}\n}\n}\n");
+            foreach (var group in nodes.GroupBy(n => n.Symbol.ContainingNamespace, SymbolEqualityComparer.Default))
             {
-                var type = node.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var suffix = node.Symbol.Name;
-                ITypeSymbol? argumentType = null;
-                for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
-                    if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.UINode<TArgs>")
-                        argumentType = baseType.TypeArguments[0];
-                var argumentDeclaration = argumentType == null ? "" : argumentType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + " args, ";
-                var argumentCall = argumentType == null ? "null" : "args";
-                foreach (var pair in new[] { (Container: "StackContainerNode", Method: "Push"), (Container: "PanelContainerNode", Method: "Open"), (Container: "ModalContainerNode", Method: "Open") })
+                var scope = (INamespaceSymbol)group.Key!;
+                if (!scope.IsGlobalNamespace)
+                    source.Append("namespace ").Append(scope.ToDisplayString()).Append(" {\n");
+                source.Append("public static class GeneratedUICalls {\n");
+                foreach (var node in group)
                 {
-                    source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> ")
-                        .Append(pair.Method).Append(suffix).Append("Async(this global::UIFramework.").Append(pair.Container)
-                        .Append(" container, ").Append(argumentDeclaration).Append("bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.")
-                        .Append(pair.Method).Append("Async<").Append(type).Append(">(")
-                        .Append(argumentCall).Append(", playAnimation, cancellationToken);\n");
-                    if (pair.Container == "PanelContainerNode" && argumentType != null)
-                        source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> Open")
-                            .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
-                            .Append(type).Append(">(null, playAnimation, cancellationToken);\n");
-                }
-                for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
-                    if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.DialogNode<TResult>")
+                    var type = node.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var suffix = node.Symbol.Name;
+                    ITypeSymbol? argumentType = null;
+                    for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
+                        if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.UINode<TArgs>")
+                            argumentType = baseType.TypeArguments[0];
+                    var argumentDeclaration = argumentType == null ? "" : argumentType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + " args, ";
+                    var argumentCall = argumentType == null ? "null" : "args";
+                    foreach (var pair in new[] { (Container: "StackContainerNode", Method: "Push"), (Container: "PanelContainerNode", Method: "Open"), (Container: "ModalContainerNode", Method: "Open") })
                     {
-                        var resultType = baseType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                        source.Append("public static global::System.Threading.Tasks.Task<").Append(resultType).Append("> Show")
-                            .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
-                            .Append(type).Append(", ").Append(resultType).Append(">(null, playAnimation, cancellationToken);\n");
+                        source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> ")
+                            .Append(pair.Method).Append(suffix).Append("Async(this global::UIFramework.").Append(pair.Container)
+                            .Append(" container, ").Append(argumentDeclaration).Append("bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.")
+                            .Append(pair.Method).Append("Async<").Append(type).Append(">(")
+                            .Append(argumentCall).Append(", playAnimation, cancellationToken);\n");
+                        if (pair.Container == "PanelContainerNode" && argumentType != null)
+                            source.Append("public static global::System.Threading.Tasks.Task<").Append(type).Append("> Open")
+                                .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
+                                .Append(type).Append(">(null, playAnimation, cancellationToken);\n");
                     }
+                    for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
+                        if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.DialogNode<TResult>")
+                        {
+                            var resultType = baseType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                            source.Append("public static global::System.Threading.Tasks.Task<").Append(resultType).Append("> Show")
+                                .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
+                                .Append(type).Append(", ").Append(resultType).Append(">(null, playAnimation, cancellationToken);\n");
+                        }
+                }
+                source.Append("}\n");
+                if (!scope.IsGlobalNamespace) source.Append("}\n");
             }
-            source.Append("}\n}\n");
             output.AddSource("UIRegistration.g.cs", source.ToString());
         });
     }

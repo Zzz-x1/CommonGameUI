@@ -134,4 +134,22 @@ public class ResourceTests
         Assert.Same(error, await Assert.ThrowsAsync<IOException>(async () => await ui.DisposeAsync()));
         Assert.Single(host.Errors, e => ReferenceEquals(e, error));
     }
+    [Fact] public async Task ResourceReleaseSharesContextDisposalTask()
+    {
+        var (ui, host) = Create();
+        var lease = await ui.PreloadAsync<CounterView>();
+        var resource = Assert.Single(host.Resources);
+        var original = new IOException("Resource release failed.");
+        resource.DisposeFailure = original;
+        Task? repeated = null;
+        resource.OnDispose = () => repeated = ui.DisposeAsync().AsTask();
+
+        var disposal = ui.DisposeAsync().AsTask();
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => disposal));
+        Assert.Same(disposal, repeated);
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => repeated!));
+        Assert.Equal(1, resource.Disposals);
+        lease.Dispose();
+    }
+
 }

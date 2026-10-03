@@ -83,4 +83,61 @@ public class GeneratorTests
         var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         Assert.Equal(canceled.Token, failure.CancellationToken);
     }
+    [Fact] public async Task SameNamedNodesGenerateCallsInTheirBusinessNamespaces()
+    {
+        var code = """
+            using UIFramework;
+            using UIFramework.Generated;
+            [UIResource("global")] public class GlobalView : UINode { }
+            namespace Game.Lobby
+            {
+                [UIResource("lobby")] public class SettingsView : UINode { }
+                public static class Calls
+                {
+                    public static System.Threading.Tasks.Task<SettingsView> Open(PanelContainerNode windows) => windows.OpenSettingsViewAsync();
+                }
+            }
+            namespace Game.Battle
+            {
+                [UIResource("battle")] public class SettingsView : UINode { }
+                public static class Calls
+                {
+                    public static System.Threading.Tasks.Task<SettingsView> Open(PanelContainerNode windows) => windows.OpenSettingsViewAsync();
+                }
+            }
+            public static class Entry
+            {
+                public static async System.Threading.Tasks.Task Run(UIContext ui, PanelContainerNode windows)
+                {
+                    ui.RegisterGeneratedUI();
+                    var lobby = await Game.Lobby.Calls.Open(windows);
+                    var battle = await Game.Battle.Calls.Open(windows);
+                    var global = await windows.OpenGlobalViewAsync();
+                    if (lobby.GetType() != typeof(Game.Lobby.SettingsView) || battle.GetType() != typeof(Game.Battle.SettingsView)
+                        || global.GetType() != typeof(GlobalView)) throw new System.Exception("Wrong generated node type.");
+                }
+            }
+            """;
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path)).Cast<MetadataReference>().ToList();
+        references.Add(MetadataReference.CreateFromFile(typeof(UIContext).Assembly.Location));
+        var compilation = CSharpCompilation.Create("NamespaceCalls", new[] { CSharpSyntaxTree.ParseText(code) }, references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new UIResourceGenerator().AsSourceGenerator());
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        using var stream = new MemoryStream();
+        Assert.True(output.Emit(stream).Success);
+        var entry = System.Reflection.Assembly.Load(stream.ToArray()).GetType("Entry")!;
+        var host = new TestHost();
+        await using var ui = new UIContext(host, host, host);
+        var windows = new PanelContainerNode();
+        await windows.AttachAsync(ui.Root, "Windows", new MemoryElement());
+        await (Task)entry.GetMethod("Run")!.Invoke(null, new object[] { ui, windows })!;
+        Assert.Equal(3, windows.Children.Count);
+        Assert.Equal(3, host.Resources.Count);
+        Assert.Empty(host.Errors);
+    }
+
 }

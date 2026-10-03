@@ -276,57 +276,54 @@ public class UINode : IAsyncDisposable
         if (_disposeTask != null) return new ValueTask(_disposeTask);
         if (State == NodeState.Detached) throw new InvalidOperationException("Detached node has no lifetime owner.");
         State = NodeState.Disposing;
-        _disposeTask = DisposeCoreAsync();
+        // Publish the shared task before cancellation can synchronously call back into disposal.
+        var completion = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _disposeTask = completion.Task.Unwrap();
+        completion.SetResult(DisposeCoreAsync());
         return new ValueTask(_disposeTask);
     }
 
     private async Task DisposeCoreAsync()
     {
-        Exception? first = null;
-        async Task Attempt(Func<Task> action)
+        var previous = Executing.Value;
+        Executing.Value = new OperationFrame(this, previous);
+        try
         {
-            try { await action(); }
-            catch (Exception ex)
+            Exception? first = null;
+            async Task Attempt(Func<Task> action)
             {
-                Context.Report(ex, $"Dispose {GetType().Name}/{Name} ({Id})");
-                if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+                try { await action(); }
+                catch (Exception ex)
+                {
+                    Context.Report(ex, $"Dispose {GetType().Name}/{Name} ({Id})");
+                    if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+                }
             }
-        }
-        await Attempt(() => { _lifetime.Cancel(); return Task.CompletedTask; });
-        if (_busy != 0 && _idle != null) await _idle.Task;
-        await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
-        foreach (var child in Enumerable.Reverse(_children.ToArray()))
-            await Attempt(async () => await child.DisposeAsync());
-        await Attempt(async () =>
-        {
-            var previous = Executing.Value;
-            Executing.Value = new OperationFrame(this, previous);
-            try { await OnDisposeAsync(); }
-            finally { Executing.Value = previous; }
-        });
-        foreach (var handler in _initializedHandlers.AsEnumerable().Reverse())
-            await Attempt(async () =>
+            await Attempt(() => { _lifetime.Cancel(); return Task.CompletedTask; });
+            if (_busy != 0 && _idle != null) await _idle.Task;
+            await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
+            foreach (var child in Enumerable.Reverse(_children.ToArray()))
+                await Attempt(async () => await child.DisposeAsync());
+            await Attempt(OnDisposeAsync);
+            foreach (var handler in _initializedHandlers.AsEnumerable().Reverse())
+                await Attempt(() => handler.DisposeAsync(this));
+            if (Element != null) await Attempt(async () => await Element.DisposeAsync());
+            await Attempt(() => { ResourceLease?.Dispose(); ResourceLease = null; return Task.CompletedTask; });
+            var formerParent = Parent;
+            await Attempt(() =>
             {
-                var previous = Executing.Value;
-                Executing.Value = new OperationFrame(this, previous);
-                try { await handler.DisposeAsync(this); }
-                finally { Executing.Value = previous; }
+                if (Parent != null)
+                {
+                    var parent = Parent; parent._children.Remove(this); Parent = null; parent.OnChildRemoved(this);
+                }
+                return Task.CompletedTask;
             });
-        if (Element != null) await Attempt(async () => await Element.DisposeAsync());
-        await Attempt(() => { ResourceLease?.Dispose(); ResourceLease = null; return Task.CompletedTask; });
-        var formerParent = Parent;
-        await Attempt(() =>
-        {
-            if (Parent != null)
-            {
-                var parent = Parent; parent._children.Remove(this); Parent = null; parent.OnChildRemoved(this);
-            }
-            return Task.CompletedTask;
-        });
-        if (formerParent != null) await Attempt(() => formerParent.OnChildRemovedAsync(this));
-        State = NodeState.Disposed;
-        _lifetime.Dispose();
-        if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
+            if (formerParent != null) await Attempt(() => formerParent.OnChildRemovedAsync(this));
+            State = NodeState.Disposed;
+            _lifetime.Dispose();
+            if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
+        }
+        finally { Executing.Value = previous; }
     }
 
     internal void ReportFailure(Exception failure, string context)

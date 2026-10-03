@@ -232,4 +232,48 @@ public class LifecycleTests
         await modals.CloseAsync(dialog);
     }
 
+    [Fact] public async Task DisposalCancellationSharesTheAlreadyPublishedTask()
+    {
+        await using var ui = Create();
+        var node = new UINode();
+        var element = new MemoryElement();
+        await node.AttachAsync(ui.Root, "CancellationOwner", element);
+        Task? repeated = null;
+        using var registration = node.Lifetime.Register(() => repeated = node.DisposeAsync().AsTask());
+
+        var disposal = node.DisposeAsync().AsTask();
+        await disposal;
+        Assert.Same(disposal, repeated);
+        await repeated!;
+        Assert.Equal(1, element.Disposals);
+        Assert.Equal(NodeState.Disposed, node.State);
+        Assert.Empty(ui.Root.Children);
+        await node.DisposeAsync();
+        Assert.Equal(1, element.Disposals);
+    }
+
+    private sealed class CanceledCleanup(Exception failure) : UINode
+    {
+        protected override Task OnDisposeAsync() => throw failure;
+    }
+    [Fact] public async Task SharedDisposalPreservesCancellationStatusAndOriginalException()
+    {
+        await using var ui = Create();
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+        var original = new OperationCanceledException(cancel.Token);
+        var node = new CanceledCleanup(original);
+        var element = new MemoryElement();
+        await node.AttachAsync(ui.Root, "CanceledCleanup", element);
+        Task? repeated = null;
+        using var registration = node.Lifetime.Register(() => repeated = node.DisposeAsync().AsTask());
+        var pending = node.DisposeAsync().AsTask();
+        Assert.Same(original, await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending));
+        Assert.True(pending.IsCanceled);
+        Assert.Same(pending, repeated);
+        Assert.Same(original, await Assert.ThrowsAnyAsync<OperationCanceledException>(() => repeated!));
+        Assert.Equal(1, element.Disposals);
+        Assert.Equal(NodeState.Disposed, node.State);
+    }
+
 }

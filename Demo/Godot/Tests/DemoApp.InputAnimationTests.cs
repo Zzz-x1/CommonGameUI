@@ -54,6 +54,21 @@ public partial class DemoApp
         mount.QueueFree();
 
         await OpenAsync("Home");
+        var focusMount = new Control();
+        var previousFocus = new Button { FocusMode = Control.FocusModeEnum.All, Disabled = true };
+        var currentFocus = new Button { FocusMode = Control.FocusModeEnum.All };
+        AddChild(focusMount);
+        focusMount.AddChild(previousFocus);
+        focusMount.AddChild(currentFocus);
+        currentFocus.GrabFocus();
+        var host = new GodotUIHost(GetViewport());
+        host.RestoreFocus(previousFocus);
+        pass(GetViewport().GuiGetFocusOwner() == currentFocus, "restore focus does not select a business-disabled button");
+        previousFocus.Disabled = false;
+        host.RestoreFocus(previousFocus);
+        pass(GetViewport().GuiGetFocusOwner() == previousFocus, "restore focus selects a usable original button");
+        RemoveChild(focusMount);
+        focusMount.QueueFree();
         using var modalPreload = await _ui.PreloadAsync<ClientModalView>();
         var modalOpening = ModalAsync(new ModalArgs("Settings"));
         var tasks = _tasks.Count;

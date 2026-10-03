@@ -191,5 +191,61 @@ namespace StarCourt.UnityDemo.Tests
             }
             finally { Time.timeScale = original; }
         }
+
+        [UnityTest] public IEnumerator BackdropVisibilityAndCancellation() => Await(BackdropVisibilityAsync());
+        private async Task BackdropVisibilityAsync()
+        {
+            var host = (UnityUIHost)_ui.Host;
+            var observed = new List<Task>();
+            var factory = UnityBackdrops.Dim(observed.Add, duration: .05);
+            var backdrop = await factory.CreateAsync(new UnityUIElement(host, _mount), () => Task.CompletedTask, CancellationToken.None);
+            try
+            {
+                var rect = (RectTransform)_mount.GetChild(0);
+                await backdrop.ShowAsync(false, CancellationToken.None);
+                Assert.That(rect.gameObject.activeSelf, Is.True);
+                await backdrop.HideAsync(false, CancellationToken.None);
+                Assert.That(rect.gameObject.activeSelf, Is.False);
+                await backdrop.ShowAsync(true, CancellationToken.None);
+                await backdrop.HideAsync(true, CancellationToken.None);
+                Assert.That(rect.gameObject.activeSelf, Is.False);
+                using var cancel = new CancellationTokenSource();
+                var pending = backdrop.ShowAsync(true, cancel.Token);
+                cancel.Cancel();
+                try { await pending; Assert.Fail("Expected cancellation."); }
+                catch (OperationCanceledException) { }
+                Assert.That(rect.gameObject.activeSelf, Is.False);
+                Assert.That(rect.GetComponent<CanvasGroup>().alpha, Is.EqualTo(1));
+            }
+            finally
+            {
+                await backdrop.DisposeAsync();
+                await Task.WhenAll(observed);
+            }
+        }
+        [UnityTest] public IEnumerator AnimationClipSamplesBeforeFirstFrame() => Await(ClipFirstFrameAsync());
+        private async Task ClipFirstFrameAsync()
+        {
+            var rect = Rect("AuthoredTimeline", _mount);
+            var group = rect.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = .6f;
+            var player = rect.gameObject.AddComponent<Animation>();
+            var clip = new AnimationClip { legacy = true };
+            clip.SetCurve("", typeof(CanvasGroup), "m_Alpha", AnimationCurve.Linear(0, 0, .2f, .6f));
+            player.AddClip(clip, "enter");
+            player.AddClip(clip, "exit");
+            try
+            {
+                var tabs = await _ui.Root.CreateContainerAsync<TabContainerNode>("FirstFrame", _mount);
+                var node = new UINode { Transition = UnityTransitions.Animation(null, "enter", "exit", _ => group.alpha = .6f) };
+                await tabs.BindAsync("Timeline", node, rect);
+                var pending = tabs.SwitchAsync("Timeline");
+                Assert.That(group.alpha, Is.InRange(0, .01f), "Authored alpha was exposed before sampling.");
+                await pending;
+                Assert.That(group.alpha, Is.EqualTo(.6f));
+                await tabs.DisposeAsync();
+            }
+            finally { UnityEngine.Object.Destroy(clip); }
+        }
     }
 }
