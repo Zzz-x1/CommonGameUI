@@ -104,7 +104,7 @@ public class ClientModalView : UINode<ModalArgs>
         {
             var n = names[i];
             await _settings.BindAsync(n, new UINode { Transition = ClientTransitions.Category("Settings") }, Get<Control>(path + "SettingPages/" + n), token);
-            Wire(path + "Tab" + i, () => _settings.CurrentName == n ? Task.CompletedTask : _settings.SwitchAsync(n));
+            Wire(path + "Tab" + i, () => _settings.CurrentName == n ? Task.CompletedTask : App.RunAsync(this, () => _settings.SwitchAsync(n)));
         }
 
         await _settings.SwitchAsync("声音", false, token);

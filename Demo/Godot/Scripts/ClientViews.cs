@@ -185,7 +185,7 @@ public class LobbyView : ClientView
         button.Disabled = true;
         try
         {
-            await App.RunAsync(async () =>
+            await App.RunAsync(this, async () =>
             {
                 var portrait = Get<TextureRect>("Hero");
                 var tween = Root.CreateTween();
@@ -288,8 +288,11 @@ public abstract class ClientPage : ClientView
     {
         if (Tabs.CurrentName == name)
             return;
-        await Tabs.SwitchAsync(name);
-        Refresh();
+        await App.RunAsync(this, async () =>
+        {
+            await Tabs.SwitchAsync(name);
+            Refresh();
+        });
     }
 
     public override void Refresh()
@@ -629,13 +632,15 @@ public class EventsView : ClientView
             Wire("Pages/" + n + "/Claim", () => ClaimAsync(id));
         }
 
-        Wire("Fold", () => Tabs.Current == null ? SelectAsync("庆典") : Tabs.HideAsync());
+        Wire("Fold", FoldAsync);
         await Tabs.SwitchAsync("庆典", false, token);
         Feedback();
         Refresh();
     }
 
-    public Task SelectAsync(string name) => Tabs.CurrentName == name ? Task.CompletedTask : Tabs.SwitchAsync(name);
+    public Task SelectAsync(string name) => Tabs.CurrentName == name ? Task.CompletedTask :
+        App.RunAsync(this, () => Tabs.SwitchAsync(name));
+    public Task FoldAsync() => App.RunAsync(this, () => Tabs.Current == null ? Tabs.SwitchAsync("庆典") : Tabs.HideAsync());
     public async Task ClaimAsync(int id)
     {
         App.Store.ClaimEvent(id);

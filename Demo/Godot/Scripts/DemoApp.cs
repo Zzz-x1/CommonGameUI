@@ -54,7 +54,7 @@ public partial class DemoApp : Control
 
     public async Task EnterAsync()
     {
-        await RunAsync(async () =>
+        await RunAsync(_login!, async () =>
         {
             _login!.Text("Account", "正在准备星庭资源…");
             using var lobby = await _ui.PreloadAsync<LobbyView>();
@@ -133,6 +133,26 @@ public partial class DemoApp : Control
                 Shell.SetNavigation(true);
         }
     }
+
+    public Task RunAsync(UINode owner, Func<Task> action) => RunAsync(async () =>
+    {
+        var display = (GodotUIElement)owner.Element!;
+        var focus = owner.Context.Host.CaptureFocus();
+        display.SetInteractive(false);
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            // A destroyed page no longer owns native controls to restore.
+            if (owner.State == NodeState.Ready)
+            {
+                display.SetInteractive(owner.IsInteractive);
+                owner.Context.Host.RestoreFocus(focus);
+            }
+        }
+    });
 
     public async Task BackAsync()
     {

@@ -256,6 +256,7 @@ public partial class DemoApp
         Pass(saved.State.Gold == Store.State.Gold && saved.State.Levels[0] == Store.State.Levels[0], "client persisted");
         await RunAnimationBoundaryTestsAsync(Pass);
         await RunInputAnimationTestsAsync(Pass);
+        await RunTabInputTestsAsync(Pass);
         await RunRevealTestsAsync(Pass);
         await RunSourceBranchTestsAsync(Pass);
         await RunAdapterSelfTestAsync();
@@ -266,7 +267,9 @@ public partial class DemoApp
         await OpenAsync("Home");
         int showcase = Store.State.Showcase;
         var switchHero = Shell.Home.SwitchHeroAsync();
-        Pass(Busy && Shell.Home.GetControl<Button>("Welcome/NextHero").Disabled, "portrait switch disables repeated input");
+        Pass(Busy && Shell.Home.GetControl<Button>("Welcome/NextHero").Disabled
+            && Shell.Home.GetControl<Button>("Quest/Tasks").MouseFilter == Control.MouseFilterEnum.Ignore,
+            "portrait switch disables repeated input and other lobby actions");
         await switchHero;
         Pass(Store.State.Showcase == (showcase + 1) % 6 && !Busy && !Shell.Home.GetControl<Button>("Welcome/NextHero").Disabled, "portrait switch restores input");
         GD.Print($"CLIENT TESTS PASSED: {checks}");
