@@ -1,0 +1,18 @@
+{
+  "name": "StarCourt.UnityDemo.Tests",
+  "references": [
+    "UIFramework.Unity",
+    "StarCourt.UnityDemo",
+    "Unity.ugui"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "UIFramework.Core.dll",
+    "nunit.framework.dll",
+    "Newtonsoft.Json.dll"
+  ]
+}

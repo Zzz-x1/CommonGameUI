@@ -1596,3 +1596,58 @@ DemoApp 负责初始化、资源预备、项目操作期间禁用外壳入口、
 邮件单封领取现在保留正文窗口：提交附件后在其上显示奖励，关闭奖励恢复同一正文并显示已领取／删除操作。这既保留阅读上下文，也让 Source 真实指向邮件窗口；不是通过虚构来源标签选择动画。批量领取流程仍返回邮件列表。
 
 本轮验证：解决方案构建 0 警告、0 错误；核心／生成器 152 项通过；Godot headless 与 1280×720 原生窗口各 97 项通过，独立进程重启检查 4 项通过，均正常退出。新增检查覆盖奖励时间轴中间阶段与跳过后的 scale／pivot／星阵／输入恢复；三种 Shader 完成、取消、原异常传播和材质引用恢复；真实页面不同 Source／Pop Phase 分支；真实单封邮件领取的来源分支与正文恢复。原有框架／业务覆盖继续保留。1280×720、1600×900、1920×1080 各生成 112 张实际 PNG，检查全部修改模块终态及幕帘、星阵、奖励卡、卷帘、菱形和来源切换中间帧，没有发现布局越界或残留效果。截图与 GIF 预览不纳入提交。核心 API 未改变；未增加性能基准或其他平台验证。
+
+## 14. Unity 适配与原生 Demo（2026-10-03）
+
+用户确认增加 Unity 适配和 Unity Demo，通过 Unity CLI 操作普通编辑器，不使用 BatchMode。开发期间不得反复聚焦或切换到 Unity 窗口；重编译使用 focus=false，已连接的项目不重复 open，Game View 分辨率工具不请求焦点。
+
+用户再次反馈后台 CLI 仍干扰窗口后，停止全部主动 Unity 编辑器调用，包括重编译、Play Mode、测试、截图及切换编辑器页面。当前只进行文件修改；不得仅因设置 focus=false 就认为操作不会抢焦点。后续原生验证暂缓，不能将未验证修改登记为完成。
+
+### 14.1 依赖与职责
+
+`src/UIFramework.Unity` 是本地 UPM 包 `com.ui-framework.unity`，当前使用 Unity 6000.3.24f1、uGUI 2.0.0 和原生 Animation 模块验证。纯 C# 核心仍是 netstandard2.1，未改为 Unity 专属代码。运行脚本构建核心 DLL 到包内 Runtime/Plugins；DLL 和缓存不入库，首次打开前必须准备。没有声称验证其他 Unity 版本、移动端、IL2CPP 或 Unity 内 Source Generator；Demo 采用普通 C# 注册。
+
+UnityUIHost 提供主线程检查、帧等待、EventSystem 焦点快照和日志。UnityFramePump 用 MonoBehaviour.Update 完成帧等待，禁用时让未完成等待明确失败；不后台轮询 Unity 对象。UnityUIElement 适配 RectTransform，拥有的 Prefab 根销毁前先失活／脱离父级，再 Destroy，避免延迟销毁造成兄弟顺序不一致；内嵌节点借用已有 RectTransform，不销毁项目控件。
+
+CanvasGroup 门控不覆盖 Button.interactable 等业务限制。锁定时让子 CanvasGroup 不忽略父级门控，恢复时采用原资源设定。空结构挂载不创建可射线命中的 Image，不能挡住标题按钮；实际模态遮罩负责屏蔽下层输入。运行期间新增跨越已有输入快照的控件不属于本 Demo 工作流。
+
+### 14.2 使用 API
+
+```csharp
+using UIFramework;
+using UIFramework.Unity;
+
+var ui = UnityUI.Create(canvas, eventSystem);
+ui.Register<InventoryView>("UI/Inventory"); // Resources 相对路径，无扩展名。
+var pages = await ui.Root.CreateContainerAsync<StackContainerNode>("Pages", pageMount);
+pages.ChildTransition = UnityTransitions.SlideHorizontal();
+await pages.PushAsync<InventoryView>();
+
+var dialogs = await ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", modalMount);
+dialogs.ConfigureBackdrop(UnityBackdrops.Dim(observeTask), ModalBackdropMode.Shared);
+
+var tabs = await parent.CreateContainerAsync<TabContainerNode>("Categories", embeddedMount);
+await tabs.BindAsync("装备", equipmentRect);
+await tabs.BindAsync("材料", materialsRect);
+await tabs.SwitchAsync("材料");
+```
+
+Create 不创建 HUD／Overlay 等默认业务层。挂载和绑定有生命周期，保留异步；组件查询、配置和注册同步。GetRect／GetComponent<T>(path) 获取真实 Unity 控件，路径或组件缺失明确报错，不生成默认控件。所有异步操作须等待或由项目帧入口观察原始异常。关闭项目时先 await ui.DisposeAsync，再销毁 Canvas／EventSystem；编辑器强制停止不等于可等待的正常业务关闭。
+
+### 14.3 资源与转场
+
+默认 UnityPrefabLoader 使用 Resources.LoadAsync<GameObject>，要求 RectTransform 根。Unity ResourceRequest 不可取消，因此取消取得时先等待请求结束，检查取消后不创建晚到实例。资源与实例保持核心既有持有关系；PrefabResource.Dispose 释放适配器引用，实例 Dispose 销毁 GameObject。Resources 的引擎缓存由 Unity 管理，不能将引用释放说成立即卸载纹理／GPU 内存；项目可注入自己的 IUIResourceLoader 管理 Addressables 等资源，本轮不实现该加载后端。
+
+UnityTransitions 提供 Fade、ScaleFade、SlideHorizontal、Simple 帧参数和 Animation。简单转场保存 RectTransform 位置／scale 及 CanvasGroup alpha，完成、取消、失败均恢复。Animation 等待原生非循环 legacy AnimationClip，以未缩放时间设置 time 并 Sample；保存／恢复 speed、time 和 wrapMode，timeScale=0 时可以正常展示 UI。项目提供轨道属性恢复函数，不把业务提交放入时间轴。未播放完成却被外部 Stop 时明确报错，不能将中途停止当成功。
+
+条件与来源依然只有 Transitions.Select(Func<TransitionContext,IUITransition>)。Unity Demo 同一功能页从大厅进入缩放、背包→商店向左侧移动旧页并从右进入新页、商店→背包反向、返回用短横移、简化模式短淡入；同一个 RewardView 从 PurchaseView 进入播放完整奖励时间轴，其余来源使用短缩放，简化模式也用短缩放。直接读取 Source／Target／Direction／Entering 和玩家设置，不保存额外“上一入口”状态，也不新增核心机制。
+
+### 14.4 Demo 范围与验收
+
+Unity Demo 保持原创中文「星庭远征」美术和真实游戏操作：本地标题／大厅、六角色属性／装备／培养、八件装备背包与内嵌材料页、四槽编队、商店数量与确认购买、单次任务奖励、双对比浮窗、嵌套画质设置及演出偏好。十五个业务 Prefab、测试共用的 ClientRoot Prefab、原生场景和四个 AnimationClip 保存于 Assets，可直接编辑；正常运行加载资源而非重建所有控件。未移植 Godot 的邮件／活动／关卡等模块，未接 Gameplay 或联网。两端范围和动画表现不能混用验收结论。
+
+ClientStore 独立于 View，统一存储货币、库存、等级、装备、编队、购买计数、任务领取与设置。复制快照并验证，同步写临时文件和替换正式文件，成功后发布；损坏或写入失败原异常直接传播。存档位于 Application.persistentDataPath/unity-client-save.json。自测使用隔离 GUID 档案，不读写玩家档案。
+
+UnityClient 管理单个 UIContext、项目 Stack／Panel／Modal 挂载、外壳入口锁、返回和异步任务观察；无全局输入策略或诊断菜单。模态层还原、双比较数量限制与状态刷新使用直接项目逻辑。核心 API 未修改，Godot Demo 未迁移或删除。
+
+当前阶段状态：此前 16 项原生测试通过，三种分辨率各生成 19 张截图；但进一步检查发现入场轨道没有完整持久化，之前仅检查完成／恢复不足以证明复杂演出有效。已调整创作脚本为全部轨道编排结束后创建动画资产，并增加实际中间属性断言。这次修正尚未重新构建资源或完成原生验证，现存 `.anim` 不能视为已完成交付。遵照用户停止窗口干扰要求，后续验证暂缓。Unity 适配和 Demo 尚未记录为全部完成。

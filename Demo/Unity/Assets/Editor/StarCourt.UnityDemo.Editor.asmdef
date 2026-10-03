@@ -1,0 +1,5 @@
+{
+  "name": "StarCourt.UnityDemo.Editor",
+  "references": ["StarCourt.UnityDemo", "UIFramework.Unity", "Unity.ugui"],
+  "includePlatforms": ["Editor"]
+}

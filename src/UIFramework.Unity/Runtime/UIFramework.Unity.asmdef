@@ -1,0 +1,5 @@
+{
+  "name": "UIFramework.Unity",
+  "references": ["Unity.ugui"],
+  "autoReferenced": true
+}

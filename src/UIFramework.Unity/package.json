@@ -1,0 +1,11 @@
+{
+  "name": "com.ui-framework.unity",
+  "version": "0.1.0",
+  "displayName": "UI Framework Unity",
+  "description": "Unity uGUI adapter for renderer-independent hierarchical UI management.",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.unity.ugui": "2.0.0",
+    "com.unity.modules.animation": "1.0.0"
+  }
+}

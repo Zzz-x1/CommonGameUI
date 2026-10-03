@@ -1,0 +1,5 @@
+{
+  "name": "StarCourt.UnityDemo",
+  "references": ["UIFramework.Unity", "Unity.ugui"],
+  "autoReferenced": true
+}

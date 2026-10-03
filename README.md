@@ -8,8 +8,10 @@
 | --- | --- |
 | `src/UIFramework.Core` | netstandard2.1 管理内核、默认 Root、节点与容器 |
 | `src/UIFramework.Godot` | Godot Control/PackedScene 适配器、转场预设、AnimationPlayer 接入与模态遮罩 |
+| `src/UIFramework.Unity` | Unity UPM 包，uGUI / Resources Prefab、AnimationClip 转场与模态遮罩 |
 | `src/UIFramework.Generators` | 注册与类型化调用的 Source Generator，不包含自定义 Analyzer |
 | `Demo/Godot` | Godot 4.7.2 .NET / net10.0 示例项目 |
+| `Demo/Unity` | Unity 6000.3.24f1 原生场景和游戏 UI Demo |
 | `tests/UIFramework.Tests` | 核心行为与生成结果编译测试 |
 
 设计依据：[设计文档](docs/design-decisions.md)、[V1 开发文档](docs/v1-development.md)、[V2 开发计划](docs/v2-development.md)。V3 在 V2 生命周期上加入单实例窗口、隐藏恢复和返回指定历史实例；Demo 使用虚构冒险游戏的纯 UI 场景。V3 实际契约与验收集中于设计文档第 8.9、8.10 节。
@@ -25,6 +27,8 @@ V5 增加逐次 playAnimation 开关与统一的 Transitions.Select 包装函数
 当前 Demo 已完整替换为原创中文奇幻客户端，包含角色、背包、编队、商店、任务、邮件、活动和设置等本地 UI 闭环，使用 AnimationPlayer 制作复杂过场。操作与场景说明见 [Demo README](Demo/Godot/README.md)，实际范围与验收见设计文档第 13 节。
 
 ## 运行
+
+Unity 版本使用普通编辑器与 Unity CLI（非 BatchMode）：`./scripts/Run-UnityDemo.ps1 -Play`。原生测试使用 `-SelfTest`，首次手动打开前用 `-PrepareOnly` 生成核心 DLL。接入、操作和两端差异见 [Unity Demo README](Demo/Unity/README.md)。
 
 需要 .NET 10 SDK 和 Godot 4.7.2 .NET。下载的便携引擎放在 `.tools`，不进入项目源码，也不修改系统安装。
 

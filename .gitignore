@@ -8,3 +8,16 @@ artifacts/
 .vs/
 .idea/
 *.suo
+Demo/Unity/Library/
+Demo/Unity/Temp/
+Demo/Unity/Logs/
+Demo/Unity/UserSettings/
+Demo/Unity/MemoryCaptures/
+Demo/Unity/*.csproj
+Demo/Unity/*.sln
+Demo/Unity/*.slnx
+src/UIFramework.Unity/Runtime/Plugins/*.dll
+src/UIFramework.Unity/Runtime/Plugins/*.pdb
+Demo/Unity/Assets/Temp/
+Demo/Unity/Assets/Temp.meta
+Demo/Unity/Assets/InitTestScene*.unity*
