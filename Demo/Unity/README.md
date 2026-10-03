@@ -17,7 +17,9 @@ Unity 6000.3.24f1、uGUI，纯 UI 本地客户端，不含 Gameplay。与 Godot 
 ./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-场景为 `Assets/Scenes/Client.unity`。脚本复用已连接编辑器，重编译 `focus=false`，不会反复聚焦 Unity。未运行编辑器时第一次启动仍需 `unity open`。`-Resolution 1280x720 / 1600x900 / 1920x1080` 设置 Game View；`-RebuildAssets` 从编辑器创作脚本重建保存的场景、Prefab 和 AnimationClip，必须先停止 Play Mode。
+场景为 `Assets/Scenes/Client.unity`。脚本无操作开关时只准备核心 DLL；仅 `-Play`、`-SelfTest` 或 `-RebuildAssets` 才连接编辑器。脚本复用已连接编辑器，重编译 `focus=false`，但这不保证引擎自身的播放／测试流程不会抢窗口焦点。未运行编辑器时第一次启动仍需 `unity open`。`-Resolution 1280x720 / 1600x900 / 1920x1080` 设置 Game View；`-RebuildAssets` 从编辑器创作脚本重建保存的场景、Prefab 和 AnimationClip，必须先停止 Play Mode。
+
+当前为待验证阶段：已停止主动编辑器操作，时间轴完整轨道的保存修正尚未重新生成 `.anim` 并验证。最近一次新增中间属性检查的结果为 15 项通过、1 项失败；不能将旧截图和“播放完成”检查视为复杂动画已交付。
 
 核心 DLL 是构建产物，不入 Git。首次直接打开工程前须执行 `-PrepareOnly`，不能以缺失程序集的编译错误为正常状态。Unity 使用 `netstandard2.1` 二进制核心；这一适配尚未接入 Unity Source Generator 工作流，Demo 注册是普通 C#。
 
