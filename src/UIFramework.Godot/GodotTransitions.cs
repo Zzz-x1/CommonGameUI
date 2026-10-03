@@ -203,6 +203,8 @@ public static class GodotTransitions
             try
             {
                 player.Play(name);
+                // Play schedules evaluation; sample now before the first visible draw.
+                player.Advance(0);
                 while (!finished)
                 {
                     await root.ToSignal(root.GetTree(), SceneTree.SignalName.ProcessFrame);

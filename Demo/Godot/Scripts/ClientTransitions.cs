@@ -109,14 +109,16 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
 
         public async Task PlayAsync(CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
+            _material.SetShaderParameter("progress", _context.Entering ? 0f : 1f);
+            foreach (var item in _originals.Keys)
+                item.Material = _material;
             await _root.ToSignal(_root.GetTree(), SceneTree.SignalName.ProcessFrame);
             token.ThrowIfCancellationRequested();
             var viewport = _root.GetViewport().GetVisibleRect().Size;
             var rect = _root.GetGlobalRect();
             _material.SetShaderParameter("panel_origin", rect.Position / viewport);
             _material.SetShaderParameter("panel_extent", rect.Size / viewport);
-            foreach (var item in _originals.Keys)
-                item.Material = _material;
             var started = Time.GetTicksUsec();
             float progress;
             do

@@ -58,7 +58,11 @@ public partial class DemoApp
             var tabs = await fixture.Root.CreateContainerAsync<TabContainerNode>("Reveal", mount);
             var node = new UINode { Transition = new GildedRevealTransition(style, .15) };
             await tabs.BindAsync("Page", node, page);
-            await tabs.SwitchAsync("Page");
+            var opening = tabs.SwitchAsync("Page");
+            var firstMaterial = (ShaderMaterial)page.Material;
+            pass(firstMaterial != null && firstMaterial.GetShaderParameter("progress").AsSingle() == 0
+                && ReferenceEquals(child.Material, firstMaterial), $"reveal style {style} masks the layout frame synchronously");
+            await opening;
             pass(page.Material == null && ReferenceEquals(child.Material, originalMaterial) && tabs.Current == node,
                 $"reveal style {style} completes and restores original materials");
             await tabs.HideAsync(playAnimation: false);

@@ -296,7 +296,12 @@ public partial class DemoApp
         };
         page.AddChild(player);
         var library = new AnimationLibrary();
-        library.AddAnimation("enter", new Animation { Length = 0.02 });
+        var enterClip = new Animation { Length = 0.02 };
+        var alphaTrack = enterClip.AddTrack(Animation.TrackType.Value);
+        enterClip.TrackSetPath(alphaTrack, new NodePath(".:modulate"));
+        enterClip.TrackInsertKey(alphaTrack, 0, new Color(tint.R, tint.G, tint.B, 0));
+        enterClip.TrackInsertKey(alphaTrack, .02, tint);
+        library.AddAnimation("enter", enterClip);
         library.AddAnimation("exit", new Animation { Length = 0.02 });
         player.AddAnimationLibrary("", library);
         var restored = false;
@@ -306,7 +311,9 @@ public partial class DemoApp
             restored = true;
         });
         var animation = authored.Create(new(lifecycle, true, TransitionDirection.None));
-        await animation.PlayAsync(CancellationToken.None);
+        var timelinePlaying = animation.PlayAsync(CancellationToken.None);
+        Check(page.Modulate.A == 0, "AnimationPlayer exposed the authored state before sampling its first key.");
+        await timelinePlaying;
         animation.Restore();
         Check(restored && !player.IsPlaying(), "AnimationPlayer restoration was not invoked.");
         GD.Print("PASS V4 native animations: slide directions, tint/position/scale restoration, cancellation, AnimationPlayer");

@@ -318,9 +318,15 @@ public partial class DemoApp
         var fixture = GodotUI.Create(this, logger: log);
         fixture.Register<RewardView>("res://Scenes/Client/Reward.tscn");
         var windows = await fixture.Root.CreateContainerAsync<PanelContainerNode>("AnimationTests", mount);
+        using var preload = await fixture.PreloadAsync<RewardView>();
         var complete = windows.OpenAsync<RewardView>(new PresentationArgs("多阶段奖励"));
+        var preparing = windows.Children.Single().GetControl();
+        pass(preparing.IsVisibleInTree() && preparing.Modulate.A == 0 && SkipCinematic == null,
+            "timeline layout frame cannot draw authored end state");
         while (SkipCinematic == null)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        pass(preparing.Modulate.A == 1 && preparing.GetNode<Control>("Center/Paper").Modulate.A == 0,
+            "timeline first key is sampled before layout mask is removed for drawing");
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         var display = windows.Children.Single().GetControl();
         var timeline = display.GetNode<AnimationPlayer>("AnimationPlayer");

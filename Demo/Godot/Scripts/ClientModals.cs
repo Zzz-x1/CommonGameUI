@@ -550,13 +550,18 @@ public sealed class CinematicTransition : IUITransition
             foreach (var pair in originals)
                 pair.Key.Item1.Set(pair.Key.Item2, pair.Value);
         }).Create(context);
-        return new Run(inner, player, context.Entering, particles, scaled);
+        return new Run(inner, root, player, context.Entering, particles, scaled);
     }
 
-    private sealed class Run(IUITransitionRun inner, AnimationPlayer player, bool entering, CpuParticles2D? particles, Control[] scaled) : IUITransitionRun
+    private sealed class Run(IUITransitionRun inner, Control root, AnimationPlayer player, bool entering, CpuParticles2D? particles, Control[] scaled) : IUITransitionRun
     {
+        private readonly Color _color = root.Modulate;
         public async Task PlayAsync(CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
+            // Keep layout active, but do not draw the authored end state while it settles.
+            if (entering)
+                root.Modulate = new Color(_color.R, _color.G, _color.B, 0);
             await player.ToSignal(player.GetTree(), SceneTree.SignalName.ProcessFrame);
             token.ThrowIfCancellationRequested();
             foreach (var control in scaled)
@@ -570,6 +575,7 @@ public sealed class CinematicTransition : IUITransition
                 DemoApp.Instance.Gate(() => player.Advance(player.GetAnimation("enter").Length - player.CurrentAnimationPosition + .01));
             try
             {
+                root.Modulate = _color;
                 await inner.PlayAsync(token);
             }
             finally
@@ -581,9 +587,10 @@ public sealed class CinematicTransition : IUITransition
 
         public void Restore()
         {
-            inner.Restore();
+            root.Modulate = _color;
             if (particles != null)
                 particles.Emitting = false;
+            inner.Restore();
         }
     }
 }
