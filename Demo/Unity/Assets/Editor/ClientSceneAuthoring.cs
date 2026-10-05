@@ -326,6 +326,7 @@ namespace StarCourt.UnityDemo.Editor
         }
         private static void Save(string name, RectTransform root)
         {
+            root.gameObject.AddComponent(typeof(UnityClient).Assembly.GetType("StarCourt.UnityDemo." + name + "View", true));
             root.gameObject.SetActive(false); PrefabUtility.SaveAsPrefabAsset(root.gameObject, "Assets/Resources/UI/" + name + ".prefab");
             UnityEngine.Object.DestroyImmediate(root.gameObject);
         }

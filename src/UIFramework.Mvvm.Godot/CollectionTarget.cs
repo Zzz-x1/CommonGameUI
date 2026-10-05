@@ -3,11 +3,11 @@ using UIFramework.Godot;
 namespace UIFramework.Mvvm.Godot;
 public sealed class CollectionTarget : ICollectionTarget
 {
-    private readonly UINode _owner; private readonly Control _mount; private readonly PackedScene _template;
+    private readonly IUINode _owner; private readonly Control _mount; private readonly PackedScene _template;
     private readonly List<(Control Control, UINode Node)> _items = new();
     private int _id;
     private readonly string _name = "Items_" + Guid.NewGuid().ToString("N");
-    public CollectionTarget(UINode owner, Control mount, PackedScene template) { _owner = owner; _mount = mount; _template = template; }
+    public CollectionTarget(IUINode owner, Control mount, PackedScene template) { _owner = owner; _mount = mount; _template = template; }
     public void Insert(int index, object item)
     {
         var control = _template.Instantiate<Control>(); _mount.AddChild(control);

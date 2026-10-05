@@ -1,3 +1,4 @@
+using EngineMvvm = global::UIFramework.Mvvm.Unity;
 using System;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -26,7 +27,7 @@ namespace StarCourt.UnityDemo.Editor
             window.rootVisualElement.Q<ListView>("sources").selectedIndex = 0;
             var name = window.rootVisualElement.Q<ScrollView>("details").Q<TextField>(); name.value = "Renamed";
             Check(cfg.ViewModels[0].Name == "Renamed", "Source GUI failed"); Undo.PerformUndo(); Check(cfg.ViewModels[0].Name == "Player", "GUI Undo failed");
-            using (var preview = new UnityBindingPreview(cfg)) { Check(label.GetComponent<Text>().text == "100", "Preview failed"); Check(template.Gold == 100, "Asset changed in preview"); }
+            using (var preview = new BindingPreview(cfg)) { Check(label.GetComponent<Text>().text == "100", "Preview failed"); Check(template.Gold == 100, "Asset changed in preview"); }
             await Task.Yield(); Check(label.GetComponent<Text>().text == "original", "Preview did not restore");
             var prefabPath = "Assets/Temp/MvvmVerification.prefab"; System.IO.Directory.CreateDirectory("Assets/Temp"); PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath)); var instanceConfig = instance.GetComponent<MvvmBindings>();

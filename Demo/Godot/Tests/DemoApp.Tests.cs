@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Mvvm;
@@ -135,7 +138,7 @@ public partial class DemoApp
         await OpenAsync("Home");
         await OpenAsync("Inventory");
         inventory = (InventoryView)Shell.Pages.Current!;
-        await PressAsync(inventory.GetControl().GetNode<Button>("Pages/装备/C0"));
+        await PressAsync(inventory.GetRoot().GetNode<Button>("Pages/装备/C0"));
         var item = (ItemDetailsView)Shell.Pages.Current!;
         Pass(!inventory.IsInteractive && item.IsInteractive, "partner activation");
         Pass(!ClientView.Descendants(GetNode<Control>("ShellMount")).Any(n => n.Name == "FlyingItemPortrait"), "partner cleanup");
@@ -321,12 +324,12 @@ public partial class DemoApp
         AddChild(mount);
         mount.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         var log = new TestLog();
-        var fixture = GodotUI.Create(this, logger: log);
+        var fixture = EngineUI.UI.Create(this, logger: log);
         fixture.Register<RewardView>("res://Scenes/Client/Reward.tscn");
         var windows = await fixture.Root.CreateContainerAsync<PanelContainerNode>("AnimationTests", mount);
         using var preload = await fixture.PreloadAsync<RewardView>();
         var complete = windows.OpenAsync<RewardView>(new PresentationArgs("多阶段奖励"));
-        var preparing = windows.Children.Single().GetControl();
+        var preparing = windows.Children.Single().GetRoot();
         pass(preparing.IsVisibleInTree() && preparing.Modulate.A == 0 && SkipCinematic == null,
             "timeline layout frame cannot draw authored end state");
         while (SkipCinematic == null)
@@ -334,7 +337,7 @@ public partial class DemoApp
         pass(preparing.Modulate.A == 1 && preparing.GetNode<Control>("Center/Paper").Modulate.A == 0,
             "timeline first key is sampled before layout mask is removed for drawing");
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var display = windows.Children.Single().GetControl();
+        var display = windows.Children.Single().GetRoot();
         var timeline = display.GetNode<AnimationPlayer>("AnimationPlayer");
         timeline.Seek(.8, update: true);
         pass(display.GetNode<Control>("Center/Crest").Modulate.A > .1f && display.GetNode<Control>("Center/Close").Modulate.A == 0,
@@ -363,7 +366,7 @@ public partial class DemoApp
         pending = windows.OpenAsync<RewardView>(new PresentationArgs("原始动画错误"));
         while (SkipCinematic == null)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        windows.Children.Single().GetControl().GetNode<AnimationPlayer>("AnimationPlayer").Stop();
+        windows.Children.Single().GetRoot().GetNode<AnimationPlayer>("AnimationPlayer").Stop();
         Exception original;
         try
         {

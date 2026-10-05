@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -28,7 +31,7 @@ namespace StarCourt.UnityDemo.Tests
         public sealed class Window : UINode { }
         private sealed class DisconnectingNode : UINode
         {
-            internal UnityLifetimeBinding Binding;
+            internal EngineUI.LifetimeBinding Binding;
             protected override Task OnDisposeAsync() { Binding.Dispose(); return Task.CompletedTask; }
         }
         private sealed class GatedNode : UINode
@@ -51,10 +54,10 @@ namespace StarCourt.UnityDemo.Tests
                 internal Resource(Loader loader) { _loader = loader; }
                 public IUIElement Instantiate(IUIElement mount)
                 {
-                    var target = (UnityUIElement)mount;
+                    var target = (EngineUI.UIElement)mount;
                     var rect = (RectTransform)new GameObject("Window", typeof(RectTransform)).transform;
                     rect.SetParent(target.Rect, false);
-                    return new UnityUIElement(target.Host, rect, true);
+                    return new EngineUI.UIElement(target.Host, rect, true);
                 }
                 public void Dispose() => _loader.Released++;
             }
@@ -65,8 +68,8 @@ namespace StarCourt.UnityDemo.Tests
             _canvas = new GameObject("LifetimeCanvas", typeof(RectTransform), typeof(Canvas));
             _events = new GameObject("LifetimeEvents", typeof(EventSystem));
             _loader = new Loader(); _log = new RecordingLog();
-            _ui = UnityUI.Create(_canvas.GetComponent<Canvas>(), _events.GetComponent<EventSystem>(), _loader, _log);
-            _ui.Register<Window>("window", WindowInstanceMode.Multiple);
+            _ui = EngineUI.UI.Create(_canvas.GetComponent<Canvas>(), _events.GetComponent<EventSystem>(), _loader, _log);
+            _ui.Register(() => new Window(), "window", WindowInstanceMode.Multiple);
             yield return null;
         }
         [UnityTearDown] public IEnumerator TearDown()
@@ -91,7 +94,7 @@ namespace StarCourt.UnityDemo.Tests
             var scene = SceneManager.CreateScene("Lifetime-" + Guid.NewGuid());
             SceneManager.MoveGameObjectToScene(_canvas, scene); SceneManager.MoveGameObjectToScene(_events, scene);
             var dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", (RectTransform)_canvas.transform);
-            dialogs.ConfigureBackdrop(UnityBackdrops.Dim(_ => Assert.Fail("Unexpected dismiss")), ModalBackdropMode.PerModal);
+            dialogs.ConfigureBackdrop(EngineUI.Backdrops.Dim(_ => Assert.Fail("Unexpected dismiss")), ModalBackdropMode.PerModal);
             var first = await dialogs.OpenAsync<Window>(playAnimation: false); var second = await dialogs.OpenAsync<Window>(playAnimation: false);
             var binding = _ui.BindLifetime(scene);
             Assert.That(Array.Exists(scene.GetRootGameObjects(), go => go.name == "[UIFramework] Scene Lifetime" && (go.hideFlags & HideFlags.HideInHierarchy) != 0), Is.True);
@@ -99,7 +102,7 @@ namespace StarCourt.UnityDemo.Tests
             await binding.Completion;
             Assert.That(_ui.Root.State, Is.EqualTo(NodeState.Disposed)); Assert.That(first.State, Is.EqualTo(NodeState.Disposed));
             Assert.That(second.State, Is.EqualTo(NodeState.Disposed)); Assert.That(_loader.Released, Is.EqualTo(1)); Assert.That(_log.Errors, Is.Empty);
-            while (!unload.isDone) await ((UnityUIHost)_ui.Host).NextFrameAsync();
+            while (!unload.isDone) await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
         }
         [UnityTest] public IEnumerator DisconnectAndDuplicateBinding() => Await(DisconnectAsync());
         private async Task DisconnectAsync()
@@ -124,7 +127,7 @@ namespace StarCourt.UnityDemo.Tests
         {
             var owner = new GameObject("Async"); var node = new GatedNode(); await node.AttachAsync(_ui.Root, "Async");
             var binding = node.BindLifetime(owner); UnityEngine.Object.Destroy(owner);
-            while (node.State != NodeState.Disposing) await ((UnityUIHost)_ui.Host).NextFrameAsync();
+            while (node.State != NodeState.Disposing) await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
             Assert.That(binding.Completion.IsCompleted, Is.False);
             node.Gate.SetResult(true); await binding.Completion; Assert.That(node.State, Is.EqualTo(NodeState.Disposed));
         }
@@ -142,7 +145,7 @@ namespace StarCourt.UnityDemo.Tests
                     var player = page.gameObject.AddComponent<Animation>(); clip = new AnimationClip { legacy = true };
                     clip.SetCurve("", typeof(CanvasGroup), "m_Alpha", AnimationCurve.Linear(0, 0, 1, 1)); player.AddClip(clip, "enter"); player.AddClip(clip, "exit");
                 }
-                var node = new UINode { Transition = timeline ? UnityTransitions.Animation(null, "enter", "exit", _ => Assert.Fail("Restoring a destroyed timeline")) : UnityTransitions.Fade(1) };
+                var node = new UINode { Transition = timeline ? EngineUI.Transitions.Animation(null, "enter", "exit", _ => Assert.Fail("Restoring a destroyed timeline")) : EngineUI.Transitions.Fade(1) };
                 await tabs.BindAsync("Page", node, page); var binding = tabs.BindLifetime(rect.gameObject);
                 var pending = tabs.SwitchAsync("Page"); UnityEngine.Object.Destroy(rect.gameObject);
                 try { await pending; Assert.Fail("Expected cancellation"); } catch (OperationCanceledException) { }
@@ -159,14 +162,14 @@ namespace StarCourt.UnityDemo.Tests
             UnityEngine.Object.Destroy(owner);
             try { await binding.Completion; Assert.Fail("Expected cleanup failure"); }
             catch (InvalidOperationException error) { Assert.That(error, Is.SameAs(node.Failure)); Assert.That(_log.Errors, Does.Contain(error)); }
-            await ((UnityUIHost)_ui.Host).NextFrameAsync();
+            await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
         }
         [UnityTest] public IEnumerator UnboundDestroyedDisplayStillFails() => Await(UnboundAsync());
         private async Task UnboundAsync()
         {
             var rect = (RectTransform)new GameObject("Unbound", typeof(RectTransform)).transform; rect.SetParent(_canvas.transform, false);
             var node = new UINode(); await node.AttachToAsync(_ui.Root, "Unbound", rect);
-            UnityEngine.Object.Destroy(rect.gameObject); await ((UnityUIHost)_ui.Host).NextFrameAsync();
+            UnityEngine.Object.Destroy(rect.gameObject); await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
             try { await node.DisposeAsync(); Assert.Fail("Expected missing display error"); }
             catch (ObjectDisposedException error) { Assert.That(_log.Errors, Does.Contain(error)); }
         }

@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineMvvm = global::UIFramework.Mvvm.Unity;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -21,9 +24,9 @@ namespace StarCourt.UnityDemo
     }
     internal sealed class InventoryGridTarget : ICollectionTarget
     {
-        private readonly UnityCollectionTarget _items;
+        private readonly EngineMvvm.CollectionTarget _items;
         private readonly RectTransform _mount;
-        public InventoryGridTarget(UINode owner, RectTransform mount, GameObject row) { _mount = mount; _items = new UnityCollectionTarget(owner, mount, row); }
+        public InventoryGridTarget(IUINode owner, RectTransform mount, GameObject row) { _mount = mount; _items = new EngineMvvm.CollectionTarget(owner, mount, row); }
         public void Insert(int index, object item) { _items.Insert(index, item); Arrange(); }
         public void Remove(int index) { _items.Remove(index); Arrange(); }
         public void Move(int oldIndex, int newIndex) { _items.Move(oldIndex, newIndex); Arrange(); }

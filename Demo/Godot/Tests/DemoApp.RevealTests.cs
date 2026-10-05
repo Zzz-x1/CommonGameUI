@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -12,17 +15,17 @@ public partial class DemoApp
         var entry = OpenAsync("Inventory");
         while (SkipCinematic == null && !entry.IsCompleted)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        pass(SkipCinematic != null && Shell.GetControl().IsVisibleInTree(), "lobby source chooses visible page timeline");
+        pass(SkipCinematic != null && Shell.GetRoot().IsVisibleInTree(), "lobby source chooses visible page timeline");
         await entry;
         var right = OpenAsync("Shop");
         await ToSignal(GetTree().CreateTimer(.1), SceneTreeTimer.SignalName.Timeout);
         var shop = Shell.Pages.Children.OfType<ShopView>().Single();
-        pass(SkipCinematic == null && shop.GetControl().Position.X > 0, "inventory to shop chooses right-side slide");
+        pass(SkipCinematic == null && shop.GetRoot().Position.X > 0, "inventory to shop chooses right-side slide");
         await right;
         var left = OpenAsync("Inventory");
         await ToSignal(GetTree().CreateTimer(.1), SceneTreeTimer.SignalName.Timeout);
         var inventory = Shell.Pages.Children.OfType<InventoryView>().Last();
-        pass(SkipCinematic == null && inventory.GetControl().Position.X < 0, "shop to inventory chooses left-side slide");
+        pass(SkipCinematic == null && inventory.GetRoot().Position.X < 0, "shop to inventory chooses left-side slide");
         await left;
         var returning = Shell.Pages.PopAsync();
         await ToSignal(GetTree().CreateTimer(.1), SceneTreeTimer.SignalName.Timeout);
@@ -54,7 +57,7 @@ public partial class DemoApp
             using var originalMaterial = new CanvasItemMaterial();
             child.Material = originalMaterial;
             var log = new TestLog();
-            await using var fixture = GodotUI.Create(this, logger: log);
+            await using var fixture = EngineUI.UI.Create(this, logger: log);
             var tabs = await fixture.Root.CreateContainerAsync<TabContainerNode>("Reveal", mount);
             var node = new UINode { Transition = new GildedRevealTransition(style, .15) };
             await tabs.BindAsync("Page", node, page);

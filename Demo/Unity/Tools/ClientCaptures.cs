@@ -1,3 +1,5 @@
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Reflection;
 using System.Linq;
@@ -18,7 +20,7 @@ public static class ClientCaptures
         var app = UnityClient.Instance;
         await app.Ready;
         ClientSceneAuthoring.SetResolution(width,height);
-        var host = (UnityUIHost)app.UI.Host;
+        var host = (EngineUI.UIHost)app.UI.Host;
         var captureType = Type.GetType("Unity.Pipeline.Editor.Commands.Capture.CaptureCommands, Unity.Pipeline.Editor", true);
         var capture = captureType.GetMethod("CaptureGameView", BindingFlags.Public | BindingFlags.Static);
         async Task Save(string name)

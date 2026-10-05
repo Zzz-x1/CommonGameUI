@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Linq;
@@ -20,7 +23,7 @@ namespace StarCourt.UnityDemo.Tests
             var root = (RectTransform)instance.transform;
             var rects = root.GetComponentsInChildren<RectTransform>(true).ToDictionary(r => r, r => (r.anchoredPosition, r.localScale, r.localRotation));
             var groups = root.GetComponentsInChildren<CanvasGroup>(true).ToDictionary(g => g, g => g.alpha);
-            var node = new UINode { Transition = UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
+            var node = new UINode { Transition = EngineUI.Transitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
             {
                 foreach (var pair in rects) { pair.Key.anchoredPosition = pair.Value.anchoredPosition; pair.Key.localScale = pair.Value.localScale; pair.Key.localRotation = pair.Value.localRotation; }
                 foreach (var pair in groups) pair.Key.alpha = pair.Value;
@@ -38,7 +41,7 @@ namespace StarCourt.UnityDemo.Tests
                 var entering = view.Tabs.SwitchAsync("Lobby");
                 Assert.That(view.Rect.Find("Hero").GetComponent<CanvasGroup>().alpha, Is.EqualTo(0).Within(.01), "First frame must be sampled before returning to the engine.");
                 Assert.That(view.Director.timeUpdateMode, Is.EqualTo(DirectorUpdateMode.Manual));
-                while (view.Node.TransitionProgress < .3) await ((UnityUIHost)_ui.Host).NextFrameAsync();
+                while (view.Node.TransitionProgress < .3) await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
                 Assert.That(((RectTransform)view.Rect.Find("Hero")).anchoredPosition.x, Is.InRange(506, 759));
                 Assert.That(view.Rect.Find("Entries").GetComponent<CanvasGroup>().alpha, Is.EqualTo(0).Within(.01));
                 await entering; Assert.That(view.Node.IsInteractive, Is.True); Assert.That(view.Node.TransitionProgress, Is.EqualTo(1));

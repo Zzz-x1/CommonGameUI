@@ -1,3 +1,5 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
 using Godot;
 using UIFramework;
 using UIFramework.Mvvm;
@@ -123,7 +125,7 @@ public partial class DemoApp
         await OpenAsync("Home");
         await OpenAsync("Inventory");
         var inventory = (InventoryView)Shell.Pages.Current!;
-        var item = PressAsync(inventory.GetControl().GetNode<Button>("Pages/装备/C0"));
+        var item = PressAsync(inventory.GetRoot().GetNode<Button>("Pages/装备/C0"));
         await CaptureDuringAsync("partner-mid", item);
         await item;
         await CaptureAsync("item-details");

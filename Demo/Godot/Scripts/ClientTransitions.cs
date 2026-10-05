@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -10,21 +13,21 @@ public static class ClientTransitions
     public static IUITransition Page(string module) => Transitions.Select(context =>
     {
         if (module == "Inventory" && (context.Source is ItemDetailsView || context.Target is ItemDetailsView))
-            return GodotTransitions.Fade(.12);
+            return EngineUI.Transitions.Fade(.12);
         if (!DemoApp.Instance.Store.State.FullMotion)
-            return GodotTransitions.Fade(.1);
+            return EngineUI.Transitions.Fade(.1);
         if (context.Phase is TransitionPhase.PopEnter or TransitionPhase.PopExit)
-            return GodotTransitions.SlideHorizontal(.24);
+            return EngineUI.Transitions.SlideHorizontal(.24);
         if (context.Entering && context.Source is LobbyView)
             return new CinematicTransition();
         if (context.Source is ClientPage source && context.Target is ClientPage target)
         {
             var direction = ModulePosition(target.Module) > ModulePosition(source.Module) ? 1 : -1;
-            var away = new GodotTransitionFrame { RelativeOffset = new Vector2(direction * (context.Entering ? .2f : -.2f), 0), Alpha = 0 };
-            var neutral = new GodotTransitionFrame();
-            return GodotTransitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away, .3);
+            var away = new EngineUI.TransitionFrame { RelativeOffset = new Vector2(direction * (context.Entering ? .2f : -.2f), 0), Alpha = 0 };
+            var neutral = new EngineUI.TransitionFrame();
+            return EngineUI.Transitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away, .3);
         }
-        return context.Entering ? new CinematicTransition() : GodotTransitions.SlideHorizontal(.24);
+        return context.Entering ? new CinematicTransition() : EngineUI.Transitions.SlideHorizontal(.24);
     });
 
     private static int ModulePosition(string module) => module switch
@@ -37,46 +40,46 @@ public static class ClientTransitions
     public static IUITransition Presentation() => Transitions.Select(context =>
     {
         if (!context.Entering)
-            return GodotTransitions.ScaleFade(.18, targetPath: "Center");
+            return EngineUI.Transitions.ScaleFade(.18, targetPath: "Center");
         if (context.Node is RewardView && context.Source is ClientModalView { Parameters.Kind: "Mail" })
             return DemoApp.Instance.Store.State.FullMotion
                 ? new GildedRevealTransition(0, .45, "Center")
-                : GodotTransitions.Fade(.1, "Center");
+                : EngineUI.Transitions.Fade(.1, "Center");
         return new CinematicTransition();
     });
 
     public static IUITransition Popup(string kind) => Transitions.Select(context =>
     {
         if (!DemoApp.Instance.Store.State.FullMotion)
-            return GodotTransitions.ScaleFade(.1, targetPath: "Center");
+            return EngineUI.Transitions.ScaleFade(.1, targetPath: "Center");
         if (context.Entering && kind is "Mail" or "Shop" or "Purchase")
             return new GildedRevealTransition(kind == "Mail" ? 0 : 1, .38, "Center");
-        var neutral = new GodotTransitionFrame();
+        var neutral = new EngineUI.TransitionFrame();
         var away = kind switch
         {
             "Profile" => neutral with { Scale = Vector2.One * .72f, Alpha = 0 },
             "Stage" or "Departure" => neutral with { Offset = new Vector2(120, 0), Alpha = 0 },
             _ => neutral with { Offset = new Vector2(0, 60), Scale = Vector2.One * .9f, Alpha = 0 }
         };
-        return GodotTransitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away,
+        return EngineUI.Transitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away,
             context.Entering ? .3 : .18, targetPath: "Center", transition: Tween.TransitionType.Back, ease: Tween.EaseType.Out);
     });
 
     public static IUITransition Category(string module) => Transitions.Select(context =>
         DemoApp.Instance.Store.State.FullMotion
             ? new GildedRevealTransition(module == "Shop" ? 1 : module == "Friends" ? 2 : 0, context.Entering ? .32 : .18)
-            : GodotTransitions.Fade(.1));
+            : EngineUI.Transitions.Fade(.1));
 
     public static IUITransition Hero() => Transitions.Select(context =>
         DemoApp.Instance.Store.State.FullMotion
             ? new GildedRevealTransition(2, context.Entering ? .45 : .22)
-            : GodotTransitions.Fade(.1));
+            : EngineUI.Transitions.Fade(.1));
 
     public static IUITransition Comparison(int position) => Transitions.Select(context =>
     {
-        var neutral = new GodotTransitionFrame();
+        var neutral = new EngineUI.TransitionFrame();
         var away = neutral with { RelativeOffset = new Vector2(position == 0 ? -.35f : .35f, 0), Scale = Vector2.One * .85f, Alpha = 0 };
-        return GodotTransitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away,
+        return EngineUI.Transitions.Simple(context.Entering ? away : neutral, context.Entering ? neutral : away,
             DemoApp.Instance.Store.State.FullMotion ? .3 : .1, targetPath: "Card", transition: Tween.TransitionType.Back, ease: Tween.EaseType.Out);
     });
 }
@@ -85,7 +88,7 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
 {
     public IUITransitionRun Create(TransitionContext context)
     {
-        var root = ((GodotUIElement)context.Element!).Control;
+        var root = ((EngineUI.UIElement)context.Element!).Control;
         return new Run(context, targetPath == null ? root : root.GetNode<Control>(targetPath), style, duration);
     }
 
@@ -115,7 +118,7 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
             _material.SetShaderParameter("progress", _context.Entering ? 0f : 1f);
             foreach (var item in _originals.Keys)
                 item.Material = _material;
-            await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
+            await ((EngineUI.UIHost)_context.Node.Context.Host).NextFrameAsync();
             token.ThrowIfCancellationRequested();
             var viewport = _root.GetViewport().GetVisibleRect().Size;
             var rect = _root.GetGlobalRect();
@@ -131,7 +134,7 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
                 _material.SetShaderParameter("progress", _context.Entering ? eased : 1 - eased);
                 _context.ReportProgress(progress);
                 if (progress < 1)
-                    await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
+                    await ((EngineUI.UIHost)_context.Node.Context.Host).NextFrameAsync();
             } while (progress < 1);
         }
 

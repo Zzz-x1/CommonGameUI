@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -5,27 +8,18 @@ using UIFramework.Godot;
 namespace HierarchyDemo;
 public partial class DemoApp
 {
-    private sealed class FeedbackProbe : ClientView
-    {
-        protected override Task OnInitializeAsync(CancellationToken token)
-        {
-            Feedback();
-            return Task.CompletedTask;
-        }
-    }
-
     private async Task RunInputAnimationTestsAsync(Action<bool, string> pass)
     {
         var mount = new Control();
         AddChild(mount);
         mount.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        await using var ui = GodotUI.Create(this);
-        ui.Register<FeedbackProbe>("res://Scenes/Client/Characters.tscn");
+        await using var ui = EngineUI.UI.Create(this);
+        ui.Register<CharactersView>("res://Scenes/Client/Characters.tscn");
         var windows = await ui.Root.CreateContainerAsync<PanelContainerNode>("HoverAnimation", mount);
         windows.ChildTransition = new CinematicTransition();
-        using var preload = await ui.PreloadAsync<FeedbackProbe>();
-        var opening = windows.OpenAsync<FeedbackProbe>();
-        var display = windows.Children.Single().GetControl();
+        using var preload = await ui.PreloadAsync<CharactersView>();
+        var opening = windows.OpenAsync<CharactersView>();
+        var display = windows.Children.Single().GetRoot();
         var card = display.GetNode<Button>("Pages/角色/C0");
         // A mouse-exit feedback can already be running when input becomes locked.
         card.EmitSignal(Control.SignalName.MouseExited);
@@ -61,7 +55,7 @@ public partial class DemoApp
         focusMount.AddChild(previousFocus);
         focusMount.AddChild(currentFocus);
         currentFocus.GrabFocus();
-        var host = new GodotUIHost(GetViewport());
+        var host = new EngineUI.UIHost(GetViewport());
         host.RestoreFocus(previousFocus);
         pass(GetViewport().GuiGetFocusOwner() == currentFocus, "restore focus does not select a business-disabled button");
         previousFocus.Disabled = false;

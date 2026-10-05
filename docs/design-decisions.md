@@ -1882,3 +1882,9 @@ Core 增加 IUINode，业务对象通过一个 Core UINode 执行状态与清理
 Godot 编辑配置后保留选中绑定并重建详情；选择转换函数后可继续配置参数。Godot VM 资产需要 Tool 才能在编辑器执行其 C# 属性和预览；无 Tool 的原生资源在编辑器不具备该行为，不进行类型名称保底。
 
 验证：核心 164、MVVM 41 项通过。Unity 原生编辑器验证 GUI 参数、独立预览及恢复、原始资产不变、Prefab 保存重开、控件引用映射、Undo；Godot 原生 headless 验证场景保存重开与实例预览，原生编辑器验证参数 GUI、选中行保留、Undo、预览恢复。脚本 scripts/Test-MvvmConverters.ps1 在隔离项目重复验证上述流程，中英文操作／API 文档及站点构建通过。Unity UXML／USS 使用原生编辑器导入，无 IMGUI。此阶段完成转换器配置，两端完整资产发现、控件引用和游戏 Demo 的原生节点迁移仍在实施。
+
+### 21.4 游戏 Demo 原生脚本阶段（2026-10-06）
+
+两端业务窗口均继承引擎原生 UINode／参数节点／结果弹窗，独立脚本与资源根节点对应；Core 工厂仅用于结构节点和隔离适配测试。Godot 确认窗口使用独立 Confirm.tscn，不再与业务 Modal 的根脚本混用同一场景。确认文本通过 Register 配置回调赋值，移除引擎脚本的业务构造参数。Unity 窗口 Prefab 已通过原生 Editor API 挂载对应组件，资源编排器同步生成原生业务脚本；控件查询使用统一 GetControl，列表所属节点采用 IUINode。
+
+两端 Demo 构建无错误。Godot 完整客户端 139 项、Unity 原生 Play Mode 31 项通过，Godot 生命周期独立检查 13 项通过。Godot 退出仍出现少量 RefCounted 引用计数为零的 ObjectDB 警告（完整客户端 3 个，独立生命周期 2 个），尚未定位，不标为已解决，不在业务添加 GC 或降级掩盖。完整资产发现、原生绑定目标引用及其余用户文档仍在迁移。

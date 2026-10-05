@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -30,7 +33,7 @@ public partial class DemoApp
         inventory.TransitionChanged += Hook;
         await ExpectCancellationAsync(stack.PushAsync<ItemDetailsView>(itemId, cancellationToken: cancel.Token));
         inventory.TransitionChanged -= Hook;
-        pass(canceledDetails!.State == NodeState.Disposed && stack.Current == inventory && inventory.SelectedIcon.SelfModulate.A == 1 && stack.GetControl().GetNodeOrNull("FlyingItemPortrait") == null, "partner entry cancellation restores retained icon");
+        pass(canceledDetails!.State == NodeState.Disposed && stack.Current == inventory && inventory.SelectedIcon.SelfModulate.A == 1 && stack.GetRoot().GetNodeOrNull("FlyingItemPortrait") == null, "partner entry cancellation restores retained icon");
         var original = new IOException("Expected partner observer failure.");
         void FailHook(TransitionState state)
         {
@@ -46,7 +49,7 @@ public partial class DemoApp
         }
         catch (IOException ex)
         {
-            pass(ReferenceEquals(ex, original) && stack.Current == inventory && inventory.SelectedIcon.SelfModulate.A == 1 && stack.GetControl().GetNodeOrNull("FlyingItemPortrait") == null, "partner raw failure restores source and cleans overlay");
+            pass(ReferenceEquals(ex, original) && stack.Current == inventory && inventory.SelectedIcon.SelfModulate.A == 1 && stack.GetRoot().GetNodeOrNull("FlyingItemPortrait") == null, "partner raw failure restores source and cleans overlay");
         }
         finally
         {
@@ -63,16 +66,16 @@ public partial class DemoApp
         retained.TransitionChanged += CancelReturn;
         await ExpectCancellationAsync(stack.PopAsync(cancellationToken: cancelReturn.Token));
         retained.TransitionChanged -= CancelReturn;
-        pass(stack.Current == retained && retained.GetControl().Modulate.A == 1 && retained.GetControl<TextureRect>("Icon").SelfModulate.A == 1 && stack.GetControl().GetNodeOrNull("FlyingItemPortrait") == null, "partner return cancellation restores detail");
+        pass(stack.Current == retained && retained.GetRoot().Modulate.A == 1 && retained.GetControl<TextureRect>("Icon").SelfModulate.A == 1 && stack.GetRoot().GetNodeOrNull("FlyingItemPortrait") == null, "partner return cancellation restores detail");
         await stack.PopAsync(playAnimation: false);
         var instant = await stack.PushAsync<ItemDetailsView>(itemId, playAnimation: false);
-        pass(instant.GetControl<TextureRect>("Icon").Texture == inventory.SelectedIcon.Texture && stack.GetControl().GetNodeOrNull("FlyingItemPortrait") == null, "instant partner prepares texture without overlay");
+        pass(instant.GetControl<TextureRect>("Icon").Texture == inventory.SelectedIcon.Texture && stack.GetRoot().GetNodeOrNull("FlyingItemPortrait") == null, "instant partner prepares texture without overlay");
         await stack.PopAsync(playAnimation: false);
         await OpenAsync("Home");
-        var host = new GodotUIHost(GetViewport());
-        var loader = new DelayedLoader(new GodotSceneLoader(host));
-        await using var ui = GodotUI.Create(this, loader: loader);
-        ui.Register<UINode>("res://Scenes/Client/Compare.tscn");
+        var host = new EngineUI.UIHost(GetViewport());
+        var loader = new DelayedLoader(new EngineUI.UIResourceLoader(host));
+        await using var ui = EngineUI.UI.Create(this, loader: loader);
+        ui.Register(() => new UINode(), "res://Scenes/Client/Compare.tscn");
         var windows = await ui.Root.CreateContainerAsync<PanelContainerNode>("LoadingCancellation", GetNode<Control>("FloatingMount"));
         var pending = windows.OpenAsync<UINode>();
         await ui.DisposeAsync();
@@ -142,10 +145,10 @@ public partial class DemoApp
 
     private async Task RunResourceSelfTestAsync()
     {
-        var host = new GodotUIHost(GetViewport());
-        var loader = new CountingLoader(new GodotSceneLoader(host));
-        await using var ui = GodotUI.Create(this, loader: loader);
-        ui.Register<UINode>("res://Scenes/Client/Compare.tscn");
+        var host = new EngineUI.UIHost(GetViewport());
+        var loader = new CountingLoader(new EngineUI.UIResourceLoader(host));
+        await using var ui = EngineUI.UI.Create(this, loader: loader);
+        ui.Register(() => new UINode(), "res://Scenes/Client/Compare.tscn");
         var first = ui.PreloadAsync<UINode>();
         var second = ui.PreloadAsync<UINode>();
         var a = await first;
@@ -155,7 +158,7 @@ public partial class DemoApp
         var window = await panels.OpenAsync<UINode>(playAnimation: false);
         a.Dispose();
         b.Dispose();
-        Check(loader.Loads == 1 && loader.Instances == 1 && loader.Releases == 0 && window.GetControl().IsInsideTree(), "Releasing preload damaged the opened window or reloaded its resource.");
+        Check(loader.Loads == 1 && loader.Instances == 1 && loader.Releases == 0 && window.GetRoot().IsInsideTree(), "Releasing preload damaged the opened window or reloaded its resource.");
         await panels.CloseAsync(window, playAnimation: false);
         Check(loader.Releases == 1, "Closing the last instance kept its resource hold.");
         var remaining = await ui.PreloadAsync<UINode>();
@@ -178,18 +181,18 @@ public partial class DemoApp
         };
         AddChild(mount);
         mount.AddChild(page);
-        var ui = GodotUI.Create(this, logger: new TestLog());
+        var ui = EngineUI.UI.Create(this, logger: new TestLog());
         try
         {
             Check(ui.Root.Children.Count == 0, "Adapter setup supplied project nodes.");
-            var customLoader = new DelayedLoader(new GodotSceneLoader((GodotUIHost)ui.Host));
-            await using (var custom = GodotUI.Create(this, loader: customLoader, logger: ui.Log))
+            var customLoader = new DelayedLoader(new EngineUI.UIResourceLoader((EngineUI.UIHost)ui.Host));
+            await using (var custom = EngineUI.UI.Create(this, loader: customLoader, logger: ui.Log))
                 Check(ReferenceEquals(custom.Loader, customLoader) && ReferenceEquals(custom.Log, ui.Log), "Custom services were replaced.");
             var tabs = await ui.Root.CreateContainerAsync<TabContainerNode>("Tabs", mount);
             await tabs.BindAsync("Page", page);
             await tabs.SwitchAsync("Page");
             Check(tabs.Current!.GetType() == typeof(UINode), "Control-only binding requires a business View.");
-            Check(ReferenceEquals(tabs.Current.GetControl(), page), "Embedded Control was cloned.");
+            Check(ReferenceEquals(tabs.Current.GetRoot(), page), "Embedded Control was cloned.");
             Check(ReferenceEquals(tabs.GetControl<Control>("Page"), page), "Typed Control lookup.");
             await VerifyNativeTransitionsAsync(tabs.Current!, page);
             await tabs.DisposeAsync();
@@ -204,7 +207,7 @@ public partial class DemoApp
             await ExpectCancellationAsync(ui.Root.CreateContainerAsync<PanelContainerNode>("Canceled", mount, canceled.Token));
             Check(ui.Root.Children.Count == 0, "Canceled helper left an attached container.");
             var stack = await ui.Root.CreateContainerAsync<StackContainerNode>("TransitionRollback", mount);
-            ui.Register<AdapterFadeNode>("res://Scenes/Client/Compare.tscn");
+            ui.Register(() => new AdapterFadeNode(), "res://Scenes/Client/Compare.tscn");
             var retained = await stack.PushAsync<AdapterFadeNode>();
             var transitionFailure = new InvalidOperationException("Expected adapter transition rollback failure.");
             ui.Register(() => new UINode { Transition = new AdapterFailingTransition(transitionFailure) }, "res://Scenes/Client/Compare.tscn");
@@ -216,7 +219,7 @@ public partial class DemoApp
             catch (InvalidOperationException ex)
             {
                 Check(ReferenceEquals(ex, transitionFailure), "Transition replaced the original exception.");
-                Check(ReferenceEquals(stack.Current, retained) && retained.IsVisible && retained.GetControl().Modulate.A == 1, "Rollback restored visibility but left the previous fade transparent.");
+                Check(ReferenceEquals(stack.Current, retained) && retained.IsVisible && retained.GetRoot().Modulate.A == 1, "Rollback restored visibility but left the previous fade transparent.");
             }
 
             await stack.DisposeAsync();
@@ -246,7 +249,7 @@ public partial class DemoApp
         GD.Print("GODOT ADAPTER SELF-TEST PASSED (setup, custom services, binding, ownership, cancellation, original failure)");
     }
 
-    private async Task VerifyNativeTransitionsAsync(UINode node, Control page)
+    private async Task VerifyNativeTransitionsAsync(IUINode node, Control page)
     {
         page.Size = new Vector2(100, 70);
         page.Position = new Vector2(5, 7);
@@ -266,7 +269,7 @@ public partial class DemoApp
 
         )
         {
-            var run = GodotTransitions.SlideHorizontal(0.02).Create(new(lifecycle, true, direction));
+            var run = EngineUI.Transitions.SlideHorizontal(0.02).Create(new(lifecycle, true, direction));
             var playing = run.PlayAsync(CancellationToken.None);
             var sign = direction == TransitionDirection.Forward ? 1 : -1;
             Check(page.Position.IsEqualApprox(position + new Vector2(sign * page.Size.X, 0)), "Slide did not honor the operation direction.");
@@ -275,16 +278,16 @@ public partial class DemoApp
             Check(page.Position.IsEqualApprox(position), "Slide drifted after restoration.");
         }
 
-        var fade = GodotTransitions.Fade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
+        var fade = EngineUI.Transitions.Fade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
         await fade.PlayAsync(CancellationToken.None);
         fade.Restore();
         Check(page.Modulate == tint, "Fade overwrote authored tint/alpha.");
-        var zoom = GodotTransitions.ScaleFade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
+        var zoom = EngineUI.Transitions.ScaleFade(0.02).Create(new(lifecycle, true, TransitionDirection.None));
         await zoom.PlayAsync(CancellationToken.None);
         zoom.Restore();
         Check(page.Scale == scale && page.PivotOffset == pivot && page.Modulate == tint, "ScaleFade did not restore authored presentation.");
         using var canceled = new CancellationTokenSource();
-        var rollback = GodotTransitions.ScaleFade(0.2).Create(new(lifecycle, false, TransitionDirection.None));
+        var rollback = EngineUI.Transitions.ScaleFade(0.2).Create(new(lifecycle, false, TransitionDirection.None));
         var pending = rollback.PlayAsync(canceled.Token);
         canceled.Cancel();
         await ExpectCancellationAsync(pending);
@@ -305,7 +308,7 @@ public partial class DemoApp
         library.AddAnimation("exit", new Animation { Length = 0.02 });
         player.AddAnimationLibrary("", library);
         var restored = false;
-        var authored = GodotTransitions.Animation("Animator", "enter", "exit", c =>
+        var authored = EngineUI.Transitions.Animation("Animator", "enter", "exit", c =>
         {
             c.Modulate = tint;
             restored = true;
@@ -323,7 +326,7 @@ public partial class DemoApp
     {
         protected override Task OnInitializeAsync(CancellationToken token)
         {
-            Transition = GodotTransitions.Fade(0.02);
+            Transition = EngineUI.Transitions.Fade(0.02);
             return Task.CompletedTask;
         }
     }

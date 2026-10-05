@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -13,8 +16,8 @@ public sealed class ItemPartnerTransition : IUITransition
         var details = (ItemDetailsView)context.Node;
         var partner = ReferenceEquals(context.Node, context.Source) ? context.Target : context.Source;
         var inventory = (InventoryView)partner!;
-        return new Run(context, details.GetControl(), inventory.SelectedIcon,
-            details.GetControl<TextureRect>("Icon"), context.Container!.GetControl());
+        return new Run(context, details.GetRoot(), inventory.SelectedIcon,
+            details.GetControl<TextureRect>("Icon"), context.Container!.GetRoot());
     }
 
     private sealed class Run : IUITransitionRun
@@ -76,7 +79,7 @@ public sealed class ItemPartnerTransition : IUITransition
             _small.SelfModulate = new Color(_smallColor.R, _smallColor.G, _smallColor.B, 0);
             _large.SelfModulate = new Color(_largeColor.R, _largeColor.G, _largeColor.B, 0);
             if (_context.Entering) _page.Modulate = new Color(_pageColor.R, _pageColor.G, _pageColor.B, 0);
-            var host = (GodotUIHost)_context.Node.Context.Host;
+            var host = (EngineUI.UIHost)_context.Node.Context.Host;
             // A newly shown VBoxContainer needs its deferred layout pass before geometry sampling.
             await host.NextFrameAsync();
             await host.NextFrameAsync();

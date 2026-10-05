@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -50,7 +53,7 @@ namespace StarCourt.UnityDemo
         private async Task InitializeAsync()
         {
             Store = new ClientStore(Path.Combine(Application.persistentDataPath, SaveFile));
-            UI = UnityUI.Create(Canvas, Events);
+            UI = EngineUI.UI.Create(Canvas, Events);
             PlayerVm = UI.GetSharedViewModel(Resources.Load<ClientPlayerVm>("MVVM/Player"));
             await new PlayerSubscriptionLifetime(this).AttachAsync(UI.Root, "PlayerSubscriptionLifetime");
             UI.BindLifetime(gameObject.scene);
@@ -62,14 +65,14 @@ namespace StarCourt.UnityDemo
             UI.Register<GraphicsView>("UI/Graphics"); UI.Register<RewardView>("UI/Reward");
             UI.Register<CompareView>("UI/Compare", windowMode: WindowInstanceMode.Multiple);
             UI.Register<PurchaseView>("UI/Purchase");
-            UI.Register(() => new ConfirmView(_confirmation), "UI/Confirm");
+            UI.Register<ConfirmView>("UI/Confirm", view => view.Message = _confirmation);
             Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Client", PageMount);
             Windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Comparison", WindowMount);
             Modals = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", ModalMount);
             Pages.ChildTransition = ClientTransitions.Page();
-            Windows.ChildTransition = UnityTransitions.ScaleFade();
-            Modals.ChildTransition = UnityTransitions.ScaleFade(targetPath: "Panel");
-            Modals.ConfigureBackdrop(UnityBackdrops.Dim(Track), ModalBackdropMode.Shared);
+            Windows.ChildTransition = EngineUI.Transitions.ScaleFade();
+            Modals.ChildTransition = EngineUI.Transitions.ScaleFade(targetPath: "Panel");
+            Modals.ConfigureBackdrop(EngineUI.Backdrops.Dim(Track), ModalBackdropMode.Shared);
             foreach (var button in Navigation.GetComponentsInChildren<Button>(true))
             {
                 var route = button.name;
@@ -105,7 +108,7 @@ namespace StarCourt.UnityDemo
                 foreach (var window in Windows.Children.Reverse().ToArray()) await Windows.CloseAsync(window);
                 ((ItemView)Pages.Current).RefreshComparison();
             }
-            if (route == "Home") { if (Pages.Current != Home) await Pages.PopToAsync(Home); return; }
+            if (route == "Home") { if (!ReferenceEquals(Pages.Current, Home)) await Pages.PopToAsync(Home); return; }
             if (Pages.Current.GetType().Name == route + "View") return;
             switch (route)
             {
@@ -137,8 +140,8 @@ namespace StarCourt.UnityDemo
             if (Modals.Current != null) { await Modals.RequestDismissAsync(); return; }
             if (Windows.Children.Count > 0)
             { foreach (var window in Windows.Children.Reverse().ToArray()) await Windows.CloseAsync(window); ((ItemView)Pages.Current).RefreshComparison(); return; }
-            if (Pages.Current != Home && !(Pages.Current is LoginView)) { await Pages.PopAsync(); return; }
-            if (Pages.Current == Home && await AskAsync("返回标题？本地档案已保存。"))
+            if (!ReferenceEquals(Pages.Current, Home) && !(Pages.Current is LoginView)) { await Pages.PopAsync(); return; }
+            if (ReferenceEquals(Pages.Current, Home) && await AskAsync("返回标题？本地档案已保存。"))
             { await Pages.PopAsync(); Navigation.SetActive(false); }
         });
         private sealed class WalletNode : UINode { protected override bool InitiallyVisible => true; }

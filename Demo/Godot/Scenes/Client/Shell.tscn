@@ -1,5 +1,8 @@
 [gd_scene load_steps=1 format=3]
+[ext_resource type="Script" path="res://Scripts/ShellView.cs" id="native_ui"]
+
 [node name="Shell" type="Control"]
+script = ExtResource("native_ui")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

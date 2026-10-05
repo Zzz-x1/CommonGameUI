@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -36,8 +39,8 @@ namespace StarCourt.UnityDemo.Tests
             _canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             _events = new GameObject("TestEvents", typeof(EventSystem), typeof(StandaloneInputModule));
             _log = new RecordingLog();
-            _ui = UnityUI.Create(_canvas.GetComponent<Canvas>(), _events.GetComponent<EventSystem>(), logger: _log);
-            _ui.Register<Plain>("UI/Graphics"); _ui.Register<Other>("UI/Confirm"); _ui.Register<Third>("UI/Purchase");
+            _ui = EngineUI.UI.Create(_canvas.GetComponent<Canvas>(), _events.GetComponent<EventSystem>(), logger: _log);
+            _ui.Register(() => new Plain(), "UI/Graphics"); _ui.Register(() => new Other(), "UI/Confirm"); _ui.Register(() => new Third(), "UI/Purchase");
             _mount = Rect("Mount", _canvas.transform);
             yield return null;
         }
@@ -64,7 +67,7 @@ namespace StarCourt.UnityDemo.Tests
             var first = Rect("Equipment", _mount); var second = Rect("Materials", _mount);
             await tabs.BindAsync("装备", first); await tabs.BindAsync("材料", second);
             await tabs.SwitchAsync("材料");
-            Assert.That(tabs.Current.GetRect(), Is.SameAs(second)); Assert.That(first.gameObject.activeSelf, Is.False);
+            Assert.That(tabs.Current.GetRoot(), Is.SameAs(second)); Assert.That(first.gameObject.activeSelf, Is.False);
             await tabs.HideAsync(); Assert.That(tabs.Current, Is.Null);
             await tabs.SwitchAsync("材料"); Assert.That(tabs.Current.GetType(), Is.EqualTo(typeof(UINode)));
             await tabs.DisposeAsync(); Assert.That(first && second && _mount, Is.True);
@@ -74,7 +77,7 @@ namespace StarCourt.UnityDemo.Tests
         {
             var stack = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", _mount);
             var first = await stack.PushAsync<Plain>(); var second = await stack.PushAsync<Other>();
-            Assert.That(first.State, Is.EqualTo(NodeState.Ready)); Assert.That(first.GetRect().gameObject.activeSelf, Is.False);
+            Assert.That(first.State, Is.EqualTo(NodeState.Ready)); Assert.That(first.GetRoot().gameObject.activeSelf, Is.False);
             await stack.PopToAsync(first); Assert.That(stack.Current, Is.SameAs(first)); Assert.That(second.State, Is.EqualTo(NodeState.Disposed));
             var panelMount = Rect("Windows", _canvas.transform);
             var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", panelMount);
@@ -88,7 +91,7 @@ namespace StarCourt.UnityDemo.Tests
             var page = Rect("Page", _mount); var child = Rect("Button", page);
             var button = child.gameObject.AddComponent<Button>(); button.interactable = false;
             var group = child.gameObject.AddComponent<CanvasGroup>(); group.ignoreParentGroups = true;
-            var element = new UnityUIElement((UnityUIHost)_ui.Host, page);
+            var element = new EngineUI.UIElement((EngineUI.UIHost)_ui.Host, page);
             element.SetInteractive(false); Assert.That(group.ignoreParentGroups, Is.False); Assert.That(button.interactable, Is.False);
             element.SetInteractive(true); Assert.That(group.ignoreParentGroups, Is.True); Assert.That(button.interactable, Is.False);
             await element.DisposeAsync(); Assert.That(page, Is.Not.Null);
@@ -99,7 +102,7 @@ namespace StarCourt.UnityDemo.Tests
             var original = Rect("Original", _canvas.transform).gameObject.AddComponent<Button>();
             _events.GetComponent<EventSystem>().SetSelectedGameObject(original.gameObject);
             var modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", _mount);
-            var dismissTasks = new List<Task>(); modals.ConfigureBackdrop(UnityBackdrops.Dim(dismissTasks.Add), ModalBackdropMode.Shared);
+            var dismissTasks = new List<Task>(); modals.ConfigureBackdrop(EngineUI.Backdrops.Dim(dismissTasks.Add), ModalBackdropMode.Shared);
             var first = await modals.OpenAsync<Plain>(); var second = await modals.OpenAsync<Other>(); var third = await modals.OpenAsync<Third>();
             Assert.That(first.IsInteractive, Is.False); Assert.That(third.IsInteractive, Is.True);
             await modals.CloseToAsync(first); Assert.That(first.IsInteractive, Is.True); Assert.That(second.State, Is.EqualTo(NodeState.Disposed));
@@ -113,7 +116,7 @@ namespace StarCourt.UnityDemo.Tests
             var tabs = await _ui.Root.CreateContainerAsync<TabContainerNode>("Effects", _mount);
             var rect = Rect("Item", _mount); rect.localScale = new Vector3(.8f, .9f, 1);
             var group = rect.gameObject.AddComponent<CanvasGroup>(); group.alpha = .7f;
-            var node = new UINode { Transition = UnityTransitions.Simple(new UnityTransitionFrame(offset: new Vector2(100, 40), scale: .4f, alpha: 0), new UnityTransitionFrame(), .3) };
+            var node = new UINode { Transition = EngineUI.Transitions.Simple(new EngineUI.TransitionFrame(offset: new Vector2(100, 40), scale: .4f, alpha: 0), new EngineUI.TransitionFrame(), .3) };
             await tabs.BindAsync("Item", node, rect);
             var scale = rect.localScale; var position = rect.anchoredPosition;
             using var cancellation = new CancellationTokenSource();
@@ -135,19 +138,19 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator MissingPrefabAndThreadAccessFailExplicitly() => Await(ErrorsAsync());
         private async Task ErrorsAsync()
         {
-            var loader = new UnityPrefabLoader((UnityUIHost)_ui.Host);
+            var loader = new EngineUI.UIResourceLoader((EngineUI.UIHost)_ui.Host);
             try { await loader.LoadAsync("UI/Absent", CancellationToken.None); Assert.Fail("Expected missing resource."); }
             catch (FileNotFoundException ex) { Assert.That(ex.FileName, Is.EqualTo("UI/Absent")); }
-            var exception = await Task.Run(() => Assert.Throws<InvalidOperationException>(() => _ui.Register<ClipNode>("Tests/LegacyLobby")));
+            var exception = await Task.Run(() => Assert.Throws<InvalidOperationException>(() => _ui.Register(() => new ClipNode(), "Tests/LegacyLobby")));
             Assert.That(_log.Errors, Does.Contain(exception));
         }
         public sealed class ClipNode : UINode
         {
             protected override Task OnInitializeAsync(CancellationToken token)
             {
-                var hero = this.GetComponent<RectTransform>("Hero"); var position = hero.anchoredPosition;
-                var groups = this.GetRect().GetComponentsInChildren<CanvasGroup>(true).ToDictionary(g => g, g => g.alpha);
-                Transition = UnityTransitions.Animation(null, "LobbyEnter", "LobbyExit", _ =>
+                var hero = this.GetControl<RectTransform>("Hero"); var position = hero.anchoredPosition;
+                var groups = this.GetRoot().GetComponentsInChildren<CanvasGroup>(true).ToDictionary(g => g, g => g.alpha);
+                Transition = EngineUI.Transitions.Animation(null, "LobbyEnter", "LobbyExit", _ =>
                 { hero.anchoredPosition = position; foreach (var pair in groups) pair.Key.alpha = pair.Value; });
                 return Task.CompletedTask;
             }
@@ -155,21 +158,21 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator AnimationClipCompletionAndCancellation() => Await(ClipsAsync());
         private async Task ClipsAsync()
         {
-            _ui.Register<ClipNode>("Tests/LegacyLobby");
+            _ui.Register(() => new ClipNode(), "Tests/LegacyLobby");
             var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Animation", _mount);
             var firstOpening = windows.OpenAsync<ClipNode>();
             while (windows.Children.Count == 0 || windows.Children[0].TransitionState?.Stage != TransitionStage.Playing || windows.Children[0].TransitionState.Progress < .3)
-                await ((UnityUIHost)_ui.Host).NextFrameAsync();
+                await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
             var moving = windows.Children[0];
-            Assert.That(moving.GetComponent<RectTransform>("Hero").anchoredPosition.x, Is.InRange(506, 759));
-            Assert.That(moving.GetComponent<CanvasGroup>("Entries").alpha, Is.EqualTo(0));
+            Assert.That(moving.GetControl<RectTransform>("Hero").anchoredPosition.x, Is.InRange(506, 759));
+            Assert.That(moving.GetControl<CanvasGroup>("Entries").alpha, Is.EqualTo(0));
             var node = await firstOpening;
-            Assert.That(node.GetComponent<RectTransform>("Hero").anchoredPosition.x, Is.EqualTo(505).Within(.001f));
-            Assert.That(node.GetComponent<CanvasGroup>("Hero").alpha, Is.EqualTo(1)); Assert.That(node.IsInteractive, Is.True);
+            Assert.That(node.GetControl<RectTransform>("Hero").anchoredPosition.x, Is.EqualTo(505).Within(.001f));
+            Assert.That(node.GetControl<CanvasGroup>("Hero").alpha, Is.EqualTo(1)); Assert.That(node.IsInteractive, Is.True);
             await windows.CloseAsync(node);
             using var cancellation = new CancellationTokenSource();
             var opening = windows.OpenAsync<ClipNode>(cancellationToken: cancellation.Token);
-            while (windows.Children.Count == 0 || windows.Children[0].TransitionState?.Stage != TransitionStage.Playing) await ((UnityUIHost)_ui.Host).NextFrameAsync();
+            while (windows.Children.Count == 0 || windows.Children[0].TransitionState?.Stage != TransitionStage.Playing) await ((EngineUI.UIHost)_ui.Host).NextFrameAsync();
             cancellation.Cancel();
             try { await opening; Assert.Fail("Expected cancellation."); } catch (OperationCanceledException) { }
             Assert.That(windows.Children, Is.Empty); Assert.That(_mount.childCount, Is.EqualTo(0));
@@ -177,7 +180,7 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator AnimationRunsWhileGameplayIsPaused() => Await(PausedClipAsync());
         private async Task PausedClipAsync()
         {
-            _ui.Register<ClipNode>("Tests/LegacyLobby");
+            _ui.Register(() => new ClipNode(), "Tests/LegacyLobby");
             var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Paused", _mount);
             var original = Time.timeScale;
             try
@@ -185,7 +188,7 @@ namespace StarCourt.UnityDemo.Tests
                 Time.timeScale = 0;
                 var node = await windows.OpenAsync<ClipNode>();
                 Assert.That(node.IsInteractive, Is.True);
-                var state = node.GetRect().GetComponent<Animation>()["LobbyEnter"];
+                var state = node.GetRoot().GetComponent<Animation>()["LobbyEnter"];
                 Assert.That(state.speed, Is.EqualTo(1)); Assert.That(state.time, Is.EqualTo(0));
                 await windows.CloseAsync(node);
             }
@@ -195,10 +198,10 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator BackdropVisibilityAndCancellation() => Await(BackdropVisibilityAsync());
         private async Task BackdropVisibilityAsync()
         {
-            var host = (UnityUIHost)_ui.Host;
+            var host = (EngineUI.UIHost)_ui.Host;
             var observed = new List<Task>();
-            var factory = UnityBackdrops.Dim(observed.Add, duration: .05);
-            var backdrop = await factory.CreateAsync(new UnityUIElement(host, _mount), () => Task.CompletedTask, CancellationToken.None);
+            var factory = EngineUI.Backdrops.Dim(observed.Add, duration: .05);
+            var backdrop = await factory.CreateAsync(new EngineUI.UIElement(host, _mount), () => Task.CompletedTask, CancellationToken.None);
             try
             {
                 var rect = (RectTransform)_mount.GetChild(0);
@@ -237,7 +240,7 @@ namespace StarCourt.UnityDemo.Tests
             try
             {
                 var tabs = await _ui.Root.CreateContainerAsync<TabContainerNode>("FirstFrame", _mount);
-                var node = new UINode { Transition = UnityTransitions.Animation(null, "enter", "exit", _ => group.alpha = .6f) };
+                var node = new UINode { Transition = EngineUI.Transitions.Animation(null, "enter", "exit", _ => group.alpha = .6f) };
                 await tabs.BindAsync("Timeline", node, rect);
                 var pending = tabs.SwitchAsync("Timeline");
                 Assert.That(group.alpha, Is.InRange(0, .01f), "Authored alpha was exposed before sampling.");

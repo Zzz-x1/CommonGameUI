@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -45,19 +48,19 @@ public partial class DemoApp : Control
 
     private async Task StartAsync()
     {
-        _ui = GodotUI.Create(this);
+        _ui = EngineUI.UI.Create(this);
         PlayerVm = _ui.GetSharedViewModel(GD.Load<ClientPlayerVm>("res://Assets/Mvvm/Player.tres"));
         RefreshPlayerVm();
         Store.Changed += RefreshPlayerVm;
         await new PlayerSubscriptionLifetime(this).AttachAsync(_ui.Root, "PlayerSubscriptionLifetime");
         _ui.BindLifetime(this);
         _ui.RegisterGeneratedUI();
-        _ui.Register(() => new ConfirmView(Confirmation), "res://Scenes/Client/Modal.tscn");
-        _ui.DefaultTransition = GodotTransitions.Fade(.18);
+        _ui.Register<ConfirmView>("res://Scenes/Client/Confirm.tscn", view => view.Message = Confirmation);
+        _ui.DefaultTransition = EngineUI.Transitions.Fade(.18);
         _shells = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Client", GetNode<Control>("ShellMount"));
         Floating = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Comparison", GetNode<Control>("FloatingMount"));
         Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("ModalMount"));
-        Modals.ConfigureBackdrop(GodotBackdrops.Dim(Track), ModalBackdropMode.Shared);
+        Modals.ConfigureBackdrop(EngineUI.Backdrops.Dim(Track), ModalBackdropMode.Shared);
         _login = await _shells.OpenAsync<LoginView>();
         await RunDevelopmentAsync();
     }
@@ -144,9 +147,9 @@ public partial class DemoApp : Control
         }
     }
 
-    public Task RunAsync(UINode owner, Func<Task> action) => RunAsync(async () =>
+    public Task RunAsync(IUINode owner, Func<Task> action) => RunAsync(async () =>
     {
-        var display = (GodotUIElement)owner.Element!;
+        var display = (EngineUI.UIElement)owner.Element!;
         var focus = owner.Context.Host.CaptureFocus();
         display.SetInteractive(false);
         try

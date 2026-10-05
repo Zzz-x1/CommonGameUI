@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -28,7 +31,7 @@ public partial class DemoApp
     {
         await OpenAsync("Inventory");
         var inventory = (InventoryView)Shell.Pages.Current!;
-        var root = inventory.GetControl();
+        var root = inventory.GetRoot();
         var tab = root.GetNode<Button>("Tabs/材料");
         var filter = root.GetNode<LineEdit>("Filter");
         var focusMode = filter.FocusMode;
@@ -127,7 +130,7 @@ public partial class DemoApp
         held.Gate.SetResult(true);
         await switching;
         target.Transition = originalTransition;
-        pass(!Busy && events.Tabs.Current == null && events.GetControl().IsVisibleInTree()
+        pass(!Busy && events.Tabs.Current == null && events.GetRoot().IsVisibleInTree()
             && GetViewport().GuiGetFocusOwner() == fold, "activity fold restores input and retains its page");
         await events.FoldAsync();
         pass(events.Tabs.CurrentName == "庆典" && !Busy, "activity fold can restore retained embedded content");
@@ -157,8 +160,8 @@ public partial class DemoApp
         var mount = new Control();
         AddChild(mount);
         mount.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        await using var fixture = GodotUI.Create(this);
-        fixture.Register<UINode>("res://Scenes/Client/Inventory.tscn");
+        await using var fixture = EngineUI.UI.Create(this);
+        fixture.Register(() => new UINode(), "res://Scenes/Client/Inventory.tscn");
         var panels = await fixture.Root.CreateContainerAsync<PanelContainerNode>("DisposalScope", mount);
         var owner = await panels.OpenAsync<UINode>(playAnimation: false);
         var tabs = await owner.CreateContainerAsync<TabContainerNode>("Tabs", owner.GetControl<Control>("Pages"));

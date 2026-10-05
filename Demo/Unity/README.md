@@ -2,6 +2,10 @@
 
 Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 
+## 业务脚本
+
+每个窗口脚本单独保存在同名文件，并直接挂载在窗口资源根节点上。继承 `UIFramework.Unity.UINode`，参数窗口使用 `UINode<TArgs>`，确认窗口使用 `DialogNode<TResult>`。注册从资源取得脚本实例；确认文本在注册配置回调中赋值，脚本构造函数不注入服务。
+
 ## 运行
 
 安装 .NET 10 SDK，从仓库根执行：

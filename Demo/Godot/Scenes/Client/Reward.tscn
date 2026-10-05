@@ -1,4 +1,5 @@
 [gd_scene load_steps=7 format=3]
+[ext_resource type="Script" path="res://Scripts/RewardView.cs" id="native_ui"]
 [ext_resource type="Texture2D" path="res://Assets/Client/glow.svg" id="1"]
 [ext_resource type="Texture2D" path="res://Assets/Client/star.svg" id="particle"]
 [ext_resource type="Texture2D" path="res://Assets/Client/sigil.svg" id="sigil"]
@@ -163,7 +164,9 @@ tracks/0/path = NodePath(".:modulate")
 tracks/0/keys = { "times": PackedFloat32Array(0, 0.2), "transitions": PackedFloat32Array(1, 1), "update": 0, "values": [Color(1,1,1,1), Color(1,1,1,0)] }
 [sub_resource type="AnimationLibrary" id="Library"]
 _data = { &"enter": SubResource("Enter"), &"exit": SubResource("Exit") }
+
 [node name="Reward" type="Control"]
+script = ExtResource("native_ui")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

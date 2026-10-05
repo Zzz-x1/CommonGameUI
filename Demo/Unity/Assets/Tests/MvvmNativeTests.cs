@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -32,7 +35,7 @@ namespace StarCourt.UnityDemo.Tests
         {
             var template = ScriptableObject.CreateInstance<NativePlayerVm>(); template.Gold = 100; template.Items.Add(1);
             var events = new GameObject("MVVM Events", typeof(EventSystem)); var canvas = new GameObject("MVVM Canvas", typeof(Canvas));
-            var ui = UnityUI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>()); var runtime = new MvvmRuntime(); ui.ConfigureMvvm(runtime);
+            var ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>()); var runtime = new MvvmRuntime(); ui.ConfigureMvvm(runtime);
             var rect = new GameObject("View", typeof(RectTransform), typeof(MvvmBindings)); rect.transform.SetParent(canvas.transform, false);
             var label = new GameObject("Gold", typeof(RectTransform), typeof(Text)); label.transform.SetParent(rect.transform, false);
             var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)); button.transform.SetParent(rect.transform, false);

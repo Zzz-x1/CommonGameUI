@@ -1,3 +1,6 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineMvvm = global::UIFramework.Mvvm.Godot;
 using System.Collections.ObjectModel;
 using Godot;
 using UIFramework;
@@ -34,9 +37,9 @@ public class ClientInventoryItemVm
 // The project owns its four-column layout; the module owns instances and bindings.
 internal sealed class InventoryGridTarget : ICollectionTarget
 {
-    private readonly GodotCollectionTarget _items;
+    private readonly EngineMvvm.CollectionTarget _items;
     private readonly Control _mount;
-    public InventoryGridTarget(UINode owner, Control mount, PackedScene row) { _mount = mount; _items = new(owner, mount, row); }
+    public InventoryGridTarget(IUINode owner, Control mount, PackedScene row) { _mount = mount; _items = new(owner, mount, row); }
     public void Insert(int index, object item) { _items.Insert(index, item); Arrange(); }
     public void Remove(int index) { _items.Remove(index); Arrange(); }
     public void Move(int oldIndex, int newIndex) { _items.Move(oldIndex, newIndex); Arrange(); }

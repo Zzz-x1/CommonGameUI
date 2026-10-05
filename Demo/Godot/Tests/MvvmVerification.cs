@@ -1,3 +1,7 @@
+using Transitions = global::UIFramework.Transitions;
+using UINode = global::UIFramework.UINode;
+using EngineMvvm = global::UIFramework.Mvvm.Godot;
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
@@ -26,12 +30,12 @@ public partial class MvvmVerification : global::Godot.Node
         config.Bindings.Add(new ViewBindingResource { Target = new("Gold"), Member = "Text", Source = "Player.Gold", Converter = "FormatNumber" });
         config.Bindings.Add(new ViewBindingResource { Target = new("Buy"), Kind = ViewBindingKind.Command, Source = "Player.Buy" });
         config.Bindings.Add(new ViewBindingResource { Target = new("Amount"), Member = "Value", Source = "Player.Gold", Mode = BindingMode.TwoWay, Converter = "IntToFloat", ConvertBack = "FloatToInt" });
-        var runtime = new MvvmRuntime(); var ui = GodotUI.Create(this); ui.ConfigureMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
+        var runtime = new MvvmRuntime(); var ui = EngineUI.UI.Create(this); ui.ConfigureMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
         var vm = node.GetViewModel<NativePlayerVm>("Player"); Check(vm != template, "Original asset was used"); Check(ReferenceEquals(vm, vm.Other), "Asset cycle not preserved"); Check(label.Text == "100", "Initial display missing");
         button.EmitSignal(BaseButton.SignalName.Pressed); Check(vm.Gold == 90 && template.Gold == 100, "Purchase modified template");
         slider.Value = 70; Check(vm.Gold == 70 && label.Text == "70", "Two-way editor"); vm.Items.Add(2); Check(template.Items.Count == 1, "Typed arrays shared storage");
         await node.DisposeAsync(); vm.Gold = 40; Check(label.Text == "70", "Closed node retained bindings"); await ui.DisposeAsync(); await runtime.DisposeAsync();
-        await using (var preview = new GodotBindingPreview(config)) { Check(label.Text == "100", "Preview initial value"); Check(slider.Value == 100, "Preview slider value"); button.EmitSignal(BaseButton.SignalName.Pressed); Check(template.Gold == 100, "Preview command changed asset"); }
+        await using (var preview = new EngineMvvm.BindingPreview(config)) { Check(label.Text == "100", "Preview initial value"); Check(slider.Value == 100, "Preview slider value"); button.EmitSignal(BaseButton.SignalName.Pressed); Check(template.Gold == 100, "Preview command changed asset"); }
         Check(label.Text == "70" && slider.Value == 70, "Preview did not restore controls");
         template.Other = null; var packed = new PackedScene(); Check(packed.Pack(view) == Error.Ok, "Pack view"); var path = "user://mvvm-config-verification.tscn"; Check(ResourceSaver.Save(packed, path) == Error.Ok, "Save configuration");
         using var saved = ResourceLoader.Load<PackedScene>(path, cacheMode: ResourceLoader.CacheMode.Ignore); var restored = saved.Instantiate<Control>(); var restoredConfig = restored.GetNode<MvvmBindings>("MvvmBindings");
