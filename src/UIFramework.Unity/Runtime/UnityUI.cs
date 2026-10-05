@@ -14,8 +14,7 @@ namespace UIFramework.Unity
             try
             {
                 if (!canvas || !canvas.isActiveAndEnabled) throw new ArgumentException("An active scene Canvas is required.", nameof(canvas));
-                var frames = canvas.GetComponent<UnityFramePump>();
-                if (!frames) frames = canvas.gameObject.AddComponent<UnityFramePump>();
+                var frames = UnityLifetimeRunner.Get().Frames;
                 var host = new UnityUIHost(events, frames);
                 return new UIContext(host, loader ?? new UnityPrefabLoader(host), logger ?? host);
             }

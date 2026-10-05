@@ -15,6 +15,21 @@ RectTransform GetRect(this UINode node)
 T GetComponent<T>(this UINode node, string path) where T : Component
 ```
 
+## 生命周期绑定
+
+同步绑定已挂载节点；销毁引擎对象后自动清理。Dispose 只解除绑定；Completion 等待清理。详见[生命周期](../manual/lifecycle.md)。
+
+```csharp
+// UnityLifetimeExtensions:
+UnityLifetimeBinding BindLifetime(this UINode node, GameObject owner)
+UnityLifetimeBinding BindLifetime(this UINode node, UnityEngine.SceneManagement.Scene scene)
+UnityLifetimeBinding BindLifetime(this UIContext ui, GameObject owner)
+UnityLifetimeBinding BindLifetime(this UIContext ui, UnityEngine.SceneManagement.Scene scene)
+// UnityLifetimeBinding:
+Task Completion { get; }
+void Dispose()
+```
+
 ## 转场与遮罩
 
 ```csharp

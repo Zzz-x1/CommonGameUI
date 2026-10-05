@@ -8,7 +8,20 @@ public partial class DemoApp
     private async Task RunDevelopmentAsync()
     {
         var args = OS.GetCmdlineUserArgs();
-        if (args.Contains("--self-test"))
+        if (args.Contains("--lifetime-tests"))
+        {
+            int checks = 0;
+            await RunLifetimeTestsAsync((passed, name) =>
+            {
+                if (!passed) throw new InvalidOperationException("Lifetime test failed: " + name);
+                checks++; GD.Print("PASS " + name);
+            });
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await _ui.DisposeAsync();
+            GD.Print("LIFETIME TESTS PASSED: " + checks);
+            GetTree().Quit();
+        }
+        else if (args.Contains("--self-test"))
             await RunClientTestsAsync();
         else if (args.Contains("--verify-client-save"))
             await VerifyClientSaveAsync();

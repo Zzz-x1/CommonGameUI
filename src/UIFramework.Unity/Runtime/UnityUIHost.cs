@@ -12,6 +12,8 @@ namespace UIFramework.Unity
         private readonly int _thread = Thread.CurrentThread.ManagedThreadId;
         private readonly EventSystem _events;
         private readonly UnityFramePump _frames;
+        private bool _lifetimeEnding;
+        internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
         public UnityUIHost(EventSystem events, UnityFramePump frames)
         {
             _events = events ? events : throw new ArgumentNullException(nameof(events));
@@ -21,14 +23,15 @@ namespace UIFramework.Unity
         {
             if (Thread.CurrentThread.ManagedThreadId != _thread)
                 throw new InvalidOperationException("UI access must run on Unity's main thread.");
-            if (!_events || !_frames) throw new ObjectDisposedException(nameof(UnityUIHost));
         }
         public Task NextFrameAsync() { VerifyAccess(); return _frames.NextFrameAsync(); }
-        public object CaptureFocus() { VerifyAccess(); return _events.currentSelectedGameObject; }
+        public object CaptureFocus() { VerifyAccess(); VerifyEvents(); return _events.currentSelectedGameObject; }
+        private void VerifyEvents() { if (!_events) throw new ObjectDisposedException(nameof(EventSystem)); }
         public void Focus(IUIElement element)
         {
             VerifyAccess();
             if (element == null) return;
+            VerifyEvents();
             if (!(element is UnityUIElement display)) throw new ArgumentException("Expected a Unity display.", nameof(element));
             foreach (var selectable in display.Rect.GetComponentsInChildren<Selectable>())
                 if (selectable.isActiveAndEnabled && selectable.IsInteractable())
@@ -41,7 +44,10 @@ namespace UIFramework.Unity
             // Closing a page normally destroys its previous focus target.
             if (focus is GameObject target && target && target.activeInHierarchy
                 && target.TryGetComponent<Selectable>(out var selectable) && selectable.IsInteractable())
-                _events.SetSelectedGameObject(target);
+            {
+                if (_lifetimeEnding && !_events) return;
+                VerifyEvents(); _events.SetSelectedGameObject(target);
+            }
         }
         public void Error(Exception exception, string context)
         {

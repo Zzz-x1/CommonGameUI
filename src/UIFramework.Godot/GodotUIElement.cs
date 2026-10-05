@@ -11,10 +11,17 @@ public sealed class GodotUIElement : IUIElement
     private readonly List<ControlState> _controls = new();
     private readonly bool _owned;
     private bool _disposed;
+    private bool _lifetimeEnding;
+    private readonly GodotUIElement? _lifetimeOwner;
+    internal bool IsLifetimeEnding => _lifetimeEnding || (_lifetimeOwner?.IsLifetimeEnding ?? false);
+    internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
+    internal bool DisplayWasDestroyed => !_disposed && IsLifetimeEnding && (!GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion());
     private readonly string _name;
 
-    public GodotUIElement(Control control, bool owned = false)
+    public GodotUIElement(Control control, bool owned = false) : this(control, owned, null) { }
+    internal GodotUIElement(Control control, bool owned, GodotUIElement? lifetimeOwner)
     {
+        _lifetimeOwner = lifetimeOwner;
         Control = control ?? throw new ArgumentNullException(nameof(control));
         _name = control.Name;
         _owned = owned;
@@ -31,9 +38,10 @@ public sealed class GodotUIElement : IUIElement
             throw new ObjectDisposedException(nameof(GodotUIElement), $"Display '{_name}' is no longer available.");
     }
 
-    public void SetVisible(bool visible) { VerifyAlive(); Control.Visible = visible; }
+    public void SetVisible(bool visible) { if (DisplayWasDestroyed) return; VerifyAlive(); Control.Visible = visible; }
     public void SetInteractive(bool interactive)
     {
+        if (DisplayWasDestroyed) return;
         VerifyAlive();
         foreach (var state in _controls)
         {
@@ -44,10 +52,11 @@ public sealed class GodotUIElement : IUIElement
             // Mouse/focus gating must not overwrite a business-controlled Button.Disabled value.
         }
     }
-    public void BringToFront() { VerifyAlive(); Control.MoveToFront(); }
+    public void BringToFront() { if (DisplayWasDestroyed) return; VerifyAlive(); Control.MoveToFront(); }
     public object CaptureOrder() { VerifyAlive(); return Control.GetIndex(); }
     public void RestoreOrder(object order)
     {
+        if (DisplayWasDestroyed) return;
         VerifyAlive();
         if (order is not int index) throw new ArgumentException("Expected a Godot sibling index.", nameof(order));
         Control.GetParent().MoveChild(Control, index);
@@ -55,6 +64,7 @@ public sealed class GodotUIElement : IUIElement
     public ValueTask DisposeAsync()
     {
         if (_disposed) return default;
+        if (DisplayWasDestroyed) { _disposed = true; return default; }
         if (!GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion())
             throw new ObjectDisposedException(nameof(GodotUIElement), "Display was destroyed before its logical owner.");
         if (_owned)

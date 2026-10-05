@@ -63,8 +63,10 @@ public sealed class ItemPartnerTransition : IUITransition
             _page.Modulate = new Color(_pageColor.R, _pageColor.G, _pageColor.B, _pageColor.A * pageAlpha);
         }
 
+        private CancellationToken _token;
         public async Task PlayAsync(CancellationToken token)
         {
+            _token = token;
             token.ThrowIfCancellationRequested();
             var origin = Rectangle(_context.Entering ? _small : _large);
             _flying.Position = origin.Position;
@@ -74,16 +76,16 @@ public sealed class ItemPartnerTransition : IUITransition
             _small.SelfModulate = new Color(_smallColor.R, _smallColor.G, _smallColor.B, 0);
             _large.SelfModulate = new Color(_largeColor.R, _largeColor.G, _largeColor.B, 0);
             if (_context.Entering) _page.Modulate = new Color(_pageColor.R, _pageColor.G, _pageColor.B, 0);
-            var tree = _page.GetTree();
+            var host = (GodotUIHost)_context.Node.Context.Host;
             // A newly shown VBoxContainer needs its deferred layout pass before geometry sampling.
-            await _page.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
-            await _page.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            await host.NextFrameAsync();
+            await host.NextFrameAsync();
             token.ThrowIfCancellationRequested();
             Apply(0); _context.ReportProgress(0);
             var elapsed = 0d;
             while (elapsed < Duration)
             {
-                await _page.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                await host.NextFrameAsync();
                 token.ThrowIfCancellationRequested();
                 elapsed += _page.GetProcessDeltaTime();
                 var progress = (float)Math.Min(1, elapsed / Duration);
@@ -94,11 +96,14 @@ public sealed class ItemPartnerTransition : IUITransition
         public void Restore()
         {
             // No task/signal survives the run. Detach immediately, free on Godot's deferred queue.
-            _mount.RemoveChild(_flying);
-            _flying.QueueFree();
-            _page.Modulate = _pageColor;
-            _small.SelfModulate = _smallColor;
-            _large.SelfModulate = _largeColor;
+            if (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(_flying))
+            {
+                _mount.RemoveChild(_flying);
+                _flying.QueueFree();
+            }
+            if (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(_page)) _page.Modulate = _pageColor;
+            if (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(_small)) _small.SelfModulate = _smallColor;
+            if (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(_large)) _large.SelfModulate = _largeColor;
         }
     }
 }

@@ -14,7 +14,6 @@ public class ClientModalView : UINode<ModalArgs>
     private PlayerState Data => App.Store.State;
     private Control Root => ((GodotUIElement)Element!).Control;
 
-    private readonly List<Action> _disconnect = new();
     private int _avatar;
     private TabContainerNode? _settings;
     private TabContainerNode _pages = null!;
@@ -26,7 +25,6 @@ public class ClientModalView : UINode<ModalArgs>
         var b = Get<Button>(path);
         void Click() => App.Track(action());
         b.Pressed += Click;
-        _disconnect.Add(() => b.Pressed -= Click);
     }
 
     protected override async Task OnInitializeAsync(CancellationToken token)
@@ -61,7 +59,6 @@ public class ClientModalView : UINode<ModalArgs>
             spin.Value = Parameters.Quantity;
             void Changed(double value) => Refresh();
             spin.ValueChanged += Changed;
-            _disconnect.Add(() => spin.ValueChanged -= Changed);
         }
 
         if (page == "Profile")
@@ -82,7 +79,6 @@ public class ClientModalView : UINode<ModalArgs>
             var name = Get<LineEdit>("Center/Pages/Profile/Name");
             void Changed(string value) => Refresh();
             name.TextChanged += Changed;
-            _disconnect.Add(() => name.TextChanged -= Changed);
         }
 
         if (page == "Settings")
@@ -117,7 +113,6 @@ public class ClientModalView : UINode<ModalArgs>
         }
 
         volume.ValueChanged += Volume;
-        _disconnect.Add(() => volume.ValueChanged -= Volume);
         var full = Get<CheckButton>(path + "SettingPages/画面/Fullscreen");
         full.ButtonPressed = Data.Fullscreen;
         void Full(bool v)
@@ -127,12 +122,10 @@ public class ClientModalView : UINode<ModalArgs>
         }
 
         full.Toggled += Full;
-        _disconnect.Add(() => full.Toggled -= Full);
         var motion = Get<CheckButton>(path + "SettingPages/演出/FullMotion");
         motion.ButtonPressed = Data.FullMotion;
         void Motion(bool v) => App.Store.Change(s => s.FullMotion = v);
         motion.Toggled += Motion;
-        _disconnect.Add(() => motion.Toggled -= Motion);
         var quality = Get<OptionButton>(path + "SettingPages/画面/Quality");
         foreach (var n in new[]
         {
@@ -144,7 +137,6 @@ public class ClientModalView : UINode<ModalArgs>
         quality.Select(Data.Quality);
         void Quality(long v) => App.Store.Change(s => s.Quality = (int)v);
         quality.ItemSelected += Quality;
-        _disconnect.Add(() => quality.ItemSelected -= Quality);
     }
 
     protected override void OnActivated(StateChangeContext context) => Refresh();
@@ -390,12 +382,6 @@ public class ClientModalView : UINode<ModalArgs>
         await App.Modals.CloseAsync(this);
     }
 
-    protected override Task OnDisposeAsync()
-    {
-        foreach (var disconnect in _disconnect)
-            disconnect();
-        return Task.CompletedTask;
-    }
 }
 
 public class ConfirmView(string message) : DialogNode<bool>
@@ -423,13 +409,6 @@ public class ConfirmView(string message) : DialogNode<bool>
     private void Yes() => Complete(true);
     private void No() => Complete(false);
     protected override void OnEntered(LifecycleContext context) => Root.GetNode<Button>("Center/Confirm").GrabFocus();
-    protected override Task OnDisposeAsync()
-    {
-        Root.GetNode<Button>("Center/Confirm").Pressed -= Yes;
-        Root.GetNode<Button>("Center/Cancel").Pressed -= No;
-        Root.GetNode<Button>("Center/Close").Pressed -= No;
-        return Task.CompletedTask;
-    }
 }
 
 [UIResource("res://Scenes/Client/Compare.tscn", WindowMode = WindowInstanceMode.Multiple)]
@@ -457,11 +436,6 @@ public class CompareView : UINode<CompareArgs>
             item.Refresh();
     }
 
-    protected override Task OnDisposeAsync()
-    {
-        ((GodotUIElement)Element!).Control.GetNode<Button>("Card/Close").Pressed -= Close;
-        return Task.CompletedTask;
-    }
 }
 
 public abstract class PresentationView : UINode<PresentationArgs>
@@ -494,11 +468,6 @@ public abstract class PresentationView : UINode<PresentationArgs>
     }
 
     private void Close() => DemoApp.Instance.Track(DemoApp.Instance.Modals.CloseAsync(this));
-    protected override Task OnDisposeAsync()
-    {
-        ((GodotUIElement)Element!).Control.GetNode<Button>("Center/Close").Pressed -= Close;
-        return Task.CompletedTask;
-    }
 }
 
 [UIResource("res://Scenes/Client/Reward.tscn")]
@@ -550,19 +519,21 @@ public sealed class CinematicTransition : IUITransition
             foreach (var pair in originals)
                 pair.Key.Item1.Set(pair.Key.Item2, pair.Value);
         }).Create(context);
-        return new Run(inner, root, player, context.Entering, particles, scaled);
+        return new Run(inner, root, player, context.Entering, particles, scaled, (GodotUIHost)context.Node.Context.Host);
     }
 
-    private sealed class Run(IUITransitionRun inner, Control root, AnimationPlayer player, bool entering, CpuParticles2D? particles, Control[] scaled) : IUITransitionRun
+    private sealed class Run(IUITransitionRun inner, Control root, AnimationPlayer player, bool entering, CpuParticles2D? particles, Control[] scaled, GodotUIHost host) : IUITransitionRun
     {
         private readonly Color _color = root.Modulate;
+        private CancellationToken _token;
         public async Task PlayAsync(CancellationToken token)
         {
+            _token = token;
             token.ThrowIfCancellationRequested();
             // Keep layout active, but do not draw the authored end state while it settles.
             if (entering)
                 root.Modulate = new Color(_color.R, _color.G, _color.B, 0);
-            await player.ToSignal(player.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await host.NextFrameAsync();
             token.ThrowIfCancellationRequested();
             foreach (var control in scaled)
                 control.PivotOffset = control.Size / 2;
@@ -580,17 +551,19 @@ public sealed class CinematicTransition : IUITransition
             }
             finally
             {
-                if (entering)
+                if (entering && GodotObject.IsInstanceValid(DemoApp.Instance))
                     DemoApp.Instance.Gate(null);
             }
         }
 
         public void Restore()
         {
-            root.Modulate = _color;
-            if (particles != null)
-                particles.Emitting = false;
-            inner.Restore();
+            try
+            {
+                if (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(root)) root.Modulate = _color;
+                if (particles != null && (!_token.IsCancellationRequested || GodotObject.IsInstanceValid(particles))) particles.Emitting = false;
+            }
+            finally { inner.Restore(); }
         }
     }
 }

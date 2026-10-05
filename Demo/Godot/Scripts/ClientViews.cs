@@ -19,7 +19,6 @@ public abstract class ClientView : UINode
         var button = Get<Button>(path);
         void Click() => App.Track(action());
         button.Pressed += Click;
-        _disconnect.Add(() => button.Pressed -= Click);
     }
 
     protected void Listen(Action connect, Action disconnect)
@@ -46,11 +45,6 @@ public abstract class ClientView : UINode
             void Leave() => Animate(original);
             button.MouseEntered += Enter;
             button.MouseExited += Leave;
-            _disconnect.Add(() =>
-            {
-                button.MouseEntered -= Enter;
-                button.MouseExited -= Leave;
-            });
         }
     }
 
@@ -68,8 +62,9 @@ public abstract class ClientView : UINode
     {
         foreach (var disconnect in _disconnect)
             disconnect();
-        foreach (var tween in _feedback.Values)
-            tween.Kill();
+        // Owned scenes release native signals and node-bound tweens when freed.
+        _disconnect.Clear();
+        _feedback.Clear();
         return Task.CompletedTask;
     }
 
@@ -248,7 +243,7 @@ public abstract class ClientPage : ClientView
         {
             var filter = Get<LineEdit>("Filter");
             void Search(string text) => Refresh();
-            Listen(() => filter.TextChanged += Search, () => filter.TextChanged -= Search);
+            filter.TextChanged += Search;
             Wire("FavoriteFilter", () =>
             {
                 _favorites = !_favorites;
@@ -274,7 +269,7 @@ public abstract class ClientPage : ClientView
                 Refresh();
             }
 
-            Listen(() => sort.ItemSelected += Sort, () => sort.ItemSelected -= Sort);
+            sort.ItemSelected += Sort;
         }
 
         if (Module == "Mail")
@@ -546,13 +541,6 @@ public class HeroDetailsView : UINode<int>
         Root.GetNode<Button>("Train").Disabled = s.Gold < 100 || s.Inventory["mat6"] < 1 || s.Levels[Parameters] >= 60;
     }
 
-    protected override Task OnDisposeAsync()
-    {
-        Root.GetNode<Button>("Train").Pressed -= Train;
-        Root.GetNode<Button>("Equip").Pressed -= Equip;
-        Root.GetNode<Button>("Unequip").Pressed -= Unequip;
-        return Task.CompletedTask;
-    }
 }
 
 [UIResource("res://Scenes/Client/ItemDetails.tscn")]
@@ -600,12 +588,6 @@ public class ItemDetailsView : UINode<string>
         Root.GetNode<Button>("Compare").Disabled = item.Power == 0 || App.Floating.Children.Count >= 2;
     }
 
-    protected override Task OnDisposeAsync()
-    {
-        Root.GetNode<Button>("Favorite").Pressed -= Favorite;
-        Root.GetNode<Button>("Compare").Pressed -= Compare;
-        return Task.CompletedTask;
-    }
 }
 
 [UIResource("res://Scenes/Client/Events.tscn")]

@@ -21,8 +21,15 @@ namespace UIFramework.Unity
         private readonly GroupDefaults _default;
         private readonly (CanvasGroup Group, GroupDefaults Default)[] _groups;
         private bool _disposed;
-        public UnityUIElement(UnityUIHost host, RectTransform rect, bool owned = false)
+        private bool _lifetimeEnding;
+        private readonly UnityUIElement _lifetimeOwner;
+        internal bool IsLifetimeEnding => _lifetimeEnding || (_lifetimeOwner?.IsLifetimeEnding ?? false);
+        internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
+        internal bool DisplayWasDestroyed => !_disposed && IsLifetimeEnding && (!Rect);
+        public UnityUIElement(UnityUIHost host, RectTransform rect, bool owned = false) : this(host, rect, owned, null) { }
+        internal UnityUIElement(UnityUIHost host, RectTransform rect, bool owned, UnityUIElement lifetimeOwner)
         {
+            _lifetimeOwner = lifetimeOwner;
             _host = host ?? throw new ArgumentNullException(nameof(host));
             host.VerifyAccess();
             Rect = rect ? rect : throw new ArgumentNullException(nameof(rect));
@@ -40,9 +47,10 @@ namespace UIFramework.Unity
             _host.VerifyAccess();
             if (_disposed || !Rect) throw new ObjectDisposedException(nameof(UnityUIElement));
         }
-        public void SetVisible(bool visible) { VerifyAlive(); Rect.gameObject.SetActive(visible); }
+        public void SetVisible(bool visible) { if (DisplayWasDestroyed) return; VerifyAlive(); Rect.gameObject.SetActive(visible); }
         public void SetInteractive(bool interactive)
         {
+            if (DisplayWasDestroyed) return;
             VerifyAlive();
             foreach (var pair in _groups)
             {
@@ -53,10 +61,11 @@ namespace UIFramework.Unity
             _group.blocksRaycasts = interactive && _default.Raycasts;
             // CanvasGroup gates input without overwriting a business Button.interactable value.
         }
-        public void BringToFront() { VerifyAlive(); Rect.SetAsLastSibling(); }
+        public void BringToFront() { if (DisplayWasDestroyed) return; VerifyAlive(); Rect.SetAsLastSibling(); }
         public object CaptureOrder() { VerifyAlive(); return Rect.GetSiblingIndex(); }
         public void RestoreOrder(object order)
         {
+            if (DisplayWasDestroyed) return;
             VerifyAlive();
             if (!(order is int index)) throw new ArgumentException("Expected a sibling index.", nameof(order));
             if (index < 0 || index >= Rect.parent.childCount) throw new ArgumentOutOfRangeException(nameof(order));
@@ -65,6 +74,7 @@ namespace UIFramework.Unity
         public ValueTask DisposeAsync()
         {
             if (_disposed) return default;
+            if (DisplayWasDestroyed) { _disposed = true; return default; }
             VerifyAlive();
             if (_owned)
             {

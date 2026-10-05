@@ -16,6 +16,7 @@ Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root
 
 ## 要点
 
+- 自定义转场通过对应引擎 Host.NextFrameAsync 等待帧，随后检查取消 token；不要把等待任务绑定到即将销毁的控件。
 - 示例恢复白色和单位缩放；资源原值不同时，捕获并恢复实际值。
 - 首次等待前应用起点；需要等待布局时先遮挡进入页，避免闪烁。
 - 自定义动画实现 IUITransition／IUITransitionRun，每次 Create 保存独立状态；Restore 在成功和失败后同步清理。

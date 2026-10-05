@@ -30,7 +30,7 @@ public static class GodotBackdrops
             {
                 target.Control.AddChild(control);
                 control.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                return Task.FromResult<IUIBackdrop>(new Backdrop(control, _duration, requestDismiss, _observe));
+                return Task.FromResult<IUIBackdrop>(new Backdrop(control, _duration, requestDismiss, _observe, target));
             }
             catch { control.Free(); throw; }
         }
@@ -38,14 +38,15 @@ public static class GodotBackdrops
     private sealed class Backdrop : IUIBackdrop
     {
         private readonly GodotUIElement _display;
+        private readonly GodotLifetimeRunner _frames;
         private readonly double _duration;
         private readonly Func<Task> _dismiss;
         private readonly Action<Task> _observe;
         private readonly ColorRect _control;
         private bool _interactive;
-        public Backdrop(ColorRect control, double duration, Func<Task> dismiss, Action<Task> observe)
+        public Backdrop(ColorRect control, double duration, Func<Task> dismiss, Action<Task> observe, GodotUIElement mount)
         {
-            _control = control; _display = new GodotUIElement(control, owned: true);
+            _frames = GodotLifetimeRunner.Get(control.GetTree()); _control = control; _display = new GodotUIElement(control, true, mount);
             _duration = duration; _dismiss = dismiss; _observe = observe;
             control.GuiInput += Input;
         }
@@ -84,7 +85,7 @@ public static class GodotBackdrops
                 Apply(0);
                 while (elapsed < _duration)
                 {
-                    await _control.ToSignal(_control.GetTree(), SceneTree.SignalName.ProcessFrame);
+                    await _frames.NextFrameAsync();
                     token.ThrowIfCancellationRequested();
                     elapsed += _control.GetProcessDeltaTime(); Apply((float)Math.Min(1, elapsed / _duration));
                 }
@@ -94,15 +95,16 @@ public static class GodotBackdrops
             catch (Exception ex)
             {
                 primary = ex;
-                GodotUI.Cleanup(ex, () => _control.Visible = wasVisible);
+                if (!_display.DisplayWasDestroyed) GodotUI.Cleanup(ex, () => _control.Visible = wasVisible);
                 throw;
             }
-            finally { GodotUI.Cleanup(primary, () => _control.Modulate = original); }
+            finally { if (!_display.DisplayWasDestroyed) GodotUI.Cleanup(primary, () => _control.Modulate = original); }
         }
         public void SetVisible(bool visible) => _display.SetVisible(visible);
-        public void Restore(bool visible) { _control.Modulate = Colors.White; _display.SetVisible(visible); }
+        public void Restore(bool visible) { if (_display.DisplayWasDestroyed) return; _control.Modulate = Colors.White; _display.SetVisible(visible); }
         public void SetInteractive(bool interactive)
         {
+            if (_display.DisplayWasDestroyed) return;
             _interactive = interactive;
             _display.SetInteractive(interactive);
             // Always block the mouse; disabling the dismiss action must not let input pass through.
@@ -111,6 +113,6 @@ public static class GodotBackdrops
         public void BringToFront() => _display.BringToFront();
         public object CaptureOrder() => _display.CaptureOrder();
         public void RestoreOrder(object order) => _display.RestoreOrder(order);
-        public ValueTask DisposeAsync() { _control.GuiInput -= Input; return _display.DisposeAsync(); }
+        public ValueTask DisposeAsync() { if (!_display.DisplayWasDestroyed) _control.GuiInput -= Input; return _display.DisposeAsync(); }
     }
 }

@@ -52,3 +52,7 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 销毁 Canvas／EventSystem 前 await ui.DisposeAsync。自动化先等待 ClientAutomation.Shutdown，再停止播放；编辑器强制 Stop 不属于正常关闭。
 
 [接入教程](../../docs/site/getting-started/unity.md) · [素材](Assets/SOURCES.md) · [验收记录](../../docs/design-decisions.md)
+
+生命周期：客户端 Context 通过隐藏管理对象绑定所属 Scene；UnityLifetimeTests 覆盖对象销毁、场景卸载、异步清理和动画取消。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
+
+隔离且无窗口的原生生命周期测试：`./scripts/Test-UnityLifetimes.ps1`，可通过 `-UnityPath` 指定编辑器路径。

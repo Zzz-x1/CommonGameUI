@@ -18,6 +18,7 @@ Button close = inventory.GetControl<Button>("Content/Close");
 
 ## Key points
 
+- Use `ui.BindLifetime(sceneRoot)` for a scene, or `node.BindLifetime(owner)` for a node; see [Lifecycle](../manual/lifecycle.md).
 - Call Create on the scene thread after owner enters the tree. Replace loader/logger as needed.
 - Animate independent content wrappers so layout Containers do not overwrite Slide/Scale positions.
 - The framework disposes dynamic scenes; original scenes own borrowed controls. Transfer new-control ownership with owned: true.

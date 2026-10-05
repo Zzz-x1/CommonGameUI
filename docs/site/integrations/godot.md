@@ -18,6 +18,7 @@ Button close = inventory.GetControl<Button>("Content/Close");
 
 ## 要点
 
+- 用 `ui.BindLifetime(sceneRoot)` 绑定场景，或 `node.BindLifetime(owner)` 绑定节点，见[生命周期](../manual/lifecycle.md)。
 - 在场景线程、owner 进入树后调用 Create；loader／logger 可自行替换。
 - Slide／Scale 使用独立内容包装层，避免布局 Container 重写动画位置。
 - 动态场景实例由框架销毁；借用控件由原场景拥有。转移新控件所有权时显式传 owned: true。

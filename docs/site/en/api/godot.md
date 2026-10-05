@@ -15,6 +15,19 @@ Control GetControl(this UINode node)
 T GetControl<T>(this UINode node, string path) where T : Control
 ```
 
+## Lifetime bindings
+
+Synchronously bind an attached node. Engine destruction starts cleanup. Dispose disconnects only; Completion waits for cleanup. See [Lifecycle](../manual/lifecycle.md).
+
+```csharp
+// GodotLifetimeExtensions:
+GodotLifetimeBinding BindLifetime(this UINode node, global::Godot.Node owner)
+GodotLifetimeBinding BindLifetime(this UIContext ui, global::Godot.Node owner)
+// GodotLifetimeBinding:
+Task Completion { get; }
+void Dispose()
+```
+
 ## Transitions and backdrops
 
 ```csharp
@@ -36,6 +49,7 @@ float Alpha { get; init; } // default 1
 ```csharp
 GodotUIHost(Viewport viewport)
 void GodotUIHost.VerifyAccess()
+Task GodotUIHost.NextFrameAsync()
 object? GodotUIHost.CaptureFocus()
 void GodotUIHost.Focus(IUIElement? element)
 void GodotUIHost.RestoreFocus(object? focus)

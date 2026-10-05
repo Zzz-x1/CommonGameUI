@@ -260,6 +260,7 @@ public partial class DemoApp
         await RunRevealTestsAsync(Pass);
         await RunSourceBranchTestsAsync(Pass);
         await RunAdapterSelfTestAsync();
+        await RunLifetimeTestsAsync(Pass);
         Pass(true, "retained native adapter and transition coverage");
         await RunResourceSelfTestAsync();
         Pass(true, "retained native resource ownership coverage");

@@ -26,10 +26,11 @@ public partial class DemoApp : Control
         Instance = this;
         GetTree().AutoAcceptQuit = false;
         var args = OS.GetCmdlineUserArgs();
-        var selfTest = args.Contains("--self-test");
+        var lifetimeTest = args.Contains("--lifetime-tests");
+        var selfTest = args.Contains("--self-test") || lifetimeTest;
         var verifySave = args.Contains("--verify-client-save");
         var capture = args.Contains("--capture-client");
-        var path = ProjectSettings.GlobalizePath(selfTest || verifySave ? "user://client-test/save.json" : capture ? "user://client-capture/save.json" : "user://client-save.json");
+        var path = ProjectSettings.GlobalizePath(lifetimeTest ? "user://client-lifetime-test/save.json" : selfTest || verifySave ? "user://client-test/save.json" : capture ? "user://client-capture/save.json" : "user://client-save.json");
         if ((selfTest || capture) && File.Exists(path))
             File.Delete(path);
         Store = new ClientStore(path);
@@ -41,6 +42,7 @@ public partial class DemoApp : Control
     private async Task StartAsync()
     {
         _ui = GodotUI.Create(this);
+        _ui.BindLifetime(this);
         _ui.RegisterGeneratedUI();
         _ui.Register(() => new ConfirmView(Confirmation), "res://Scenes/Client/Modal.tscn");
         _ui.DefaultTransition = GodotTransitions.Fade(.18);
@@ -261,7 +263,7 @@ public partial class DemoApp : Control
     public void ApplySettings()
     {
         AudioServer.SetBusVolumeDb(0, Store.State.Volume == 0 ? -80 : Mathf.LinearToDb((float)Store.State.Volume / 100));
-        if (!OS.GetCmdlineUserArgs().Contains("--self-test") && !OS.GetCmdlineUserArgs().Contains("--capture-client") && !OS.GetCmdlineUserArgs().Contains("--verify-client-save"))
+        if (!OS.GetCmdlineUserArgs().Contains("--lifetime-tests") && !OS.GetCmdlineUserArgs().Contains("--self-test") && !OS.GetCmdlineUserArgs().Contains("--capture-client") && !OS.GetCmdlineUserArgs().Contains("--verify-client-save"))
             DisplayServer.WindowSetMode(Store.State.Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
     }
 

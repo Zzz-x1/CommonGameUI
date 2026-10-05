@@ -2,6 +2,7 @@ param(
     [string]$GodotPath,
     [switch]$Headless,
     [switch]$SelfTest,
+    [switch]$LifetimeTest,
     [switch]$VerifySave,
     [switch]$Capture,
     [ValidateSet('1280x720', '1600x900', '1920x1080')][string]$Resolution = '1600x900'
@@ -14,7 +15,7 @@ if (-not $GodotPath) {
 }
 if (-not (Test-Path -LiteralPath $GodotPath)) { throw 'Godot .NET executable not found. Pass -GodotPath or run scripts/Get-Godot.ps1.' }
 if ($Headless -and $Capture) { throw 'Capture requires the graphical renderer.' }
-if ((@($SelfTest, $VerifySave, $Capture) | Where-Object { $_ }).Count -gt 1) { throw 'Choose only one run mode.' }
+if ((@($SelfTest, $LifetimeTest, $VerifySave, $Capture) | Where-Object { $_ }).Count -gt 1) { throw 'Choose only one run mode.' }
 $taskProject = Join-Path $taskWorkspace 'Demo/Godot'
 & dotnet build (Join-Path $taskProject 'HierarchyDemo.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Demo build failed.' }
@@ -23,6 +24,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Godot import failed.' }
 $taskArguments = @('--path', $taskProject, '--resolution', $Resolution)
 if ($Headless) { $taskArguments += '--headless' }
 if ($SelfTest) { $taskArguments += @('--', '--self-test') }
+elseif ($LifetimeTest) { $taskArguments += @('--', '--lifetime-tests') }
 elseif ($VerifySave) { $taskArguments += @('--', '--verify-client-save') }
 elseif ($Capture) { $taskArguments += @('--', '--capture-client', "--size=$Resolution") }
 & $GodotPath @taskArguments

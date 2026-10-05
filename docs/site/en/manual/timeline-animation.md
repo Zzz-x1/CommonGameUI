@@ -16,6 +16,7 @@ Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root
 
 ## Key points
 
+- Custom transitions await their engine Host.NextFrameAsync, then check the cancellation token. Do not attach frame waits to controls that may be destroyed.
 - The example restores white/unit scale. Capture actual authored values when they differ.
 - Apply the start before yielding; hide incoming presentation while awaiting layout to avoid flashing.
 - Custom animations implement IUITransition/IUITransitionRun, capturing independent state per Create. Restore cleans synchronously after success or failure.

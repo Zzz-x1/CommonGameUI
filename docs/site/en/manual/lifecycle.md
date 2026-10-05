@@ -55,6 +55,31 @@ ui.Register(() => new ProfileView(profile), "res://Profile.tscn");
 await pages.PushAsync<ProfileView>();
 ```
 
+## Binding engine lifetimes
+
+Let game UI close when its level object or scene is destroyed. Binding is synchronous configuration; it does not open the UI:
+
+```csharp
+// Unity: using UIFramework.Unity;
+var objectLifetime = gameUI.BindLifetime(gameObject);
+// Or bind the scene through a hidden scene-local GameObject:
+var sceneLifetime = ui.BindLifetime(gameObject.scene);
+
+// Godot: using UIFramework.Godot;
+// A scene is represented by its root node.
+var godotLifetime = gameUI.BindLifetime(sceneRoot);
+```
+
+- A Node binding cleans up its subtree. A Context/Root binding also releases Context resources.
+- Unity hides both its scene anchor and persistent observer in the Hierarchy. Godot adds no scene nodes.
+- Destruction triggers cleanup; disabling, hiding or removing from the hierarchy does not. Godot QueueFree also triggers it.
+- One binding per node. `binding.Dispose()` disconnects it, preserving the node and the supplied engine object.
+- Cleanup starts on a subsequent engine frame. Do not assume Destroy/Free completes it synchronously.
+- `binding.Completion` waits for cleanup, or completes immediately when explicitly disconnected. For normal closure, still await the container operation or DisposeAsync.
+- Binding does not navigate to the main menu. Automatic cleanup plays no exit transition and cancels active operations. Observe all operation tasks started by your project.
+- OnDispose releases business resources and must not depend on destroyed controls. Callback errors propagate unchanged. Close UI before unloading when cleanup needs controls or an exit animation.
+- Still await ui.DisposeAsync before application exit; asynchronous cleanup cannot continue after the engine loop stops.
+
 ## Key points
 
 - Initialize runs once; enter/exit may repeat. Hide retains; disposal ends the subtree.

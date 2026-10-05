@@ -37,7 +37,7 @@ namespace UIFramework.Unity
                     button.navigation = new Navigation { mode = Navigation.Mode.None };
                     button.onClick.AddListener(() => _observe(requestDismiss()));
                     go.SetActive(false);
-                    return Task.FromResult<IUIBackdrop>(new Backdrop(new UnityUIElement(target.Host, rect, true), _duration));
+                    return Task.FromResult<IUIBackdrop>(new Backdrop(new UnityUIElement(target.Host, rect, true, target), _duration));
                 }
                 catch (Exception ex) { UnityUI.Cleanup(ex, () => { go.transform.SetParent(null); UnityEngine.Object.Destroy(go); }); throw; }
             }
@@ -77,7 +77,7 @@ namespace UIFramework.Unity
                     UnityUI.Cleanup(ex, () => _display.SetVisible(wasVisible));
                     throw;
                 }
-                finally { UnityUI.Cleanup(primary, () => _group.alpha = original); }
+                finally { if (!_display.DisplayWasDestroyed) UnityUI.Cleanup(primary, () => _group.alpha = original); }
             }
             public void Restore(bool visible) => _display.SetVisible(visible);
             public void SetVisible(bool visible) => _display.SetVisible(visible);

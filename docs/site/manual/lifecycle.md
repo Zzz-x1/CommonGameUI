@@ -55,6 +55,31 @@ ui.Register(() => new ProfileView(profile), "res://Profile.tscn");
 await pages.PushAsync<ProfileView>();
 ```
 
+## 绑定引擎生命周期
+
+退出关卡时，让游戏 UI 跟随关卡对象或场景销毁。绑定是同步配置，不负责打开界面：
+
+```csharp
+// Unity: using UIFramework.Unity;
+var objectLifetime = gameUI.BindLifetime(gameObject);
+// Or bind the scene through a hidden scene-local GameObject:
+var sceneLifetime = ui.BindLifetime(gameObject.scene);
+
+// Godot: using UIFramework.Godot;
+// A scene is represented by its root node.
+var godotLifetime = gameUI.BindLifetime(sceneRoot);
+```
+
+- Node 绑定清理自身及子树；Context／Root 绑定还释放 Context 资源。
+- Unity 的场景管理对象和持续观察对象均隐藏于 Hierarchy。Godot 不增加场景节点。
+- 销毁触发清理；禁用、隐藏或移出层级不触发。Godot QueueFree 也会触发。
+- 每个节点同时只允许一个绑定。`binding.Dispose()` 解除绑定，保留节点和传入的引擎对象。
+- 销毁后在后续引擎帧开始清理，不假定 Destroy／Free 返回时已经完成。
+- `binding.Completion` 等待清理结束；明确解除绑定时立即完成。正常主动关闭仍 await 容器关闭或 DisposeAsync。
+- 绑定不负责切换到主菜单。自动清理不播放退出转场；进行中的操作取消。项目仍须观察自己发起的操作任务。
+- OnDispose 释放业务资源，不能依赖已销毁的控件；业务回调异常原样传播。需要访问控件或播放退场时，先主动关闭，再卸载场景。
+- 应用退出前仍需 await ui.DisposeAsync；引擎主循环停止后无法继续异步清理。
+
 ## 要点
 
 - Initialize 一次，进入／退出可重复；隐藏保留实例，销毁结束子树。

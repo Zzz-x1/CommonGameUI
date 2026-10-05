@@ -15,6 +15,21 @@ RectTransform GetRect(this UINode node)
 T GetComponent<T>(this UINode node, string path) where T : Component
 ```
 
+## Lifetime bindings
+
+Synchronously bind an attached node. Engine destruction starts cleanup. Dispose disconnects only; Completion waits for cleanup. See [Lifecycle](../manual/lifecycle.md).
+
+```csharp
+// UnityLifetimeExtensions:
+UnityLifetimeBinding BindLifetime(this UINode node, GameObject owner)
+UnityLifetimeBinding BindLifetime(this UINode node, UnityEngine.SceneManagement.Scene scene)
+UnityLifetimeBinding BindLifetime(this UIContext ui, GameObject owner)
+UnityLifetimeBinding BindLifetime(this UIContext ui, UnityEngine.SceneManagement.Scene scene)
+// UnityLifetimeBinding:
+Task Completion { get; }
+void Dispose()
+```
+
 ## Transitions and backdrops
 
 ```csharp

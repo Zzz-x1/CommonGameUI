@@ -107,13 +107,15 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
             _material.SetShaderParameter("style", style);
         }
 
+        private CancellationToken _token;
         public async Task PlayAsync(CancellationToken token)
         {
+            _token = token;
             token.ThrowIfCancellationRequested();
             _material.SetShaderParameter("progress", _context.Entering ? 0f : 1f);
             foreach (var item in _originals.Keys)
                 item.Material = _material;
-            await _root.ToSignal(_root.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
             token.ThrowIfCancellationRequested();
             var viewport = _root.GetViewport().GetVisibleRect().Size;
             var rect = _root.GetGlobalRect();
@@ -129,15 +131,21 @@ public sealed class GildedRevealTransition(int style, double duration, string? t
                 _material.SetShaderParameter("progress", _context.Entering ? eased : 1 - eased);
                 _context.ReportProgress(progress);
                 if (progress < 1)
-                    await _root.ToSignal(_root.GetTree(), SceneTree.SignalName.ProcessFrame);
+                    await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
             } while (progress < 1);
         }
 
         public void Restore()
         {
-            foreach (var pair in _originals)
-                pair.Key.Material = pair.Value;
-            _material.Dispose();
+            try
+            {
+                foreach (var pair in _originals)
+                {
+                    if (_token.IsCancellationRequested && !GodotObject.IsInstanceValid(pair.Key)) continue;
+                    pair.Key.Material = pair.Value;
+                }
+            }
+            finally { _material.Dispose(); }
         }
     }
 }

@@ -19,13 +19,13 @@ Button close = inventory.GetComponent<Button>("Content/Close");
 
 ## Lifecycle and animation
 
-- Create configures the Canvas frame pump. Await ui.DisposeAsync before destroying Canvas/EventSystem.
+- Create configures a hidden persistent frame pump. Use BindLifetime for a Scene or GameObject; see [Lifecycle](../manual/lifecycle.md).
 - Input gates preserve business interactable state. EventSystem configures keyboard navigation.
 - Timelines use non-looping legacy AnimationClips and unscaled time.
 - Resources requests cannot be canceled directly; releasing references does not immediately clear engine caches.
 
 ## Verification status
 
-Current environment: Unity 6000.3.24f1/uGUI 2.0.0. Latest fixes and tutorials have offline compilation only, with native execution pending. Demo timeline assets also await verification. The Unity Source Generator workflow is not integrated.
+Current environment: Unity 6000.3.24f1/uGUI 2.0.0. Lifetime bindings passed 7 isolated batch-mode Play Mode tests. Earlier fixes and tutorials have offline compilation only, with their native execution pending. Demo timeline assets also await verification. The Unity Source Generator workflow is not integrated.
 
 [Unity API](../api/unity.md) · [Timelines](../manual/timeline-animation.md)

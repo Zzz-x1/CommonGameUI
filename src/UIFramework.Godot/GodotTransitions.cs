@@ -14,6 +14,9 @@ public sealed record GodotTransitionFrame
 /// <summary>Immutable reusable recipes. Every operation captures independent presentation state.</summary>
 public static class GodotTransitions
 {
+    private static bool Destroyed(TransitionContext context, GodotObject target) =>
+        context.Node.Element is GodotUIElement { IsLifetimeEnding: true } &&
+        (!GodotObject.IsInstanceValid(target) || target is global::Godot.Node node && node.IsQueuedForDeletion());
     public static IUITransition Fade(double duration = 0.15, string? targetPath = null, double delay = 0,
         Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut) =>
         GodotUI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Fade));
@@ -143,11 +146,10 @@ public static class GodotTransitions
             token.ThrowIfCancellationRequested();
             Apply(0); _context.ReportProgress(0);
             var total = _duration + _delay;
-            var tree = _target.GetTree();
             var elapsed = 0d;
             while (elapsed < total)
             {
-                await _target.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
                 token.ThrowIfCancellationRequested();
                 elapsed += _target.GetProcessDeltaTime();
                 Apply(Math.Min(elapsed, total));
@@ -157,6 +159,7 @@ public static class GodotTransitions
         }
         public void Restore()
         {
+            if (Destroyed(_context, _target)) return;
             if (!GodotObject.IsInstanceValid(_target) || _target.IsQueuedForDeletion()) throw new ObjectDisposedException("Animation target");
             if (_fade) _target.Modulate = _color;
             if (_move) SetOffset(Vector2.Zero);
@@ -207,7 +210,7 @@ public static class GodotTransitions
                 player.Advance(0);
                 while (!finished)
                 {
-                    await root.ToSignal(root.GetTree(), SceneTree.SignalName.ProcessFrame);
+                    await ((GodotUIHost)context.Node.Context.Host).NextFrameAsync();
                     token.ThrowIfCancellationRequested();
                     if (finished) break;
                     if (!player.IsPlaying() || player.CurrentAnimation != name)
@@ -219,14 +222,14 @@ public static class GodotTransitions
                 context.ReportProgress(1);
             }
             catch (Exception ex) { primary = ex; throw; }
-            finally { GodotUI.Cleanup(primary, () => player.AnimationFinished -= Finished); }
+            finally { if (!Destroyed(context, player)) GodotUI.Cleanup(primary, () => player.AnimationFinished -= Finished); }
         }
         public void Restore()
         {
             Exception? primary = null;
-            try { player.Stop(keepState: true); }
+            try { if (!Destroyed(context, player)) player.Stop(keepState: true); }
             catch (Exception ex) { GodotUI.Report(ex, "Stop transition animation"); primary = ex; }
-            GodotUI.Cleanup(primary, () => restore(root));
+            if (!Destroyed(context, root)) GodotUI.Cleanup(primary, () => restore(root));
             if (primary != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
         }
     }

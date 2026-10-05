@@ -6,8 +6,9 @@ public sealed class GodotUIHost : IUIHost, IUILog
 {
     private readonly int _thread = System.Environment.CurrentManagedThreadId;
     private readonly Viewport _viewport;
-    public GodotUIHost(Viewport viewport) => _viewport = viewport;
-    internal async Task NextFrameAsync() => await _viewport.ToSignal(_viewport.GetTree(), SceneTree.SignalName.ProcessFrame);
+    private readonly GodotLifetimeRunner _frames;
+    public GodotUIHost(Viewport viewport) { _viewport = viewport; _frames = GodotLifetimeRunner.Get(viewport.GetTree()); }
+    public Task NextFrameAsync() { VerifyAccess(); return _frames.NextFrameAsync(); }
     public void VerifyAccess()
     {
         if (System.Environment.CurrentManagedThreadId != _thread)

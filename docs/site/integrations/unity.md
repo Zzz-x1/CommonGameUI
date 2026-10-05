@@ -19,13 +19,13 @@ Button close = inventory.GetComponent<Button>("Content/Close");
 
 ## 生命周期与动画
 
-- Create 在 Canvas 上配置帧泵；销毁 Canvas／EventSystem 前 await ui.DisposeAsync。
+- Create 配置隐藏且跨场景存活的帧泵；用 BindLifetime 绑定场景或 GameObject，详见[生命周期](../manual/lifecycle.md)。
 - 输入门保留按钮的业务 interactable；键盘导航由 EventSystem 配置。
 - 时间轴使用非循环 legacy AnimationClip，按未缩放时间播放。
 - Resources 请求不可直接取消；释放框架引用不立即清空引擎缓存。
 
 ## 验证状态
 
-当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。最新适配修复与教程已离线编译，尚未原生运行；Demo 时间轴资源也有待验证项。Unity Source Generator 工作流尚未接入。
+当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。生命周期绑定通过 7 项隔离 batchmode Play Mode 测试。此前适配修复与教程已离线编译，对应原生运行待验证；Demo 时间轴资源也有待验证项。Unity Source Generator 工作流尚未接入。
 
 [Unity API](../api/unity.md) · [时间轴](../manual/timeline-animation.md)

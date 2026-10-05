@@ -16,6 +16,8 @@ namespace UIFramework.Unity
     }
     public static class UnityTransitions
     {
+        private static bool Destroyed(TransitionContext context, UnityEngine.Object target) =>
+            context.Node.Element is UnityUIElement display && display.IsLifetimeEnding && !target;
         public static IUITransition Fade(double duration = .18, string targetPath = null) =>
             Transitions.Select(c => Simple(c.Entering ? new UnityTransitionFrame(alpha: 0) : new UnityTransitionFrame(),
                 c.Entering ? new UnityTransitionFrame() : new UnityTransitionFrame(alpha: 0), duration, targetPath));
@@ -100,7 +102,7 @@ namespace UIFramework.Unity
                     if (progress < 1) await host.NextFrameAsync();
                 } while (progress < 1);
             }
-            public void Restore() { _target.anchoredPosition = _position; _target.localScale = _scale; _group.alpha = _alpha; }
+            public void Restore() { if (Destroyed(_context, _target)) return; _target.anchoredPosition = _position; _target.localScale = _scale; _group.alpha = _alpha; }
         }
         public static IUITransition Animation(string playerPath, string enterClip, string exitClip, Action<RectTransform> restore) =>
             UnityUI.Configure<IUITransition>(() => new ClipRecipe(playerPath, enterClip, exitClip, restore ?? throw new ArgumentNullException(nameof(restore))));
@@ -160,6 +162,7 @@ namespace UIFramework.Unity
             }
             public void Restore()
             {
+                if (Destroyed(_context, _root)) return;
                 Exception primary = null;
                 try
                 {

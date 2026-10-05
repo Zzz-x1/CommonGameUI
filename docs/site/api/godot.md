@@ -15,6 +15,19 @@ Control GetControl(this UINode node)
 T GetControl<T>(this UINode node, string path) where T : Control
 ```
 
+## 生命周期绑定
+
+同步绑定已挂载节点；销毁引擎对象后自动清理。Dispose 只解除绑定；Completion 等待清理。详见[生命周期](../manual/lifecycle.md)。
+
+```csharp
+// GodotLifetimeExtensions:
+GodotLifetimeBinding BindLifetime(this UINode node, global::Godot.Node owner)
+GodotLifetimeBinding BindLifetime(this UIContext ui, global::Godot.Node owner)
+// GodotLifetimeBinding:
+Task Completion { get; }
+void Dispose()
+```
+
 ## 转场与遮罩
 
 ```csharp
@@ -36,6 +49,7 @@ float Alpha { get; init; } // default 1
 ```csharp
 GodotUIHost(Viewport viewport)
 void GodotUIHost.VerifyAccess()
+Task GodotUIHost.NextFrameAsync()
 object? GodotUIHost.CaptureFocus()
 void GodotUIHost.Focus(IUIElement? element)
 void GodotUIHost.RestoreFocus(object? focus)

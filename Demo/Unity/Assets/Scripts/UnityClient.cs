@@ -48,6 +48,7 @@ namespace StarCourt.UnityDemo
         {
             Store = new ClientStore(Path.Combine(Application.persistentDataPath, SaveFile));
             UI = UnityUI.Create(Canvas, Events);
+            UI.BindLifetime(gameObject.scene);
             UI.Register<LoginView>("UI/Login"); UI.Register<LobbyView>("UI/Lobby");
             UI.Register<InventoryView>("UI/Inventory"); UI.Register<ItemView>("UI/Item");
             UI.Register<CharactersView>("UI/Characters"); UI.Register<HeroView>("UI/Hero");

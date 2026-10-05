@@ -69,3 +69,7 @@ Godot 4.7.2 .NET / .NET 10 的纯 UI 客户端，包含本地业务与存档。
 SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Capture 输出各模块和过场帧，可选 1600x900／1920x1080；截图保存在忽略的 artifacts。完整检查使用 scripts/Test.ps1。
 
 [实现与验收记录](../../docs/design-decisions.md)
+
+生命周期：客户端 Context 绑定主场景节点；绑定与清理回归位于 Tests/DemoApp.LifetimeTests.cs。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
+
+仅运行生命周期回归：`./scripts/Run-Demo.ps1 -LifetimeTest -Headless`（独立测试档案）。
