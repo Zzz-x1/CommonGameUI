@@ -105,7 +105,7 @@ internal static class TransitionFlow
                 item.Node.PublishTransition(item, TransitionStage.Playing, 0);
             }
 
-            using var cancel = CancellationTokenSource.CreateLinkedTokenSource(token);
+            using var cancel = CancellationTokenSource.CreateLinkedTokenSource(items.Select(item => item.Node.Lifetime).Append(token).ToArray());
             Exception? first = null;
             async Task Play(IUITransitionRun run)
             {
@@ -123,7 +123,7 @@ internal static class TransitionFlow
             // Play observes synchronous throws as well as every asynchronous failure.
             await Task.WhenAll(runs.Select(Play));
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
-            token.ThrowIfCancellationRequested();
+            cancel.Token.ThrowIfCancellationRequested();
             exit?.Node.StageVisibility(false);
             Restore(null);
             Finish(TransitionStage.Completed, null);

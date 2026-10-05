@@ -84,6 +84,7 @@ namespace StarCourt.UnityDemo.Editor
             PlayerSettings.defaultScreenWidth = 1600; PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.runInBackground = true;
+            ClientTimelineAuthoring.Build();
             AssetDatabase.SaveAssets();
             Debug.Log("UNITY CLIENT ASSETS AUTHORED");
         }

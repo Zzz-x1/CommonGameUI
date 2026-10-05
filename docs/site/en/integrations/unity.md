@@ -21,11 +21,11 @@ Button close = inventory.GetComponent<Button>("Content/Close");
 
 - Create configures a hidden persistent frame pump. Use BindLifetime for a Scene or GameObject; see [Lifecycle](../manual/lifecycle.md).
 - Input gates preserve business interactable state. EventSystem configures keyboard navigation.
-- Timelines use non-looping legacy AnimationClips and unscaled time.
+- Supports Timeline/PlayableDirector and non-looping legacy AnimationClips, both using unscaled time.
 - Resources requests cannot be canceled directly; releasing references does not immediately clear engine caches.
 
 ## Verification status
 
-Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime and saved AnimationClip resources passed 26 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The separate tutorial still has offline compilation only. The Unity Source Generator workflow is not integrated.
+Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime, saved Timeline and AnimationClip resources passed 31 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The separate tutorial still has offline compilation only. The Unity Source Generator workflow is not integrated.
 
 [Unity API](../api/unity.md) · [Timelines](../manual/timeline-animation.md)

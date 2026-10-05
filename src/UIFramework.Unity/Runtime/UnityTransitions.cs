@@ -14,7 +14,7 @@ namespace UIFramework.Unity
         public UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, float scale = 1, float alpha = 1)
         { Offset = offset; RelativeOffset = relativeOffset; Scale = scale; Alpha = alpha; }
     }
-    public static class UnityTransitions
+    public static partial class UnityTransitions
     {
         private static bool Destroyed(TransitionContext context, UnityEngine.Object target) =>
             context.Node.Element is UnityUIElement display && display.IsLifetimeEnding && !target;

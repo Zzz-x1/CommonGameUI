@@ -4,7 +4,7 @@
 
 ## 用法
 
-Godot 场景保存非循环 AnimationPlayer 轨道；Unity 使用 legacy Animation／AnimationClip。轨道只写表现，restore 回调恢复所有轨道属性。
+Godot 使用 AnimationPlayer；Unity 同时支持 Timeline／PlayableDirector 和 legacy Animation／AnimationClip。轨道只写表现，restore 回调恢复所有轨道属性。
 
 ```csharp
 Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root =>
@@ -13,6 +13,34 @@ Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root
     root.GetNode<Control>("Content").Scale = Vector2.One;
 });
 ```
+
+## Unity Timeline
+
+大厅立绘、欢迎文字和按钮可分别放在 Animation 轨道中。Prefab 根节点下建立 `Transitions/Enter`、`Transitions/Exit`，各添加 PlayableDirector，指定有限时长的 Timeline 资产并绑定本地控件。关闭 **Play On Awake**。
+
+在节点初始化时捕获轨道修改的属性并配置转场：
+
+```csharp
+var root = this.GetRect();
+var rects = root.GetComponentsInChildren<RectTransform>(true)
+    .ToDictionary(r => r, r => (r.anchoredPosition, r.localScale, r.localRotation));
+var groups = root.GetComponentsInChildren<CanvasGroup>(true)
+    .ToDictionary(g => g, g => g.alpha);
+Transition = UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
+{
+    foreach (var pair in rects)
+    {
+        pair.Key.anchoredPosition = pair.Value.anchoredPosition;
+        pair.Key.localScale = pair.Value.localScale;
+        pair.Key.localRotation = pair.Value.localRotation;
+    }
+    foreach (var pair in groups) pair.Key.alpha = pair.Value;
+});
+```
+
+首次等待前采样起点，按未缩放时间播放。完成、取消或失败后停止播放图、恢复 Director 配置，并执行恢复回调。绑定对象在播放中销毁会取消转场；无关的外部提前停止仍报错。
+
+`playAnimation: false` 跳过播放。不同来源或简化演出通过 [Transitions.Select](transitions.md) 选择配方。制作资产需安装 `com.unity.timeline`；运行时适配只依赖 Unity 的 Director 模块。轨道只负责表现，不控制框架根节点显隐，不执行购买、保存或发奖。
 
 ## 要点
 

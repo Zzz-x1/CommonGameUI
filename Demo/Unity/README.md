@@ -64,3 +64,7 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 金币使用共享 ScriptableObject 克隆；详情和设置为节点独立 VM。背包条目使用 ObservableCollection 与 Resources/MVVM/InventoryRow.prefab，购买使用可等待确认的命令，购买窗口的关闭按钮直接绑定 VM 命令并等待关闭自身。Window → UIFramework → View Bindings 打开 GUI；玩家初始模板位于 Resources/MVVM/Player.asset。
 
 [模块入门与 GUI](../../docs/site/manual/mvvm.md)。
+
+## Timeline 过场
+
+大厅首次入场和购买奖励采用真实 Timeline 多轨动画，资产位于 Assets/Timelines。打开对应 .playable 可编辑立绘、面板、文字和装饰轨道；Prefab 的 Transitions/Enter、Exit 配置 PlayableDirector 及本地绑定。其他来源或简化演出沿用条件分支选择轻量动画。制作脚本 ClientTimelineAuthoring.Build 用 Unity 原生 API 保存资源，不在运行时生成轨道。

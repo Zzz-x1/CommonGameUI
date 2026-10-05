@@ -264,4 +264,17 @@ public class TransitionBackdropTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => second.OpenAsync<CounterView>());
         Assert.True(existing.IsInteractive); Assert.Same(focus, ((TestHost)ui.Host).Focus); Assert.Empty(second.Children);
     }
+    [Fact] public async Task DisposingTransitionParticipantCancelsPlaybackAndReleasesContainer()
+    {
+        await using var ui = Create(); var tabs = await Attach<TabContainerNode>(ui.Root);
+        var recipe = new Recipe { Play = (_, token) => Task.Delay(Timeout.Infinite, token) };
+        var node = new UINode { Transition = recipe }; await tabs.BindAsync("Page", node, new MemoryElement());
+        var entering = tabs.SwitchAsync("Page"); Assert.True(Assert.Single(recipe.Runs).Started);
+        await node.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => entering.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.True(Assert.Single(recipe.Runs).Restored); Assert.Equal(NodeState.Disposed, node.State); Assert.Null(tabs.Current);
+        await tabs.BindAsync("Next", new UINode(), new MemoryElement()); await tabs.SwitchAsync("Next");
+        Assert.True(tabs.Current!.IsInteractive);
+    }
+
 }

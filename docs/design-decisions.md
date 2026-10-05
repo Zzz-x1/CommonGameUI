@@ -1819,3 +1819,13 @@ Godot 购买确认改为单个命令执行购买、CloseToAsync、奖励展示�
 ### 文档快捷启动
 
 新增根目录 Open-Docs.cmd 与 scripts/Open-Docs.ps1：双击启动 VitePress 并打开网页；已运行服务直接复用，端口占用其他站点明确报错。服务在后台隐藏启动，首次缺少依赖时执行锁定依赖安装。默认 4173，Port 可指定，NoBrowser 用于不打开窗口的验证。
+
+## 19. Unity Timeline 转场适配（已确认）
+
+大厅多元素入场、奖励演出需要 Unity Timeline 原生多轨编排，现有 legacy AnimationClip 适配不能替代 Timeline。新增 UnityTransitions.Timeline(enterDirectorPath, exitDirectorPath, restore)，路径相对节点根，分别引用 Prefab 中两个 PlayableDirector；项目在资源中配置资产和绑定，不新建 Core 动画编排机制。
+
+要求组件启用、关闭 Play On Awake、资产时长有限且 Director 无既有播放图。框架用 Manual 更新和未缩放时间采样，首帧等待前应用起点，报告单调进度。结束、取消或失败后停止图、恢复时间／更新模式／结束模式，并恢复项目声明的所有表现属性。playAnimation:false 沿用直接跳过；来源和阶段分支沿用 Select。Director 被无关代码提前停止、暂停或替换资产直接报错；已有生命周期绑定触发销毁时按取消处理，不写入销毁对象。轨道不执行业务或修改框架根节点显隐。
+
+Runtime 仅新增 Director 引擎模块依赖；Demo 用 Package Manager 安装 Timeline 1.8.13，保存真实多轨 .playable、子 AnimationClip、Animator 与 Director 绑定。大厅和购买奖励迁移到 Timeline，其他来源及简化演出保留已有轻量分支。AnimationClip 是独立有效能力，专项测试迁至 LegacyLobby 测试资源；没有旧业务入口。
+
+专项验证发现转场原本只监听容器 Lifetime，子节点绑定销毁不会取消动画。Core 转场现在同时链接容器及进入／退出节点 Lifetime，防止已释放节点继续播放；新增核心与原生销毁回归。验证：核心 158、MVVM 34、Godot 客户端 139、Unity 原生 Play Mode 31 项通过。Unity 新增 5 项 Timeline 专项，覆盖首帧采样、Time.timeScale=0、完成及退出、跳过、取消后重播、外部停止、原始通知异常、错误配置和绑定销毁；原有客户端来源／简化演出分支同步验证。两种语言的 API、资源结构和使用代码检查及站点构建通过。未推送、未发布。

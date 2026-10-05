@@ -38,6 +38,7 @@ IUITransition UnityTransitions.ScaleFade(double duration = .22, string targetPat
 IUITransition UnityTransitions.SlideHorizontal(double duration = .28, string targetPath = null)
 IUITransition UnityTransitions.Simple(UnityTransitionFrame from, UnityTransitionFrame to, double duration = .25, string targetPath = null, AnimationCurve easing = null)
 IUITransition UnityTransitions.Animation(string playerPath, string enterClip, string exitClip, Action<RectTransform> restore)
+IUITransition UnityTransitions.Timeline(string enterDirectorPath, string exitDirectorPath, Action<RectTransform> restore)
 IUIBackdropFactory UnityBackdrops.Dim(Action<Task> observe, Color? color = null, double duration = .15)
 UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, float scale = 1, float alpha = 1)
 // Frame get-only properties: Vector2 Offset, Vector2 RelativeOffset, float Scale, float Alpha.
@@ -76,5 +77,7 @@ ValueTask UnityUIElement.DisposeAsync()
 - ScaleFade 使用 .85 起始缩放；没有 delay 参数。
 - Animation 使用非循环 legacy Clip 和未缩放时间；playerPath 可为空字符串表示根。restore 恢复全部轨道。
 - Dim 的 observe 必须观察返回任务。验证状态见[Unity 适配](../integrations/unity.md)。
+
+Timeline 路径相对节点根，null 表示根 Director。要求组件启用、资产时长有限、关闭 Play On Awake，且没有已运行的播放图。restore 必须恢复所有轨道控制的属性。
 
 [适配说明](../integrations/unity.md) · [时间轴](../manual/timeline-animation.md)

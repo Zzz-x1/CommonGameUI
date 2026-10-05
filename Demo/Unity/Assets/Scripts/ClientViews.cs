@@ -77,7 +77,7 @@ namespace StarCourt.UnityDemo
             var position = hero.anchoredPosition; var scale = hero.localScale;
             var groups = this.GetRect().GetComponentsInChildren<CanvasGroup>(true).ToDictionary(g => g, g => g.alpha);
             Transition = Transitions.Select(c => c.Phase == TransitionPhase.PushEnter
-                ? UnityTransitions.Animation(null, "LobbyEnter", "LobbyExit", root =>
+                ? UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", root =>
                 { hero.anchoredPosition = position; hero.localScale = scale; foreach (var pair in groups) pair.Key.alpha = pair.Value; })
                 : UnityTransitions.Fade(.2));
             return Task.CompletedTask;

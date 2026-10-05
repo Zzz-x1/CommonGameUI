@@ -15,7 +15,7 @@ using UnityEngine.UI;
 
 namespace StarCourt.UnityDemo.Tests
 {
-    public sealed class UnityAdapterTests
+    public sealed partial class UnityAdapterTests
     {
         private GameObject _canvas, _events;
         private UIContext _ui;
@@ -138,7 +138,7 @@ namespace StarCourt.UnityDemo.Tests
             var loader = new UnityPrefabLoader((UnityUIHost)_ui.Host);
             try { await loader.LoadAsync("UI/Absent", CancellationToken.None); Assert.Fail("Expected missing resource."); }
             catch (FileNotFoundException ex) { Assert.That(ex.FileName, Is.EqualTo("UI/Absent")); }
-            var exception = await Task.Run(() => Assert.Throws<InvalidOperationException>(() => _ui.Register<ClipNode>("UI/Lobby")));
+            var exception = await Task.Run(() => Assert.Throws<InvalidOperationException>(() => _ui.Register<ClipNode>("Tests/LegacyLobby")));
             Assert.That(_log.Errors, Does.Contain(exception));
         }
         public sealed class ClipNode : UINode
@@ -155,7 +155,7 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator AnimationClipCompletionAndCancellation() => Await(ClipsAsync());
         private async Task ClipsAsync()
         {
-            _ui.Register<ClipNode>("UI/Lobby");
+            _ui.Register<ClipNode>("Tests/LegacyLobby");
             var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Animation", _mount);
             var firstOpening = windows.OpenAsync<ClipNode>();
             while (windows.Children.Count == 0 || windows.Children[0].TransitionState?.Stage != TransitionStage.Playing || windows.Children[0].TransitionState.Progress < .3)
@@ -177,7 +177,7 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator AnimationRunsWhileGameplayIsPaused() => Await(PausedClipAsync());
         private async Task PausedClipAsync()
         {
-            _ui.Register<ClipNode>("UI/Lobby");
+            _ui.Register<ClipNode>("Tests/LegacyLobby");
             var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Paused", _mount);
             var original = Time.timeScale;
             try

@@ -105,7 +105,7 @@ namespace StarCourt.UnityDemo
                 .ToDictionary(r => r, r => (r.anchoredPosition, r.localScale, r.localRotation));
             var groups = this.GetRect().GetComponentsInChildren<CanvasGroup>(true).ToDictionary(g => g, g => g.alpha);
             Transition = Transitions.Select(c => c.Entering && c.Source is PurchaseView && UnityClient.Instance.Store.State.FullMotion
-                ? UnityTransitions.Animation(null, "RewardEnter", "RewardExit", root =>
+                ? UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", root =>
                 {
                     foreach (var pair in rects)
                     { pair.Key.anchoredPosition = pair.Value.anchoredPosition; pair.Key.localScale = pair.Value.localScale; pair.Key.localRotation = pair.Value.localRotation; }

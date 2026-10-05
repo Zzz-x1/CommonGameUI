@@ -8,6 +8,7 @@ using NUnit.Framework;
 using UIFramework;
 using UIFramework.Unity;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -130,14 +131,14 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(_app.Pages.Children.OfType<ShopView>().Last().GetRect().anchoredPosition.x, Is.GreaterThan(0));
             await entering; await _app.OpenPurchaseAsync(0);
             var reward = _app.RewardAsync("购买奖励"); await WaitForAnimation();
-            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetRect().GetComponent<Animation>().IsPlaying("RewardEnter"), Is.True);
+            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetComponent<PlayableDirector>("Transitions/Enter").state == PlayState.Playing, Is.True);
             await reward; await _app.BackAsync(); await _app.BackAsync(); await _app.OpenAsync("Quests");
             reward = _app.RewardAsync("任务奖励"); await WaitForAnimation();
-            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetRect().GetComponent<Animation>().isPlaying, Is.False);
+            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetComponent<PlayableDirector>("Transitions/Enter").playableGraph.IsValid(), Is.False);
             await reward; await _app.BackAsync(); await _app.OpenAsync("Shop"); await _app.OpenPurchaseAsync(0);
             _app.Store.Change(s => s.FullMotion = false);
             reward = _app.RewardAsync("简化购买奖励"); await WaitForAnimation();
-            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetRect().GetComponent<Animation>().isPlaying, Is.False);
+            Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetComponent<PlayableDirector>("Transitions/Enter").playableGraph.IsValid(), Is.False);
             await reward;
         }
         private async Task WaitForAnimation()

@@ -38,6 +38,7 @@ IUITransition UnityTransitions.ScaleFade(double duration = .22, string targetPat
 IUITransition UnityTransitions.SlideHorizontal(double duration = .28, string targetPath = null)
 IUITransition UnityTransitions.Simple(UnityTransitionFrame from, UnityTransitionFrame to, double duration = .25, string targetPath = null, AnimationCurve easing = null)
 IUITransition UnityTransitions.Animation(string playerPath, string enterClip, string exitClip, Action<RectTransform> restore)
+IUITransition UnityTransitions.Timeline(string enterDirectorPath, string exitDirectorPath, Action<RectTransform> restore)
 IUIBackdropFactory UnityBackdrops.Dim(Action<Task> observe, Color? color = null, double duration = .15)
 UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, float scale = 1, float alpha = 1)
 // Frame get-only properties: Vector2 Offset, Vector2 RelativeOffset, float Scale, float Alpha.
@@ -76,5 +77,7 @@ ValueTask UnityUIElement.DisposeAsync()
 - ScaleFade starts at .85 scale; there is no delay parameter.
 - Animation uses non-looping legacy Clips and unscaled time. Empty playerPath means root; restore resets all tracks.
 - Dim observe must inspect returned tasks. See [Unity integration](../integrations/unity.md) for status.
+
+Timeline paths are relative to the node root; null selects the root director. Directors require an enabled component, an asset with finite duration, Play On Awake disabled, and no existing graph. Restore must reset every property owned by the tracks.
 
 [Integration](../integrations/unity.md) · [Timelines](../manual/timeline-animation.md)
