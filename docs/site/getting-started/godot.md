@@ -1,21 +1,19 @@
 # Godot Getting Started
 
-## 场景：主菜单、设置与退出确认
+完成菜单→设置→分类切换→退出确认。需要 Godot 4.7.2 .NET 和 .NET 10 SDK。
 
-使用 Godot 4.7.2 .NET 和 .NET 10 SDK。框架管理界面流程，按钮、Slider 和布局仍使用 Godot 原生控件。音量与画质控件在本教程只保持界面内的值，不修改实际音频或渲染设置。
+## 安装
 
-## 安装与资源
-
-最短路径：克隆或下载本仓库，从仓库根目录执行 `dotnet build docs/examples/godot/Tutorial.csproj`，在 Godot 打开 `docs/examples/godot/project.godot`。这是独立教程，不读写游戏 Demo 存档。
-
-接入自己的项目时，在 `.csproj` 中添加 Core 和 Godot 两个 ProjectReference；将路径改为相对你项目文件的真实位置。本教程对应的引用如下：
+从仓库根目录运行 `dotnet build docs/examples/godot/Tutorial.csproj`，再用 Godot 打开该目录的 project.godot。接入自己的项目时引用 Core 和 Godot，按项目位置调整路径：
 
 ```xml
 <ProjectReference Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
 <ProjectReference Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
 ```
 
-资源全部是普通场景，位于教程项目根目录：
+## 资源结构
+
+场景文件已提供，可直接在编辑器修改。根节点与空挂载设为 Full Rect、Mouse Filter=Ignore；弹窗 Content 接受鼠标。按钮保留键盘焦点。
 
 ```text
 Main (Control, TutorialHost.cs)
@@ -28,11 +26,9 @@ Settings.tscn: Control → Content (Panel)
 Confirm.tscn: Control → Content (Panel) → Question (Label), Yes, No (Button)
 ```
 
-场景根铺满挂载，Mouse Filter=Ignore；Content 是实际内容区域，弹窗 Content 使用 Stop。无需在弹窗资源中再放全屏遮罩。Tab 两页都保存在 Settings 场景中，由框架绑定与切换；首次默认选 Audio。按钮保留键盘焦点，滑动条和选项使用原生默认行为。完整资源随仓库提供，可在编辑器修改。
+## 完整代码
 
-## 完整宿主与业务节点
-
-将以下代码保存为 TutorialHost.cs，挂到 Main 根节点。View 是纯 C# 逻辑节点，不是 Godot 场景脚本。所有业务节点在同一文件中便于入门；实际项目可按模块拆分。
+TutorialHost.cs 挂在 Main 根节点；View 为普通 C# 逻辑类，不挂到场景上。
 
 ```csharp
 using Godot;
@@ -176,16 +172,11 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## 验证操作
+## 操作与关闭
 
-运行 Main：设置→Graphics→Audio，Volume 值保留；Back 恢复主菜单。Quit→Cancel 保留主菜单；Quit→Confirm 等待 Context 清理后退出。Esc 先关闭设置或回答取消；主菜单 Esc 打开退出确认。Enter 激活当前焦点按钮。重开设置会创建新实例，所以尚未保存到模型的控件值重置。
-
-`Observe` 收集任务，在 `_Process` 只对已完成任务取结果；失败直接传播原异常，没有 async void 或吞错。输入等待初始化与容器转场完成；Tab 选择按钮位于内容挂载外，因此用项目 Switching 状态同时禁用选择和关闭。已经选中的分类点击视为业务无变化。
-
-正常退出先 await ShutdownAsync；不能在 `_ExitTree` 同步阻塞释放，强制停止运行也不等于正常关闭。技术性外部关闭未回答 Dialog 会取消等待，不等价于点击 Cancel 的 false。
-
-按钮在 OnApplyState 中同步更新可用状态，早于框架恢复焦点；初始化期间控件尚未绑定，所以只在 Ready 状态更新。分类操作自己的 Switching 和答案标志即时更新，不通过每帧重复查询业务按钮。
-
-## 继续阅读
+- Settings→Graphics→Audio：音量值保留；Back 返回菜单。
+- Quit→Cancel 留在菜单；Confirm 等待清理后退出。Esc 返回，Enter 激活焦点按钮。
+- Observe 在帧入口传播任务异常；OnApplyState 在焦点恢复前更新按钮状态。
+- 正常退出 await ShutdownAsync，再释放场景。音量／画质仅示范控件状态，不修改引擎设置。
 
 [内嵌 Tab](../manual/tabs.md) · [生命周期](../manual/lifecycle.md) · [Godot 适配](../integrations/godot.md) · [下一步](next-steps.md)

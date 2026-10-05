@@ -1,14 +1,10 @@
 # Concepts and responsibilities
 
-## Scenario
-
-A client has a lobby page, a hideable inventory window and purchase confirmation. All are Nodes, but their flows need different Containers.
-
-## Resources and responsibilities
-
-UIContext owns the host, resource service, registrations and structural Root. UINode supplies identity, parent/child relationships and lifecycle; View is a business name, not a separate framework base. IUIElement represents an engine instance. The logical hierarchy is related to the widget tree but need not mirror every widget. A Container is itself a Node.
+Use a Node for a screen and a Container to define how it opens, switches and returns.
 
 ## Usage
+
+UIContext provides registration, resource services and Root. A business class can be named InventoryView; IUIElement connects it to engine widgets.
 
 ```csharp
 var ui = new UIContext(host, loader);
@@ -19,10 +15,10 @@ ui.Register<LobbyView>("lobby-resource");
 await pages.PushAsync<LobbyView>();
 ```
 
-## Behavior and limits
+## Key points
 
-The adapter supplies host, loader and pageMount. Panel manages independent windows; Stack keeps page instances in history; Tab selects authored pages; Modal manages top-layer interaction and nested dialogs. `DialogNode<TResult>` supplies an awaited answer through Modal. There are no HUD/Overlay presets or mandatory Page/Sheet/Modal business base classes. The container determines how a View participates in the flow.
-
-## Related chapters
+- Panel manages independent windows; Stack keeps page history; Tab selects embedded pages; Modal manages nested dialogs.
+- Containers are Nodes. Call their operations directly.
+- Root is structural. Your project supplies mounts, widgets and layout.
 
 [Hierarchy](hierarchy.md) · [API](../api/core.md)

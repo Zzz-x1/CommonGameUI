@@ -1,14 +1,10 @@
 # 生命周期
 
-## 使用场景
+初始化时绑定控件，进入时刷新数据，失活时暂停装饰，销毁时释放资源。
 
-角色详情首次初始化绑定控件，每次返回刷新模型；大厅被弹窗遮住后暂停持续装饰，恢复后继续。
+## 用法
 
-## 资源与职责
-
-逻辑节点与引擎资源分离。初始化发生在挂载，Entering／Exiting 是提交前可等待的准备，Entered／Exited 是提交后同步通知。Activated／Deactivated 表达有效激活变化，VisibilityChanged 表达有效可见性变化。
-
-## 使用代码
+Entering／Exiting 是可等待的准备；Entered／Exited 是操作提交后的同步通知。
 
 ```csharp
 public sealed class LobbyView : UINode
@@ -25,10 +21,12 @@ public sealed class LobbyView : UINode
 }
 ```
 
-## 行为与限制
+## 要点
 
-Initialize 一次，进入／退出可多次；Hide 与被覆盖不销毁，Dispose 结束子树。IsVisible 包含祖先可见性，IsActive 包含稳定输入所有权，IsInteractive 还包含临时锁；动画锁不等于业务停用。准备失败恢复未提交状态；提交后通知或清理失败保留已提交状态并传播原异常。通知和选择器只读框架，不能在其中调用容器修改 API。生命周期中不能销毁自己或祖先。独立行为在挂载前 AddLifecycle(new MyBehavior())，继承 NodeLifecycle 只覆写需要阶段；添加仅限挂载前；移除可在空闲 Ready 状态停止后续通知，已初始化行为仍在节点销毁时清理。
-
-## 相关章节
+- Initialize 一次，进入／退出可重复；隐藏不销毁，Dispose 结束子树。
+- IsVisible 表示有效可见，IsActive 表示稳定激活，IsInteractive 还考虑临时输入锁。
+- 通知只读框架，不能在其中修改容器或销毁自己／祖先。
+- AddLifecycle 在挂载前注册独立行为；空闲时可 RemoveLifecycle，已初始化行为仍在销毁时清理。
+- 失败时的状态规则见[异步与错误](async-and-errors.md)。
 
 [API 阶段签名](../api/core.md) · [失败](async-and-errors.md)

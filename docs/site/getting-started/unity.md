@@ -1,36 +1,141 @@
 # Unity Getting Started
 
-## 场景与状态
+本教程制作一个主菜单：打开设置、切换音量／画面分类、返回菜单、确认退出。
 
-本教程完成与 Godot 相同的主菜单、设置分类、确认与返回。当前适配源码以 Unity 6000.3.24f1、uGUI 2.0.0 验证编译。最新适配修复与本教程仅离线编译，未完成原生运行验证；游戏 Unity Demo 的复杂时间轴资源还有待验证项。不要把这理解为已验证全部 Unity 平台。
+## 1. 准备项目
 
-## 安装
+- 安装 Unity 6000.3.24f1 和 .NET 10 SDK。
+- 创建一个 Unity 项目，将场景保存为 Assets/Scenes/Main.unity。
+- Player Settings → Active Input Handling 选择 **Input Manager (Old)** 或 **Both**。本教程用旧 Input API 处理 Esc。
 
-下载本仓库，安装 .NET 10 SDK。从仓库根目录执行 `./scripts/Run-UnityDemo.ps1 -PrepareOnly`，只构建核心 DLL 到本地包，不启动编辑器。自己的项目在 Package Manager 使用 Add package from disk，选择 `src/UIFramework.Unity/package.json`。包依赖 uGUI 和 Animation 模块。核心 DLL 为构建产物，不纳入源码；首次接入必须先准备。
+## 2. 安装框架
 
-本教程不使用 Source Generator，不需要 Unity CLI。将 `docs/examples/unity/TutorialHost.cs` 复制到自己的 Assets/Scripts。项目 Active Input Handling 选 Input Manager (Old) 或 Both；以下 Esc 使用旧 Input API。EventSystem 使用 StandaloneInputModule，Submit 为 Return，Cancel 为 Escape；使用新输入系统时自行替换宿主按键与输入模块。
+下载本仓库，在仓库根目录执行：
 
-## 资源与 Inspector
-
-```text
-Scene
-├── Canvas (Screen Space Overlay, CanvasScaler, GraphicRaycaster, TutorialHost)
-│   ├── PagesMount (RectTransform, Stretch)
-│   └── DialogsMount (RectTransform, Stretch, 位于 PagesMount 后)
-└── EventSystem (StandaloneInputModule)
-Assets/Resources/UI/Menu.prefab: RectTransform → Content → Settings, Quit
-Assets/Resources/UI/Settings.prefab: RectTransform → Content (Image)
-  ├── AudioTab, GraphicsTab, Close (Button)
-  └── Body → Audio/Volume (Slider), Graphics/Quality (Toggle)
-Assets/Resources/UI/Confirm.prefab: RectTransform → Content (Image)
-  └── Question (Text), Yes, No (Button)
+```powershell
+./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-CanvasScaler 采用 Scale With Screen Size、1000×700。所有 Prefab 根为 RectTransform，Stretch 填满挂载；Content 居中约 440×380。分类 Body 下两个页面都存进 Prefab，重叠显示区域；由运行时绑定默认 Audio。按钮可导航，标签的 Raycast Target 关闭，Content Image 和 Button 的 Graphic 接受射线。Volume 起始值设 .65；Quality 为普通 Toggle，值只用于 UI 演示。
+此命令生成核心 DLL，不启动 Unity。然后在自己的 Unity 项目中：
 
-PagesMount／DialogsMount 与 Prefab 根不放可命中的全屏 Image；框架自动创建遮罩。将 Canvas、Events、PagesMount、DialogsMount 拖到 TutorialHost 对应字段。不要在 Inspector 再绑定同一个按钮事件，代码已经订阅。
+1. 打开 Package Manager → **Add package from disk**。
+2. 选择仓库中的 src/UIFramework.Unity/package.json。
+3. 将 docs/examples/unity/TutorialHost.cs 复制到 Assets/Scripts。
 
-## 完整宿主与节点
+包已声明 uGUI 依赖。本教程使用手写注册，无需 Source Generator。
+
+## 3. 搭建场景
+
+创建 Canvas 和 EventSystem，Canvas 下放两个挂载：
+
+```text
+Canvas
+├── PagesMount
+└── DialogsMount
+EventSystem
+```
+
+| 对象 | 配置 |
+| --- | --- |
+| Canvas | Screen Space Overlay；保留 GraphicRaycaster |
+| CanvasScaler | Scale With Screen Size；参考分辨率 1000×700 |
+| PagesMount | RectTransform 四边 Stretch，偏移为 0；不放 Image |
+| DialogsMount | 同上；在 Hierarchy 中位于 PagesMount 后面 |
+| EventSystem | StandaloneInputModule；Submit=Return，Cancel=Escape |
+
+挂载可通过创建 UI Panel 后移除 Image 得到。PagesMount 放主菜单，DialogsMount 放弹窗和框架生成的遮罩。
+
+## 4. 创建三个 Prefab
+
+资源保存到 **Assets/Resources/UI**。对象名称必须与下面一致；按钮文字可以自行修改。
+
+所有 Prefab 根都只用 RectTransform，四边 Stretch、偏移为 0。Content 居中，约 440×380；控件放在 Content 内。
+
+### Menu.prefab：主菜单
+
+```text
+Menu (RectTransform)
+└── Content
+    ├── Settings (Button)
+    └── Quit (Button)
+```
+
+Settings 打开设置，Quit 打开退出确认。
+
+### Settings.prefab：设置
+
+```text
+Settings (RectTransform)
+└── Content (Image)
+    ├── AudioTab (Button)
+    ├── GraphicsTab (Button)
+    ├── Close (Button)
+    └── Body (RectTransform)
+        ├── Audio (RectTransform)
+        │   └── Volume (Slider)
+        └── Graphics (RectTransform)
+            └── Quality (Toggle)
+```
+
+Audio 与 Graphics 都保存在同一个 Prefab 中，填满 Body；运行时选择其中一页。把两个分类按钮放在上方，Close 放在底部。Volume 初始值可设 .65。
+
+### Confirm.prefab：退出确认
+
+```text
+Confirm (RectTransform)
+└── Content (Image)
+    ├── Question (Text or TextMeshProUGUI)
+    ├── Yes (Button)
+    └── No (Button)
+```
+
+Question 显示“是否退出？”。Yes 确认，No 取消。
+
+弹窗 Content 的 Image 接受射线；文字关闭 Raycast Target，按钮保留导航。资源根和挂载不放全屏 Image，遮罩由框架创建。
+
+## 5. 接入框架
+
+将 **TutorialHost** 挂在 Canvas 上，在 Inspector 赋值：
+
+| 字段 | 拖入对象 |
+| --- | --- |
+| Canvas | 场景 Canvas |
+| Events | 场景 EventSystem |
+| PagesMount | PagesMount |
+| DialogsMount | DialogsMount |
+
+完整脚本已包含按钮订阅，Inspector 不再添加 OnClick。
+
+初始化只做三件事：创建 Context 和容器、注册资源、显示主菜单。以下代码来自 TutorialHost，不需要额外复制：
+
+```csharp
+_ui = UnityUI.Create(Canvas, Events);
+_pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
+_dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
+_dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
+
+_ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
+_ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
+_ui.Register<ConfirmView>("UI/Confirm");
+
+await _pages.PushAsync<MenuView>();
+```
+
+业务流程对应这些 API：
+
+| 操作 | 调用 |
+| --- | --- |
+| 显示主菜单 | `_pages.PushAsync<MenuView>()` |
+| 打开设置 | `_dialogs.OpenAsync<SettingsView>()` |
+| 切换分类 | `_tabs.SwitchAsync("Audio")` |
+| 返回菜单 | `_dialogs.CloseAsync(settings)` |
+| 等待退出答案 | `ShowDialogAsync<ConfirmView, bool>()` |
+| 回答 | `Complete(result)` |
+
+MenuView、SettingsView、ConfirmView 是普通 C# 节点，不挂到 GameObject。宿主 Update 观察异步任务；分类切换期间禁用分类与关闭按钮。
+
+<details>
+<summary>展开完整 TutorialHost.cs</summary>
 
 ```csharp
 using System;
@@ -167,14 +272,21 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## 验证流程与关闭
+</details>
 
-Settings→Graphics→Audio 保留 Slider；Back 回主菜单；Quit→Cancel 不退出；Quit→Confirm 先清理再请求退出。Esc 优先当前弹窗；Enter 提交当前 EventSystem 焦点。编辑器中的 Application.Quit 不结束 Play Mode，手动 Stop 不属于可等待的正常关闭；卸载场景前由项目 await ShutdownAsync 并按项目需求替换退出动作。不要在 OnDestroy 中 async void 清理。
+## 6. 运行检查
 
-宿主 Update 观察任务并原样传播错误。分类选择和关闭共用项目 Switching 状态，容器仍管理自身输入锁。外部关闭未回答的结果弹窗会取消，不转换为 false。尚未验证本教程原生运行；源代码和 API 引用经过离线编译。
+进入 Play Mode，依次操作：
 
-按钮在 OnApplyState 中同步更新可用状态，早于框架恢复焦点；初始化期间控件尚未绑定，所以只在 Ready 状态更新。分类操作自己的 Switching 和答案标志即时更新，不通过每帧重复查询业务按钮。
+1. Settings → Graphics → Audio：音量值保留。
+2. Back：回到主菜单。
+3. Quit → Cancel：留在菜单。
+4. Quit → Confirm：等待 Context 清理，然后调用 Application.Quit。
 
-## 继续阅读
+Esc 返回或取消，Enter 激活焦点按钮。音量／画质只演示控件状态。
 
-[Unity 适配](../integrations/unity.md) · [结果弹窗](../manual/modals-and-dialogs.md) · [输入与焦点](../manual/input-and-focus.md) · [下一步](next-steps.md)
+Application.Quit 不会结束编辑器 Play Mode。实际项目在卸载场景前 await ShutdownAsync；手动 Stop 不属于正常关闭。
+
+本教程已离线编译，尚未原生运行验证。适配状态见 [Unity 适配](../integrations/unity.md)。
+
+[下一步](next-steps.md) · [Tab](../manual/tabs.md) · [结果弹窗](../manual/modals-and-dialogs.md)

@@ -1,14 +1,10 @@
 # 节点、参数与依赖
 
-## 使用场景
+装备详情用创建参数传入装备 ID；玩家模型等服务通过构造函数注入。
 
-打开某件装备的详情需要装备 ID；背包刷新需要玩家模型。创建参数与服务依赖分开表达。
+## 用法
 
-## 资源与职责
-
-详情场景只负责控件。`UINode<TArgs>`.Parameters 保存创建参数；构造工厂注入服务。普通 Node 不要求泛型参数，只有确实需要时才使用。
-
-## 使用代码
+继承 `UINode<TArgs>`，通过 Parameters 读取参数。带服务的 View 使用 Register(factory, resource) 注册。
 
 ```csharp
 public sealed record ItemArgs(string ItemId);
@@ -25,10 +21,10 @@ public sealed class ItemDetailsView : UINode<ItemArgs>
 // await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 ```
 
-## 行为与限制
+## 要点
 
-参数在初始化前赋值，类型错误或缺少必需参数直接报错。Panel 的单实例窗口首次创建可带参数，已有实例重开不能传非 null 创建参数；数据变化调用业务方法。没有通用数据绑定、MVVM 或 DI 容器，已有服务可以通过普通构造函数接入。业务模型不随 View 隐藏或销毁而丢失。
-
-## 相关章节
+- 参数在初始化前赋值；类型不符或缺少必需参数报错。
+- 参数只用于创建。已有单实例窗口重开不传参数，刷新数据调用业务方法。
+- 模型独立于 View，隐藏或销毁界面不应丢失玩家数据。
 
 [窗口](panels.md) · [生成器](source-generator.md)

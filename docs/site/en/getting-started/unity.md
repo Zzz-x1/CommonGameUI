@@ -1,36 +1,141 @@
 # Unity Getting Started
 
-## Scenario and validation status
+Build a main menu that opens settings, switches audio/graphics tabs, returns to the menu and confirms quitting.
 
-Build the same menu, settings categories, confirmation and return flow as the Godot tutorial. Adapter source has been compiled against Unity 6000.3.24f1 and uGUI 2.0.0. The latest adapter fixes and this tutorial have offline compilation only, without native runtime verification. The game Unity Demo still has pending timeline asset verification. This is not a claim of support tested on every Unity platform.
+## 1. Prepare the project
 
-## Install
+- Install Unity 6000.3.24f1 and the .NET 10 SDK.
+- Create a Unity project and save Assets/Scenes/Main.unity.
+- Set Player Settings → Active Input Handling to **Input Manager (Old)** or **Both**. This tutorial uses the old Input API for Esc.
 
-Download this repository and install the .NET 10 SDK. From the repository root run `./scripts/Run-UnityDemo.ps1 -PrepareOnly`. It prepares the core DLL in the local package without starting an editor. In your own project, use Package Manager → Add package from disk and select `src/UIFramework.Unity/package.json`. The package depends on uGUI and the Animation module. The core DLL is a build artifact; prepare it before the first import.
+## 2. Install the framework
 
-This tutorial needs neither Source Generator nor Unity CLI. Copy `docs/examples/unity/TutorialHost.cs` into Assets/Scripts. Set Active Input Handling to Input Manager (Old) or Both; Esc below uses the old Input API. Use an EventSystem with StandaloneInputModule, Submit mapped to Return and Cancel to Escape. Replace the host key check and input module when using the new input system.
+Download this repository and run from its root:
 
-## Resources and Inspector
-
-```text
-Scene
-├── Canvas (Screen Space Overlay, CanvasScaler, GraphicRaycaster, TutorialHost)
-│   ├── PagesMount (RectTransform, Stretch)
-│   └── DialogsMount (RectTransform, Stretch, after PagesMount)
-└── EventSystem (StandaloneInputModule)
-Assets/Resources/UI/Menu.prefab: RectTransform → Content → Settings, Quit
-Assets/Resources/UI/Settings.prefab: RectTransform → Content (Image)
-  ├── AudioTab, GraphicsTab, Close (Button)
-  └── Body → Audio/Volume (Slider), Graphics/Quality (Toggle)
-Assets/Resources/UI/Confirm.prefab: RectTransform → Content (Image)
-  └── Question (Text), Yes, No (Button)
+```powershell
+./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-Use Scale With Screen Size at 1000×700 on CanvasScaler. Every Prefab root is a stretched RectTransform. Center Content at roughly 440×380. Author both Tab pages under Body in the same display area; runtime binding initially selects Audio. Enable button navigation, disable label Raycast Target, and keep panel/button graphics raycastable. Start Volume at .65. Quality is a regular Toggle; both controls demonstrate UI state only.
+This builds the core DLL without starting Unity. In your Unity project:
 
-Do not place raycastable full-screen Images on the mounts or Prefab roots. The framework creates the modal backdrop. Assign Canvas, Events, PagesMount and DialogsMount to TutorialHost fields. Do not duplicate the button listeners in the Inspector.
+1. Open Package Manager → **Add package from disk**.
+2. Select src/UIFramework.Unity/package.json in the repository.
+3. Copy docs/examples/unity/TutorialHost.cs into Assets/Scripts.
 
-## Complete host and nodes
+The package declares uGUI dependencies. This tutorial uses manual registration, without Source Generator.
+
+## 3. Build the scene
+
+Create Canvas and EventSystem, then two mounts under Canvas:
+
+```text
+Canvas
+├── PagesMount
+└── DialogsMount
+EventSystem
+```
+
+| Object | Configuration |
+| --- | --- |
+| Canvas | Screen Space Overlay; keep GraphicRaycaster |
+| CanvasScaler | Scale With Screen Size; reference resolution 1000×700 |
+| PagesMount | Stretch on all sides, zero offsets; no Image |
+| DialogsMount | Same configuration; after PagesMount in the Hierarchy |
+| EventSystem | StandaloneInputModule; Submit=Return, Cancel=Escape |
+
+Create mounts from UI Panels and remove their Image components. PagesMount contains the menu; DialogsMount contains modals and the framework backdrop.
+
+## 4. Create three Prefabs
+
+Save resources under **Assets/Resources/UI**. Object names must match below; labels can differ.
+
+Every Prefab root uses a stretched RectTransform with zero offsets. Center Content at about 440×380 and place controls inside it.
+
+### Menu.prefab: main menu
+
+```text
+Menu (RectTransform)
+└── Content
+    ├── Settings (Button)
+    └── Quit (Button)
+```
+
+Settings opens settings; Quit opens confirmation.
+
+### Settings.prefab: settings
+
+```text
+Settings (RectTransform)
+└── Content (Image)
+    ├── AudioTab (Button)
+    ├── GraphicsTab (Button)
+    ├── Close (Button)
+    └── Body (RectTransform)
+        ├── Audio (RectTransform)
+        │   └── Volume (Slider)
+        └── Graphics (RectTransform)
+            └── Quality (Toggle)
+```
+
+Author Audio and Graphics in the same Prefab, each filling Body. Runtime selects one. Place category buttons above and Close below. Volume can start at .65.
+
+### Confirm.prefab: quit confirmation
+
+```text
+Confirm (RectTransform)
+└── Content (Image)
+    ├── Question (Text or TextMeshProUGUI)
+    ├── Yes (Button)
+    └── No (Button)
+```
+
+Question displays “Quit?”. Yes confirms; No cancels.
+
+Modal Content Images receive raycasts. Disable label Raycast Target and keep button navigation. Roots/mounts have no full-screen Image; the framework creates the backdrop.
+
+## 5. Connect the framework
+
+Attach **TutorialHost** to Canvas and assign:
+
+| Field | Scene object |
+| --- | --- |
+| Canvas | Canvas |
+| Events | EventSystem |
+| PagesMount | PagesMount |
+| DialogsMount | DialogsMount |
+
+The script subscribes to buttons; do not add duplicate Inspector OnClick handlers.
+
+Initialization creates Context/containers, registers resources and shows the menu. This excerpt is already in TutorialHost; do not paste it again:
+
+```csharp
+_ui = UnityUI.Create(Canvas, Events);
+_pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
+_dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
+_dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
+
+_ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
+_ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
+_ui.Register<ConfirmView>("UI/Confirm");
+
+await _pages.PushAsync<MenuView>();
+```
+
+The flow uses these APIs:
+
+| Action | Call |
+| --- | --- |
+| Show menu | `_pages.PushAsync<MenuView>()` |
+| Open settings | `_dialogs.OpenAsync<SettingsView>()` |
+| Select category | `_tabs.SwitchAsync("Audio")` |
+| Return to menu | `_dialogs.CloseAsync(settings)` |
+| Await quit answer | `ShowDialogAsync<ConfirmView, bool>()` |
+| Answer | `Complete(result)` |
+
+MenuView, SettingsView and ConfirmView are plain C# nodes, not GameObject components. Update observes tasks; category switching disables selectors and Close.
+
+<details>
+<summary>Expand complete TutorialHost.cs</summary>
 
 ```csharp
 using System;
@@ -167,14 +272,21 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## Try the flow and shut down
+</details>
 
-Settings→Graphics→Audio retains the Slider value. Back returns to the menu. Quit→Cancel keeps it; Quit→Confirm disposes the Context then requests exit. Esc handles the current modal first. Enter submits the EventSystem selection. Application.Quit does not stop Play Mode in the editor; manual Stop is not an awaited shutdown. Before unloading a scene, await ShutdownAsync from project code and replace the exit action as needed. Do not use async void cleanup in OnDestroy.
+## 6. Run the flow
 
-Update observes tasks and propagates original errors. A project Switching state disables selectors and Close together; containers still manage their own input locks. External closure of an unanswered dialog cancels instead of returning false. This tutorial has offline compilation only, not native runtime verification.
+Enter Play Mode:
 
-Buttons update their availability synchronously in OnApplyState, before framework focus restoration. Controls are not bound during initialization, so updates apply only in Ready state. Switching and answered flags update immediately without polling button state every frame.
+1. Settings → Graphics → Audio retains volume.
+2. Back returns to the menu.
+3. Quit → Cancel keeps the menu.
+4. Quit → Confirm awaits Context disposal, then calls Application.Quit.
 
-## Continue
+Esc returns/cancels; Enter activates focus. Volume/quality demonstrate widget state only.
 
-[Unity integration](../integrations/unity.md) · [Result dialogs](../manual/modals-and-dialogs.md) · [Input and focus](../manual/input-and-focus.md) · [Next steps](next-steps.md)
+Application.Quit does not end editor Play Mode. Await ShutdownAsync before unloading a scene in your game; manual Stop is not normal shutdown.
+
+This tutorial has offline compilation only, without native execution. See [Unity integration](../integrations/unity.md) for status.
+
+[Next steps](next-steps.md) · [Tabs](../manual/tabs.md) · [Result dialogs](../manual/modals-and-dialogs.md)

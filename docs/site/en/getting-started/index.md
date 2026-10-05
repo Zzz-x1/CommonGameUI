@@ -1,10 +1,6 @@
 # Getting Started
 
-## What the framework manages
-
-UIFramework manages UI identity, hierarchy, open/return flows, lifecycle, input state and resource ownership. It does not draw widgets, unify engine layout files or create business layers. Your game still owns models, networking, saves and rewards.
-
-## Environment and installation
+Start with manual registration for menu/settings, then add animation, preloading and generation as needed.
 
 | Component | Current requirements / integration |
 | --- | --- |
@@ -13,13 +9,6 @@ UIFramework manages UI identity, hierarchy, open/return flows, lifecycle, input 
 | Unity | Compiled with 6000.3.24f1 and uGUI 2.0.0; prepare DLL then add the local UPM package |
 | Generator | Optional Roslyn generator via an Analyzer project reference; not integrated into the Unity workflow |
 
-There is no public NuGet package or release download URL promised by this repository. Use the source. These versions describe the environment used here, not compatibility with every SDK or engine version.
+Integrate from source. Short Manual snippets assume initialized containers and project-defined Views; tutorials provide complete code.
 
-## Two tutorial routes
-
-1. [Godot tutorial](godot.md): complete scenes and host for menu→settings→categories→quit confirmation.
-2. [Unity tutorial](unity.md): complete host and Inspector/Prefab setup for the same flow; native execution remains unverified.
-
-Start with manual Register calls to understand resources and instances. Then read [Source Generator](../manual/source-generator.md). Short Manual snippets assume initialized ui, pages, windows, modals and tabs variables and project-defined View types. Full runnable hosts live in the tutorials rather than being repeated in every chapter.
-
-[Next steps](next-steps.md)
+[Godot tutorial](godot.md) · [Unity tutorial](unity.md) · [Next steps](next-steps.md)

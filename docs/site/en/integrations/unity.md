@@ -1,10 +1,12 @@
 # Unity integration
 
-## Setup and resources
+Follow [Unity Getting Started](../getting-started/unity.md) for setup.
 
-Prepare the netstandard2.1 core DLL, then add the local UPM package; see [Unity Getting Started](../getting-started/unity.md). No published Git UPM URL is promised and the Unity Source Generator workflow is not verified.
+## Resources and controls
 
-UnityPrefabLoader uses Resources.`LoadAsync<GameObject>` and requires a RectTransform root. Register paths relative to Resources without extensions, such as UI/Inventory. Canvas/EventSystem must be active; Create configures UnityFramePump on the Canvas for frame waits.
+- Prefab roots use RectTransform under Resources; register paths without extensions.
+- Mounts/roots have no raycastable full-screen Graphic. Modal creates the backdrop.
+- Tabs bind existing RectTransforms without cloning. GetRect/GetComponent access native controls.
 
 ```csharp
 var ui = UnityUI.Create(canvas, eventSystem);
@@ -15,16 +17,15 @@ var inventory = await pages.PushAsync<InventoryView>();
 Button close = inventory.GetComponent<Button>("Content/Close");
 ```
 
-## Scene configuration
+## Lifecycle and animation
 
-Use CanvasScaler/GraphicRaycaster and configure EventSystem mouse/keyboard modules. Empty mounts have no raycastable Graphic. Modal roots contain no full-screen backdrop; Content Images receive input and the framework creates the backdrop. CanvasGroup gates input while business code retains button interactable control.
+- Create configures the Canvas frame pump. Await ui.DisposeAsync before destroying Canvas/EventSystem.
+- Input gates preserve business interactable state. EventSystem configures keyboard navigation.
+- Timelines use non-looping legacy AnimationClips and unscaled time.
+- Resources requests cannot be canceled directly; releasing references does not immediately clear engine caches.
 
-GetRect/`GetComponent<T>`(path) access actual widgets and fail on invalid paths. Bind embedded tabs to existing RectTransforms. Owned dynamic Prefabs deactivate and detach before Destroy, avoiding delayed destruction affecting sibling order.
+## Verification status
 
-## Shutdown and validation limits
-
-Await Context.DisposeAsync before destroying Canvas, EventSystem or the frame pump. Disabling the pump fails pending frame waits; async void OnDestroy is not normal awaited cleanup. Native load requests cannot be canceled directly. Release removes adapter references while Unity owns Resources caching.
-
-Use native legacy AnimationClip, not Animator. Latest backdrop visibility/first-frame fixes have offline compilation only, and new runtime tests have not executed. Full persistence of Demo timeline assets remains unverified. The compilation environment is 6000.3.24f1, with no claim of verified IL2CPP, mobile or other versions.
+Current environment: Unity 6000.3.24f1/uGUI 2.0.0. Latest fixes and tutorials have offline compilation only, with native execution pending. Demo timeline assets also await verification. The Unity Source Generator workflow is not integrated.
 
 [Unity API](../api/unity.md) · [Timelines](../manual/timeline-animation.md)

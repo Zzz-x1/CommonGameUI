@@ -1,14 +1,10 @@
 # 输入与焦点
 
-## 使用场景
+Esc 先处理顶层弹窗，再关对比窗，再返回页面，最后确认退出。
 
-Esc 优先顶层弹窗，再关闭对比窗，再返回页面，最后在大厅确认退出。分类切换时同时禁用资源外的选择与关闭按钮。
+## 用法
 
-## 资源与职责
-
-容器锁自己管理的显示范围；Modal 操作额外临时阻挡 Context 输入并提交模态所有权。项目外壳承担跨容器按钮、全局按键和实际返回优先级。
-
-## 使用代码
+这是项目返回规则。容器负责自己的输入锁；挂载外的按钮和全局按键由外壳控制。
 
 ```csharp
 async Task BackAsync()
@@ -22,10 +18,11 @@ async Task BackAsync()
 // Call only after the project verifies that the current layer is interactive.
 ```
 
-## 行为与限制
+## 要点
 
-这是项目返回政策示例，compareWindows 由项目维护，关闭后须移除引用。确认弹窗按业务取消策略回答，不把技术失败转换为答案。IsInteractive 包括输入锁；初始化、转场和不可操作层不接受按键。适配器恢复鼠标／焦点配置，不覆盖按钮业务 Disabled／interactable 条件。焦点恢复只使用仍有效、可见且可用的目标；原生按键导航由引擎配置。没有全局输入队列、导航策略或自动 Esc 绑定。完整输入门与任务观察见教程。
-
-## 相关章节
+- 只在当前层 IsInteractive 时提交操作；初始化和转场期间等待。
+- compareWindows 由项目维护，关闭后移除引用。确认弹窗用业务答案表达取消。
+- 输入门保留按钮业务 Disabled／interactable 状态；焦点只恢复到有效、可见、可用的控件。
+- 键盘导航由引擎配置，完整输入与任务观察见教程。
 
 [Godot 教程](../getting-started/godot.md) · [Unity 教程](../getting-started/unity.md)

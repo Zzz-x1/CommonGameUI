@@ -1,14 +1,10 @@
 # Modals and result dialogs
 
-## Scenario
-
-Open graphics settings over the settings modal, then return to settings. Await purchase confirmation and do not charge on an explicit cancel.
-
-## Resources and responsibilities
-
-Modal resources supply content; the container creates backdrops. Shared uses one backdrop, PerModal one per layer. `DialogNode<TResult>` supplies the answer; Modal returns it only after closure and cleanup.
+Open graphics over settings and return to settings on close; await confirmation before purchasing.
 
 ## Usage
+
+Modal resources contain content only. Shared uses one backdrop; PerModal uses one per layer. Inherit `DialogNode<TResult>` for an answer. Observe is the project task observer.
 
 ```csharp
 modals.ConfigureBackdrop(GodotBackdrops.Dim(Observe), ModalBackdropMode.Shared);
@@ -22,10 +18,11 @@ if (confirmed) player.BuySelectedItem();
 await modals.CloseToAsync(shop);
 ```
 
-## Behavior and limits
+## Key points
 
-Observe must retain and inspect Tasks raised by backdrop interaction. CloseAsync only closes the top; CloseTo retains an earlier instance and cleans all above it without activating intermediate layers. Answer buttons call Complete(true/false). Do not use Close as false: externally closing an unanswered dialog cancels its task. Complete is allowed only while interactive and only once. Configure DismissRequested to return a close Task, or Complete(false) then CompletedTask for a result dialog. With no handler, clicking the backdrop leaves it open. Simultaneous modal input ownership across separate Modal containers is unsupported and fails.
-
-## Related chapters
+- CloseAsync closes the top only; CloseToAsync retains an earlier target and cleans the layers above it.
+- Answer buttons call Complete(result). ShowDialogAsync returns after closure and cleanup.
+- Complete(false) is an explicit cancel answer; external unanswered closure cancels the task.
+- Complete is allowed once while interactive. Configure DismissRequested for backdrop dismissal.
 
 [Complete tutorial](../getting-started/godot.md) · [Async](async-and-errors.md)

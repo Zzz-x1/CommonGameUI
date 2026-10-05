@@ -1,14 +1,10 @@
 # Page history
 
-## Scenario
-
-Lobby→inventory→item details→back restores the same inventory instance and filters. “Home” returns directly to the earlier lobby instance.
-
-## Resources and responsibilities
-
-Pages have separate resources under one Stack. History retains covered nodes hidden but alive. Keep the lobby instance as the Home target.
+Lobby→inventory→details→back restores the original inventory. Home returns to the retained lobby instance.
 
 ## Usage
+
+Each page has its own resource under one Stack. History retains covered pages; Current is the top page.
 
 ```csharp
 var lobby = await pages.PushAsync<LobbyView>();
@@ -21,10 +17,10 @@ var current = pages.Current;
 var history = pages.History;
 ```
 
-## Behavior and limits
+## Key points
 
-Push creates a node and covers the current page. Pop disposes it and restores the preceding page; an earlier item is required. PopTo accepts a concrete earlier instance in this stack, not Current or an external object. Intermediate pages are cleaned after commit without sequential reactivation. The top exits, the target prepares and enters for return; intermediate hidden pages do not replay display lifecycle. There is no Replace API; express navigation policy through the actual game flow.
-
-## Related chapters
+- Push creates a page and hides the current one. Pop disposes the top and restores the preceding page.
+- Pop requires an earlier page; PopTo takes an earlier instance in this stack.
+- PopTo cleans intermediate pages and restores only the target.
 
 [Lifecycle](lifecycle.md) · [Return rules](input-and-focus.md)

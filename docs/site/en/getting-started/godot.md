@@ -1,21 +1,19 @@
 # Godot Getting Started
 
-## Scenario: menu, settings and quit confirmation
+Build menu→settings→category switching→quit confirmation. Use Godot 4.7.2 .NET and the .NET 10 SDK.
 
-Use Godot 4.7.2 .NET with the .NET 10 SDK. UIFramework manages screen flow; buttons, sliders and layout remain native Godot controls. Volume and quality controls keep their UI values only in this tutorial; they do not change the audio or rendering backend.
+## Install
 
-## Install and prepare resources
-
-Download or clone this repository. From its root, run `dotnet build docs/examples/godot/Tutorial.csproj`, then open `docs/examples/godot/project.godot` in Godot. This standalone tutorial never accesses the game Demo save.
-
-For your own project, reference Core and Godot from your `.csproj`, adjusting paths relative to that project. The tutorial uses:
+From the repository root, run `dotnet build docs/examples/godot/Tutorial.csproj`, then open its project.godot in Godot. For your project, reference Core and Godot and adjust the paths:
 
 ```xml
 <ProjectReference Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
 <ProjectReference Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
 ```
 
-All resources are ordinary scenes at the tutorial project root:
+## Resources
+
+Scene files are provided and editable. Roots/empty mounts use Full Rect and Mouse Filter=Ignore; modal Content receives input. Keep button keyboard focus enabled.
 
 ```text
 Main (Control, TutorialHost.cs)
@@ -28,11 +26,9 @@ Settings.tscn: Control → Content (Panel)
 Confirm.tscn: Control → Content (Panel) → Question (Label), Yes, No (Button)
 ```
 
-Screen roots fill the mount and use Mouse Filter=Ignore. Content is the actual panel area; modal Content uses Stop. Do not embed another full-screen backdrop. Both Tab pages live in the Settings resource and are bound, not cloned; Audio is selected initially. Keep button keyboard focus enabled and use native slider/checkbox behavior. All scene files are provided and editable.
+## Complete code
 
-## Complete host and business nodes
-
-Save this as TutorialHost.cs and attach it to the Main root. Views are plain C# logical nodes, not Godot scene scripts. They share a file here for readability; split them into modules in a larger project.
+Attach TutorialHost.cs to Main. Views are plain C# logic classes, not scene scripts.
 
 ```csharp
 using Godot;
@@ -176,16 +172,11 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## Try the flow
+## Operation and shutdown
 
-Run Main: Settings→Graphics→Audio retains the Volume value. Back restores the menu. Quit→Cancel keeps the menu; Quit→Confirm waits for Context disposal before exiting. Esc closes settings or answers false; on the menu it opens quit confirmation. Enter activates the focused button. Opening settings again creates a new instance, so UI values not stored in a model reset.
-
-`Observe` collects tasks; `_Process` reads only completed results and propagates original failures. There is no async void or swallowed error. Input waits for initialization and container transitions. Tab selector buttons live outside the content mount, so the project Switching state also disables selectors and Close. Selecting the current category is a business no-op.
-
-For a normal exit, await ShutdownAsync before removing the scene. Never block in `_ExitTree`; forcing the running game to stop is not a normal awaited shutdown. Externally closing an unanswered Dialog cancels its task, unlike the explicit false from Cancel.
-
-Buttons update their availability synchronously in OnApplyState, before framework focus restoration. Controls are not bound during initialization, so updates apply only in Ready state. Switching and answered flags update immediately without polling button state every frame.
-
-## Continue
+- Settings→Graphics→Audio retains volume; Back returns to the menu.
+- Quit→Cancel keeps the menu; Confirm awaits cleanup before exiting. Esc goes back; Enter activates focus.
+- Observe propagates task errors from the frame entry. OnApplyState updates buttons before restoring focus.
+- Await ShutdownAsync before releasing the scene. Volume/quality demonstrate UI state only.
 
 [Embedded tabs](../manual/tabs.md) · [Lifecycle](../manual/lifecycle.md) · [Godot integration](../integrations/godot.md) · [Next steps](next-steps.md)

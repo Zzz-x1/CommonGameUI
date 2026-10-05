@@ -1,14 +1,17 @@
 # Source Generator
 
-## 使用场景
+通过资源属性生成注册和类型化调用，减少重复代码。
 
-大量业务节点需要资源注册和类型化调用，希望减少重复 Register 与泛型调用代码。仍保留手写工厂注入服务。
+## 用法
 
-## 资源与职责
+将生成器作为 Analyzer 引用；业务类使用公开、顶层、非泛型且可无参构造的类型。服务构造仍用手写工厂。
 
-在消费项目添加 Analyzer 项目引用；不是把生成器当运行时 DLL。Godot Demo 使用此方式，Unity 尚未接入生成器工作流。公开、非泛型、顶层且可无参构造的业务类是这里的示例形状。
+项目引用如下，按项目位置调整路径：
 
-## 使用代码
+```xml
+<ProjectReference Include="../../../src/UIFramework.Generators/UIFramework.Generators.csproj"
+                  OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+```
 
 ```csharp
 namespace Game.UI
@@ -23,11 +26,14 @@ namespace Game.UI
 // var inventory = await windows.OpenInventoryViewAsync();
 ```
 
-## 行为与限制
+## 要点
 
-项目引用写为 `<ProjectReference Include=".../UIFramework.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />`，路径按项目调整。注册扩展在 UIFramework.Generated；调用扩展在节点的业务命名空间。不同命名空间同名节点可并存，同时导入导致调用歧义时限定 Game.UI.GeneratedUICalls 或使用核心泛型 API。生成 Push／Panel Open／Modal Open；`UINode<TArgs>` 生成带参调用与 Panel 无参重开；`DialogNode<TResult>` 生成 Show…Async，透传 playAnimation 与 cancellationToken。没有动态 Tab 生成、绑定生成或自定义 Analyzer 诊断；依赖构造继续手写注册。
+- 注册导入 UIFramework.Generated；类型化调用导入节点业务命名空间。
+- 已自动注册的类型不要再手写注册。
+- 同名节点调用歧义时，限定 GeneratedUICalls 或使用核心泛型 API。
+- 生成调用透传参数、playAnimation 和 cancellationToken；Unity 工作流尚未接入。
 
-## 生成的签名示例
+## 生成的签名
 
 ```csharp
 // UIFramework.Generated.GeneratedUIRegistration:
@@ -37,7 +43,5 @@ Task<InventoryView> PushInventoryViewAsync(this StackContainerNode container, bo
 Task<InventoryView> OpenInventoryViewAsync(this PanelContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<InventoryView> OpenInventoryViewAsync(this ModalContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
-
-## 相关章节
 
 [节点参数](nodes-and-parameters.md) · [API](../api/core.md)

@@ -1,14 +1,17 @@
 # Source Generator
 
-## Scenario
-
-Many business nodes need resource registration and typed calls. Reduce repeated Register and generic calls while keeping handwritten dependency-injecting factories.
-
-## Resources and responsibilities
-
-Add an Analyzer project reference to the consuming project, not a runtime generator DLL. The Godot Demo uses it; the Unity workflow does not. Examples use public, non-generic, top-level business classes with parameterless constructors.
+Generate registration and typed calls from resource attributes to reduce repetition.
 
 ## Usage
+
+Reference the generator as an Analyzer. Use public top-level non-generic classes with parameterless constructors. Keep service constructors in handwritten factories.
+
+Add this project reference, adjusting the relative path:
+
+```xml
+<ProjectReference Include="../../../src/UIFramework.Generators/UIFramework.Generators.csproj"
+                  OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+```
 
 ```csharp
 namespace Game.UI
@@ -23,11 +26,14 @@ namespace Game.UI
 // var inventory = await windows.OpenInventoryViewAsync();
 ```
 
-## Behavior and limits
+## Key points
 
-Use `<ProjectReference Include=".../UIFramework.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />`, adjusting the path. Registration lives in UIFramework.Generated; call extensions live in the business node namespace. Same-named nodes can coexist across namespaces. If importing both makes a call ambiguous, qualify Game.UI.GeneratedUICalls or use the core generic API. Generated calls cover Push, Panel Open and Modal Open. `UINode<TArgs>` produces argument calls plus parameterless Panel reopen; `DialogNode<TResult>` produces Show…Async. playAnimation and cancellationToken are forwarded. There is no dynamic Tab/binding generation or custom Analyzer diagnostic. Keep service constructors in handwritten registrations.
+- Import UIFramework.Generated for registration and the node namespace for typed calls.
+- Do not manually register an automatically registered type again.
+- Qualify GeneratedUICalls or use generic APIs when same-named nodes make calls ambiguous.
+- Calls forward arguments, playAnimation and cancellationToken. The Unity workflow is not integrated.
 
-## Generated signature examples
+## Generated signatures
 
 ```csharp
 // UIFramework.Generated.GeneratedUIRegistration:
@@ -37,7 +43,5 @@ Task<InventoryView> PushInventoryViewAsync(this StackContainerNode container, bo
 Task<InventoryView> OpenInventoryViewAsync(this PanelContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<InventoryView> OpenInventoryViewAsync(this ModalContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
-
-## Related chapters
 
 [Node parameters](nodes-and-parameters.md) · [API](../api/core.md)

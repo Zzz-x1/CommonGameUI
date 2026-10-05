@@ -1,14 +1,10 @@
 # Input and focus
 
-## Scenario
-
-Esc handles the top modal, then comparison windows, page history and finally lobby quit confirmation. Category switching also disables selectors and Close outside its mount.
-
-## Resources and responsibilities
-
-Containers lock their managed displays. Modal operations also temporarily block Context input and commit modal ownership. The shell handles cross-container controls, global keys and return priority.
+Esc handles the top modal, then comparison windows, page history and finally quit confirmation.
 
 ## Usage
+
+This return policy belongs to the project. Containers own their input locks; the shell gates external buttons and global keys.
 
 ```csharp
 async Task BackAsync()
@@ -22,10 +18,11 @@ async Task BackAsync()
 // Call only after the project verifies that the current layer is interactive.
 ```
 
-## Behavior and limits
+## Key points
 
-This is project return policy. Maintain compareWindows and remove references after closure. Answer confirmation using business cancel policy, never converting technical errors into answers. IsInteractive includes locks; reject input during initialization/transitions or on inactive layers. Adapters restore mouse/focus configuration without overwriting business Disabled/interactable state. Focus restores only to a valid visible usable target. Configure native keyboard navigation in the engine. There is no global input queue, return policy or automatic Esc binding. See tutorials for complete gating and task observation.
-
-## Related chapters
+- Submit only when the current layer is interactive; wait during initialization/transitions.
+- Maintain compareWindows and remove closed references. Cancel confirmation through a business answer.
+- Input gates preserve business Disabled/interactable state; focus restores to valid visible usable controls.
+- Configure keyboard navigation in the engine. Tutorials show complete input/task handling.
 
 [Godot tutorial](../getting-started/godot.md) · [Unity tutorial](../getting-started/unity.md)

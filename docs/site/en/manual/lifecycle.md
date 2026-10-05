@@ -1,14 +1,10 @@
 # Lifecycle
 
-## Scenario
-
-Character details bind controls once and refresh model data on return. Pause lobby decoration while a modal owns input, then resume it.
-
-## Resources and responsibilities
-
-Logical nodes are distinct from engine resources. Initialization happens on attach. Entering/Exiting are awaited pre-commit preparation; Entered/Exited are synchronous post-commit notifications. Activated/Deactivated report effective activity; VisibilityChanged reports effective visibility.
+Bind controls on initialization, refresh on entry, pause decoration on deactivation and release resources on disposal.
 
 ## Usage
+
+Entering/Exiting are awaited preparation. Entered/Exited are synchronous notifications after commit.
 
 ```csharp
 public sealed class LobbyView : UINode
@@ -25,10 +21,12 @@ public sealed class LobbyView : UINode
 }
 ```
 
-## Behavior and limits
+## Key points
 
-Initialize runs once; enter/exit can repeat. Hide and coverage retain the instance; Dispose ends its subtree. IsVisible includes ancestors, IsActive includes stable input ownership, and IsInteractive also includes temporary locks; animation locks are not business deactivation. Preparation failures restore uncommitted state. Failures in post-commit notification or cleanup retain committed state and propagate the original error. Notifications and selectors are read-only toward the framework; do not invoke mutations from them. A lifecycle callback cannot dispose its own node or ancestor. Add independent behaviors before attach using AddLifecycle(new MyBehavior()); subclass NodeLifecycle and override needed phases only. Addition is pre-attach only; removal is allowed while idle and Ready, stopping later notifications while preserving initialized behavior cleanup at disposal.
-
-## Related chapters
+- Initialize runs once; entry/exit may repeat. Hiding retains; Dispose ends the subtree.
+- IsVisible is effective visibility, IsActive stable activity, and IsInteractive also considers input locks.
+- Notifications cannot mutate containers or dispose the current node/ancestors.
+- AddLifecycle registers behavior before attach. RemoveLifecycle is allowed while idle; initialized behavior still receives disposal.
+- See [Async and errors](async-and-errors.md) for failure-state rules.
 
 [API phase signatures](../api/core.md) · [Failures](async-and-errors.md)

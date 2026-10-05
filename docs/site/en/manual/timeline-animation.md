@@ -1,14 +1,10 @@
 # Timelines and custom animation
 
-## Scenario
-
-After rewards are saved, animate art, text, decoration and cards with a timeline. Skip reaches the visual endpoint only. Use project animation for an inventory icon flying into its details page.
-
-## Resources and responsibilities
-
-Save AnimationPlayer and non-looping enter/exit in Godot scenes. Unity uses native legacy Animation with non-looping AnimationClips, not Animator. Tracks change presentation only. The project restore callback restores all owned properties; the framework cannot infer arbitrary timeline snapshots.
+Save rewards first, then animate art, text and cards. Skipping changes presentation, never grants rewards again.
 
 ## Usage
+
+Godot scenes store non-looping AnimationPlayer tracks; Unity uses legacy Animation/AnimationClip. Tracks affect presentation only; restore resets every owned property.
 
 ```csharp
 Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root =>
@@ -16,30 +12,13 @@ Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root
     root.Modulate = Colors.White;
     root.GetNode<Control>("Content").Scale = Vector2.One;
 });
-// For Unity, use UnityTransitions.Animation(componentPath, enterClip, exitClip, restore).
-// Custom recipes implement these two contracts:
-public sealed class ProjectTransition : IUITransition
-{
-    public IUITransitionRun Create(TransitionContext context) => new Run(context);
-    private sealed class Run : IUITransitionRun
-    {
-        private readonly TransitionContext _context;
-        public Run(TransitionContext context) { _context = context; }
-        public Task PlayAsync(CancellationToken token)
-        {
-            token.ThrowIfCancellationRequested();
-            _context.ReportProgress(1);
-            return Task.CompletedTask;
-        }
-        public void Restore() { /* Restore captured properties and free temporary visuals. */ }
-    }
-}
 ```
 
-## Behavior and limits
+## Key points
 
-The Godot snippet assumes authored white/unit-scale values; capture and restore actual project values otherwise. The custom Run illustrates the interfaces only, not a full performance. Each real Create must return independent execution state and install its start before yielding. Hide incoming presentation while waiting for layout to prevent a final-state flash. ReportProgress takes finite monotonic 0..1 playback time, not overshooting easing values. Restore is synchronous on success and failure, without replay; cancel stops the player, releases temporary visuals and restores properties. Skip, decorative pause and Partner rectangle calculations are project implementations in the Demo, not a universal core Skip API. Unity first-frame fixes and saved Demo tracks still require native verification.
-
-## Related chapters
+- The example restores white/unit scale. Capture actual authored values when they differ.
+- Apply the start before yielding; hide incoming presentation while awaiting layout to avoid flashing.
+- Custom animations implement IUITransition/IUITransitionRun, capturing independent state per Create. Restore cleans synchronously after success or failure.
+- ReportProgress uses monotonic 0..1 time. Skip and Partner image transitions are project code; see the Demo.
 
 [Transitions](transitions.md) · [Samples](../samples/index.md)

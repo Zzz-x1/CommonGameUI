@@ -1,10 +1,13 @@
 # Custom engine integration
 
-## When to write an adapter
+Implement these contracts to connect Core to another C# engine or resource backend.
 
-Reuse window/history logic in another C# engine or replace an existing resource backend by implementing small contracts. Core should not reference engine types.
+## Responsibilities
 
-## Required interfaces
+- IUIHost: UI-thread checks and focus restoration.
+- IUIElement: visibility, input, drawing order and instance disposal.
+- IUIResourceLoader/IUIResource: load, instantiate and release resources.
+- IUILog: log original errors.
 
 ```csharp
 public interface IUIElement : IAsyncDisposable
@@ -36,11 +39,7 @@ public interface IUILog
 }
 ```
 
-Host verifies UI-thread access and captures restorable focus handles without touching destroyed objects. Element manages visibility, input and drawing order. Preserve business button conditions when gating input; RestoreOrder restores the CaptureOrder snapshot. DisposeAsync distinguishes owned dynamic instances from borrowed embedded controls; borrowed disposal must not destroy parent resources.
-
-Loader awaits real resource acquisition. Resource.Instantiate synchronously creates a hidden display on the UI thread and attaches it to mount. Preserve original errors during cancellation, failure and release; clean partially created native objects. Resource release and instance destruction are separate: closing one must not release resources still used by another.
-
-## Create a Context
+## Connect
 
 ```csharp
 var ui = new UIContext(host, loader, logger);
@@ -51,14 +50,15 @@ await pages.PushAsync<LobbyView>();
 await ui.DisposeAsync();
 ```
 
-host, loader, logger and mountElement are project implementations. Core prescribes no resource format or business mounts. Adapter logs retain original errors; Context handles its own deduplication and failure flow.
+host, loader, logger and mountElement are project implementations.
 
-## Animation and modal extensions
+## Required behavior
 
-IUITransition.Create returns a separate IUITransitionRun per operation. PlayAsync awaits playback and cancellation; Restore synchronously restores presentation. IUIBackdropFactory.CreateAsync receives the dismiss callback; the host must observe each returned Task. IUIBackdrop Show/Hide honor the animation flag, and Restore restores stable visibility. Dismiss failures cannot be discarded.
+- Instantiate hidden displays on the UI thread; borrowed instances do not destroy parent resources.
+- Preserve business button state while gating input; restore drawing order and focus.
+- Propagate original cancellation/create/cleanup failures and release native objects.
+- Closing one instance must not release resources still held by another.
 
-## Verify the adapter
+Custom animation implements IUITransition/IUITransitionRun. Backdrops implement IUIBackdropFactory/IUIBackdrop and observe dismiss tasks. See [Core API](../api/core.md).
 
-Use isolated scenes to test thread access, borrowed/owned disposal, shared loading, canceled late resources, input/focus restoration, sibling order, backdrop hiding, animation start before yielding, and simultaneous primary/cleanup failures. Native tests complement Core tests. Do not claim support for an unverified engine.
-
-[Resources](../manual/resources.md) · [API](../api/core.md)
+Verify loading, cancellation, input, focus, animation restoration and resource release in the engine. Core tests do not replace native tests.
