@@ -34,6 +34,7 @@ namespace UIFramework.Mvvm.EditorUnity
         }
         public void CreateGUI()
         {
+            rootVisualElement.Clear(); Undo.undoRedoPerformed -= Refresh;
             AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(Package + "MvvmEditor.uxml").CloneTree(rootVisualElement);
             rootVisualElement.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>(Package + "MvvmEditor.uss"));
             _details = rootVisualElement.Q<ScrollView>("details"); _members = rootVisualElement.Q<ScrollView>("members");
@@ -60,7 +61,7 @@ namespace UIFramework.Mvvm.EditorUnity
             if (_view) Select(_view); else if (Selection.activeGameObject) Select(Selection.activeGameObject.GetComponentInParent<MvvmBindings>());
         }
         private void Select(MvvmBindings view)
-        { StopPreview(); _view = view; rootVisualElement.Q<ObjectField>("view")?.SetValueWithoutNotify(view); Refresh(); }
+        { StopPreview(); _view = view; _sources.ClearSelection(); _bindings.ClearSelection(); _details.Clear(); _members.Clear(); rootVisualElement.Q<ObjectField>("view")?.SetValueWithoutNotify(view); Refresh(); }
         private void Change(Action change)
         {
             if (!_view) throw new InvalidOperationException("Select a View with MvvmBindings.");
@@ -76,6 +77,9 @@ namespace UIFramework.Mvvm.EditorUnity
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
+            var missing = _view ? _view.ViewModels.Where(s => s.Creation == ViewModelCreation.Manual && ((s.Template ? s.Template.GetType() : Type.GetType(s.TypeName)) is not Type type || !PreviewSources.Has(type))).Select(s => s.Name).ToArray() : new string[0];
+            rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
+            if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
         }
         private void SourceDetails()
         {
@@ -83,7 +87,7 @@ namespace UIFramework.Mvvm.EditorUnity
             var source = _view.ViewModels[_sources.selectedIndex];
             Text("名称", source.Name, v => source.Name = v);
             var modes = new DropdownField("创建方式", Enum.GetNames(typeof(ViewModelCreation)).ToList(), (int)source.Creation); modes.RegisterValueChangedCallback(e => { Change(() => source.Creation = (ViewModelCreation)Enum.Parse(typeof(ViewModelCreation), e.newValue)); Refresh(); }); _details.Add(modes);
-            var types = TypeCache.GetTypesWithAttribute<ViewModelAttribute>().Where(t => !t.IsAbstract && !t.IsGenericType).OrderBy(t => t.FullName).ToArray();
+            var types = TypeCache.GetTypesWithAttribute<ViewModelAttribute>().Where(t => t.IsDefined(typeof(ViewModelAttribute), false) && !t.IsAbstract && !t.IsGenericType).OrderBy(t => t.FullName).ToArray();
             var type = new DropdownField("VM 类型", types.Select(t => t.FullName).ToList(), -1); type.SetValueWithoutNotify(Type.GetType(source.TypeName)?.FullName ?? "");
             type.RegisterValueChangedCallback(e => { Change(() => source.TypeName = types.Single(t => t.FullName == e.newValue).AssemblyQualifiedName); SourceDetails(); }); _details.Add(type);
             Object("初始值资产", typeof(ScriptableObject), source.Template, false, v => source.Template = (ScriptableObject)v);

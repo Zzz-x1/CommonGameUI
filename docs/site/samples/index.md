@@ -38,3 +38,5 @@ Godot 包含角色、背包、编队、关卡、商店、任务、邮件、好�
 - 操作说明与素材记录位于各 Demo 的 README.md 和 Assets/SOURCES.md。
 
 [场景组合](game-ui-recipes.md) · [时间轴](../manual/timeline-animation.md)
+
+两端客户端使用 MVVM 展示共享金币、独立装备详情、设置双向编辑、购买命令和背包条目，见 [MVVM 入门](../manual/mvvm.md)。

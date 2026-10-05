@@ -17,9 +17,11 @@ public sealed class MvvmRuntime : IAsyncDisposable
     public IUILog Log { get; }
     public bool IsDisposed => _dispose?.IsCompleted == true;
     public void Observe(Task task) => _tasks.Add(task);
+    public Task WhenIdleAsync() => Task.WhenAll(_tasks.ToArray());
     public MvvmRuntime(IUILog? log = null) => Log = log ?? new ConsoleUILog();
     public void RegisterFactory<T>(Func<T> factory) where T : class => _factories.Add(typeof(T), () => factory());
     public void RegisterFactory(Type type, Func<object> factory) => _factories.Add(type, factory);
+    public T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class => (T)Create(typeof(T), template, assets, true, (_, _) => { });
     internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared, Action<object, IViewModelAssets?> own)
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
@@ -112,6 +114,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
     }
     internal static void Failure(ref Exception? first, Exception error)
     {
+        if (ReferenceEquals(first, error)) return;
         if (first == null) first = error;
         else
         {
@@ -154,6 +157,7 @@ public static class MvvmExtensions
     public static void ObserveMvvmTask(this UINode node, Task task) => Scope(node).Observe(task);
     public static void SetViewModel(this UINode node, string name, object vm) => Scope(node).Set(name, vm);
     public static T GetViewModel<T>(this UINode node, string name) where T : class => (T)Scope(node).Get(name);
+    public static T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class => Scope(node).Create<T>(name, template);
     public static IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
         Scope(node).Bind(path, target, new BindingOptions { Mode = mode });
     public static IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingOptions options) => Scope(node).Bind(path, target, options);

@@ -26,6 +26,6 @@ Button close = inventory.GetComponent<Button>("Content/Close");
 
 ## 验证状态
 
-当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。生命周期绑定通过 7 项隔离 batchmode Play Mode 测试。此前适配修复与教程已离线编译，对应原生运行待验证；Demo 时间轴资源也有待验证项。Unity Source Generator 工作流尚未接入。
+当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。客户端、适配器、生命周期和已保存 AnimationClip 资源通过 26 项原生 Play Mode 回归。MVVM 编辑器 Undo／Prefab Override 与预览通过验证。独立入门教程仍仅离线编译，Unity Source Generator 工作流尚未接入。
 
 [Unity API](../api/unity.md) · [时间轴](../manual/timeline-animation.md)

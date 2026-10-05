@@ -19,7 +19,6 @@ namespace UIFramework.Unity
         private readonly bool _owned;
         private readonly CanvasGroup _group;
         private readonly GroupDefaults _default;
-        private readonly (CanvasGroup Group, GroupDefaults Default)[] _groups;
         private bool _disposed;
         private bool _lifetimeEnding;
         private readonly UnityUIElement _lifetimeOwner;
@@ -37,8 +36,7 @@ namespace UIFramework.Unity
             _group = rect.GetComponent<CanvasGroup>();
             if (!_group) _group = rect.gameObject.AddComponent<CanvasGroup>();
             _default = Defaults.GetValue(_group, g => new GroupDefaults(g));
-            _groups = rect.GetComponentsInChildren<CanvasGroup>(true)
-                .Select(g => (g, Defaults.GetValue(g, item => new GroupDefaults(item)))).ToArray();
+            foreach (var group in rect.GetComponentsInChildren<CanvasGroup>(true)) Defaults.GetValue(group, item => new GroupDefaults(item));
         }
         public RectTransform Rect { get; }
         public UnityUIHost Host => _host;
@@ -52,10 +50,9 @@ namespace UIFramework.Unity
         {
             if (DisplayWasDestroyed) return;
             VerifyAlive();
-            foreach (var pair in _groups)
+            foreach (var group in Rect.GetComponentsInChildren<CanvasGroup>(true))
             {
-                if (!pair.Group) throw new ObjectDisposedException("An embedded CanvasGroup was destroyed outside its UI owner.");
-                pair.Group.ignoreParentGroups = interactive && pair.Default.IgnoreParents;
+                group.ignoreParentGroups = interactive && Defaults.GetValue(group, item => new GroupDefaults(item)).IgnoreParents;
             }
             _group.interactable = interactive && _default.Interactive;
             _group.blocksRaycasts = interactive && _default.Raycasts;

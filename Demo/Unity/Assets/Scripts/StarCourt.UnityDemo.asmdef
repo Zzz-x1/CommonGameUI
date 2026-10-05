@@ -1,5 +1,10 @@
 {
   "name": "StarCourt.UnityDemo",
-  "references": ["UIFramework.Unity", "Unity.ugui"],
+  "references": [
+    "UIFramework.Unity",
+    "Unity.ugui",
+    "UIFramework.Mvvm.Unity",
+    "Unity.TextMeshPro"
+  ],
   "autoReferenced": true
 }

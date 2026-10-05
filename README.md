@@ -20,6 +20,7 @@
 - Tab：绑定资源内页面，按名称切换。
 - Modal／Dialog：嵌套弹窗、遮罩与等待答案。
 - 生命周期、资源预加载、条件转场与原生时间轴；可选 Source Generator。
+- 可选 [MVVM](docs/site/manual/mvvm.md)：Cecil 通知、三种 VM 来源、双向绑定、命令、列表及两端 GUI。
 
 默认只提供结构 Root，项目定义业务挂载和返回规则。
 
@@ -35,7 +36,7 @@
 
 ## 接入状态
 
-Core 目标 netstandard2.1。Godot 持续维护完整 UI 客户端；Unity 最新修复与教程已离线编译，原生验证及 Demo 时间轴验证待完成。详见 [Unity 适配](docs/site/integrations/unity.md)。
+Core 目标 netstandard2.1。Godot 持续维护完整 UI 客户端；Unity 客户端、生命周期和时间轴已通过原生 Play Mode 回归。独立 Unity 入门教程仍仅离线编译。详见 [Unity 适配](docs/site/integrations/unity.md)。
 
 ## 维护
 

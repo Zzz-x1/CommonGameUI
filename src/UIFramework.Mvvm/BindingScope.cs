@@ -4,7 +4,7 @@ using System.ComponentModel;
 
 namespace UIFramework.Mvvm;
 
-public sealed class BindingScope : IAsyncDisposable
+internal sealed class BindingScope : IAsyncDisposable
 {
     private readonly MvvmRuntime _runtime;
     private readonly IViewModelAssets? _assets;
@@ -44,7 +44,20 @@ public sealed class BindingScope : IAsyncDisposable
         if (value is not IMvvmObject) throw new InvalidOperationException("VM must be woven: " + value.GetType().FullName);
         _sources[name] = value; SourcesChanged?.Invoke();
     }
-    public object Get(string name) => _sources.TryGetValue(name, out var value) ? value : throw new KeyNotFoundException("Missing VM source: " + name);
+    public object Get(string name)
+    {
+        Node.Context.Host.VerifyAccess();
+        if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
+        return _sources.TryGetValue(name, out var value) ? value : throw new KeyNotFoundException("Missing VM source: " + name);
+    }
+    public T Create<T>(string name, object? template) where T : class
+    {
+        Node.Context.Host.VerifyAccess();
+        if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
+        if (_sources.ContainsKey(name)) throw new ArgumentException("Duplicate VM source: " + name);
+        var value = (T)_runtime.Create(typeof(T), template, _assets, false, (item, adapter) => _owned.Add((item, adapter)));
+        _sources.Add(name, value); SourcesChanged?.Invoke(); return value;
+    }
     public IDisposable Bind(string path, IBindingTarget target, BindingOptions options) => Own(new PropertyBinding(this, path, target, options));
     public IDisposable Command(string path, ICommandTarget target, object? parameter) => Own(new CommandBinding(this, path, target, parameter));
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
@@ -64,9 +77,9 @@ public sealed class BindingScope : IAsyncDisposable
     private async Task DisposeCoreAsync()
     {
         Exception? first = null;
-        try { _lifetime.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         foreach (var binding in _bindings.AsEnumerable().Reverse())
             try { binding.Dispose(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        try { _lifetime.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         try { await Task.WhenAll(_commands.ToArray()); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         foreach (var value in _owned.AsEnumerable().Reverse())
             try { await _runtime.Release(value.Value, value.Assets); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
@@ -141,7 +154,8 @@ public sealed class BindingScope : IAsyncDisposable
                 if (options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel) _target.Changed += Push;
                 if (options.Mode == BindingMode.OneWayToViewModel) Push(); else Pull();
             }
-            catch { _target.Changed -= Push; _path.Dispose(); target.Dispose(); throw; }
+            catch (Exception error)
+            { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
         }
         private void Pull()
         {
@@ -181,13 +195,18 @@ public sealed class BindingScope : IAsyncDisposable
         {
             _scope = scope; _parameter = parameter; _target = target; _path = new Path(scope, path, true, true);
             try { _path.Changed += Update; scope._runtime.CommandStateChanged += Update; target.Invoked += Invoke; Update(); }
-            catch { Dispose(); throw; }
+            catch (Exception error)
+            { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
         }
         private IMvvmObject? _model;
         private void Subscribe()
         { if (_model != null) _model.PropertyChanged -= Changed; _model = _path.Resolve().Owner ?? throw new InvalidOperationException("Null command source."); _model.PropertyChanged += Changed; }
         private void Changed(object? sender, PropertyChangedEventArgs args) => Update();
-        private void Update() { Subscribe(); var (vm, member) = _path.Resolve(); _target.SetEnabled(!_scope._runtime.IsRunning(vm!, member) && vm!.CanExecute(member)); }
+        private void Update()
+        {
+            if (_disposed || _scope.Node.State is NodeState.Disposing or NodeState.Disposed) return;
+            Subscribe(); var (vm, member) = _path.Resolve(); _target.SetEnabled(!_scope._runtime.IsRunning(vm!, member) && vm!.CanExecute(member));
+        }
         private void Invoke()
         {
             var (vm, member) = _path.Resolve();
@@ -202,7 +221,7 @@ public sealed class BindingScope : IAsyncDisposable
         private INotifyCollectionChanged? _collection;
         private bool _disposed;
         internal CollectionBinding(BindingScope scope, string path, ICollectionTarget target, bool oneTime)
-        { _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch { Dispose(); throw; } }
+        { _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
         private void Reload()
         {
             if (_collection != null) _collection.CollectionChanged -= Changed;

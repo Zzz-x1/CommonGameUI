@@ -8,7 +8,7 @@ namespace UIFramework.Unity
     /// <summary>Disconnecting a binding does not dispose its node or the supplied owner.</summary>
     public sealed class UnityLifetimeBinding : IDisposable
     {
-        private readonly TaskCompletionSource<Task> _completion = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<Task> _completion = new TaskCompletionSource<Task>();
         internal readonly UINode Node;
         internal readonly GameObject Owner;
         private readonly bool _sceneAnchor;

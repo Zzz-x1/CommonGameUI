@@ -7,6 +7,7 @@
 | [Core](core.md) | Context, Node, four Containers, Dialog, lifecycle and adapter contracts |
 | [Godot](godot.md) | Control/PackedScene, AnimationPlayer, Tween recipes and backdrop |
 | [Unity](unity.md) | RectTransform/Resources, legacy AnimationClip and backdrop |
+| [MVVM](mvvm.md) | Optional sources, bindings, commands, collections and editor configuration |
 
 Look up signatures/defaults by type; see the [Manual](../manual/concepts.md) for workflows.
 

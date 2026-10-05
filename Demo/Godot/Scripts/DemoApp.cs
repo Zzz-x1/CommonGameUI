@@ -2,6 +2,8 @@ using Godot;
 using UIFramework;
 using UIFramework.Godot;
 using UIFramework.Generated;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo;
 public partial class DemoApp : Control
@@ -9,6 +11,9 @@ public partial class DemoApp : Control
     public static DemoApp Instance { get; private set; } = null!;
 
     private readonly List<Task> _tasks = new();
+    private readonly MvvmRuntime _mvvm = new();
+    public ClientPlayerVm PlayerVm { get; private set; } = null!;
+    private void RefreshPlayerVm() => PlayerVm.Refresh(Store.State);
     private UIContext _ui = null!;
     private PanelContainerNode _shells = null!;
     private LoginView? _login;
@@ -42,6 +47,11 @@ public partial class DemoApp : Control
     private async Task StartAsync()
     {
         _ui = GodotUI.Create(this);
+        _ui.UseGodotMvvm(_mvvm);
+        PlayerVm = _mvvm.GetSharedViewModel(GD.Load<ClientPlayerVm>("res://Assets/Mvvm/Player.tres"));
+        RefreshPlayerVm();
+        Store.Changed += RefreshPlayerVm;
+        await new MvvmLifetime(this).AttachAsync(_ui.Root, "MvvmLifetime");
         _ui.BindLifetime(this);
         _ui.RegisterGeneratedUI();
         _ui.Register(() => new ConfirmView(Confirmation), "res://Scenes/Client/Modal.tscn");
@@ -199,8 +209,13 @@ public partial class DemoApp : Control
             throw new InvalidOperationException("退出已在进行中。");
         _exiting = true;
         await _ui.DisposeAsync();
+        Store.Changed -= RefreshPlayerVm;
+        await _mvvm.DisposeAsync();
         GetTree().Quit();
     }
+
+    private sealed class MvvmLifetime(DemoApp app) : UINode
+    { protected override Task OnDisposeAsync() { app.Store.Changed -= app.RefreshPlayerVm; return app._mvvm.DisposeAsync().AsTask(); } }
 
     private bool CanHandleGlobalInput
     {

@@ -24,7 +24,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
         var actions = new HBoxContainer(); _dock.AddChild(actions);
         Button(actions, "+ 数据源", () => AddSource()); Button(actions, "+ 绑定", () => AddBinding());
         Button(actions, "删除选中", Delete); Button(actions, "上移", () => Move(-1)); Button(actions, "下移", () => Move(1));
-        Button(actions, "预览初始值", () => { StopPreview(); RequireView(); _preview = new GodotBindingPreview(_view!); _status.Text = "预览中：不执行命令或修改原始资产"; }); Button(actions, "恢复界面", StopPreview);
+        Button(actions, "预览初始值", StartPreview); Button(actions, "恢复界面", StopPreview);
         var columns = new HSplitContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill }; _dock.AddChild(columns);
         var left = new VBoxContainer { CustomMinimumSize = new Vector2(220, 0) }; columns.AddChild(left);
         left.AddChild(new Label { Text = "Viewmodels" }); _sources = new Tree { HideRoot = true, SizeFlagsVertical = Control.SizeFlags.ExpandFill }; left.AddChild(_sources); _sources.ItemSelected += SourceDetails;
@@ -43,6 +43,14 @@ public partial class MvvmEditorPlugin : EditorPlugin
     { StopPreview(); ObserveTasks(); EditorInterface.Singleton.GetSelection().SelectionChanged -= Selected; RemoveInspectorPlugin(_inspector); RemoveDock(_editorDock); _editorDock.QueueFree(); }
     public override void _Process(double delta) => ObserveTasks();
     private void ObserveTasks() { foreach (var task in _tasks.ToArray()) if (task.IsCompleted) { _tasks.Remove(task); task.GetAwaiter().GetResult(); } }
+    private void StartPreview()
+    {
+        StopPreview(); RequireView();
+        var missing = _view!.Sources.FirstOrDefault(s => s.Creation == ViewModelCreation.Manual && !PreviewSources.Has(s.Type));
+        if (missing != null) { _status.Text = "缺少预览来源：" + missing.Name; return; }
+        _preview = new GodotBindingPreview(_view);
+        _status.Text = "预览中：不执行命令或修改原始资产";
+    }
     private void StopPreview() { if (_preview == null) return; _tasks.Add(_preview.DisposeAsync().AsTask()); _preview = null; ObserveTasks(); }
     private void Selected()
     {
@@ -57,8 +65,9 @@ public partial class MvvmEditorPlugin : EditorPlugin
         var current = control;
         while (_view == null && current != null) { _view = current.GetChildren().OfType<MvvmBindings>().SingleOrDefault(); current = current.GetParent() as Control; }
         if (_view == null) throw new InvalidOperationException("先在界面根节点添加 MvvmBindings。");
-        var binding = new ViewBindingResource { Target = _view.GetParent().GetPathTo(control), Member = member.Length == 0 ? DefaultMember(control) : member };
-        Change("Add View Binding", () => _view.Bindings.Add(binding), () => _view.Bindings.Remove(binding));
+        var view = _view;
+        var binding = new ViewBindingResource { Target = view.GetParent().GetPathTo(control), Member = member.Length == 0 ? DefaultMember(control) : member };
+        Change("Add View Binding", () => view.Bindings.Add(binding), () => view.Bindings.Remove(binding));
         _editorDock.MakeVisible();
     }
     private static string DefaultMember(Control control) => control is BaseButton ? "ButtonPressed" : control is global::Godot.Range ? "Value" : "Text";
@@ -88,15 +97,17 @@ public partial class MvvmEditorPlugin : EditorPlugin
     }
     private void Delete()
     {
+        var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = _view!.Bindings.IndexOf(binding); Change("Delete Binding", () => _view.Bindings.Remove(binding), () => _view.Bindings.Insert(index, binding)); }
+        { var index = view.Bindings.IndexOf(binding); Change("Delete Binding", () => view.Bindings.Remove(binding), () => view.Bindings.Insert(index, binding)); }
         else if (_sources.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewModelSourceResource source)
-        { var index = _view!.ViewModels.IndexOf(source); Change("Delete Viewmodel", () => _view.ViewModels.Remove(source), () => _view.ViewModels.Insert(index, source)); }
+        { var index = view.ViewModels.IndexOf(source); Change("Delete Viewmodel", () => view.ViewModels.Remove(source), () => view.ViewModels.Insert(index, source)); }
     }
     private void Move(int offset)
     {
+        var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = _view!.Bindings.IndexOf(binding); var next = index + offset; if (next < 0 || next >= _view.Bindings.Count) return; Change("Reorder Binding", () => { _view.Bindings.RemoveAt(index); _view.Bindings.Insert(next, binding); }, () => { _view.Bindings.RemoveAt(next); _view.Bindings.Insert(index, binding); }); }
+        { var index = view.Bindings.IndexOf(binding); var next = index + offset; if (next < 0 || next >= view.Bindings.Count) return; Change("Reorder Binding", () => { view.Bindings.RemoveAt(index); view.Bindings.Insert(next, binding); }, () => { view.Bindings.RemoveAt(next); view.Bindings.Insert(index, binding); }); }
     }
     private void ClearDetails() { foreach (var n in _details.GetChildren()) { _details.RemoveChild(n); n.QueueFree(); } }
     private void SourceDetails()
@@ -129,7 +140,12 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private void Converter(string label, string current, Type? input, Type? output, Action<string> set)
     { var choices = new[] { "" }.Concat(Converters.Discover().Where(c => input != null && output != null && c.Input.IsAssignableFrom(input) && output.IsAssignableFrom(c.Output)).Select(c => c.Name)).ToArray(); var field = new OptionButton(); foreach (var name in choices) field.AddItem(name.Length == 0 ? "无" : name); field.Selected = Array.IndexOf(choices, current); field.ItemSelected += index => set(choices[index]); _details.AddChild(new Label { Text = label }); _details.AddChild(field); }
     private void Edit<T>(T old, T value, Action<T> set) => Change("Edit View Binding", () => set(value), () => set(old));
-    private void Text(string label, string value, Action<string> set) { _details.AddChild(new Label { Text = label }); var field = new LineEdit { Text = value }; field.TextSubmitted += v => set(v); field.FocusExited += () => { if (field.Text != value) set(field.Text); }; _details.AddChild(field); }
+    private void Text(string label, string value, Action<string> set)
+    {
+        _details.AddChild(new Label { Text = label }); var field = new LineEdit { Text = value }; var committed = value;
+        void Commit() { if (field.Text == committed) return; committed = field.Text; set(committed); }
+        field.TextSubmitted += _ => Commit(); field.FocusExited += Commit; _details.AddChild(field);
+    }
     private void Choice<T>(string label, T value, Action<T> set) where T : Enum { _details.AddChild(new Label { Text = label }); var field = new OptionButton(); foreach (var name in Enum.GetNames(typeof(T))) field.AddItem(name); field.Selected = Convert.ToInt32(value); field.ItemSelected += index => set((T)Enum.ToObject(typeof(T), index)); _details.AddChild(field); }
     private void Asset(string label, Resource? resource, string type, Action<Resource?> set) { _details.AddChild(new Label { Text = label }); var field = new EditorResourcePicker { BaseType = type, EditedResource = resource }; field.ResourceChanged += v => set(v); _details.AddChild(field); }
     private static void Button(Control parent, string label, Action action) { var b = new global::Godot.Button { Text = label }; b.Pressed += action; parent.AddChild(b); }

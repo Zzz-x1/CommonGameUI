@@ -1,6 +1,8 @@
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo;
 public sealed record ModalArgs(string Kind, int Id = 0, int Quantity = 1, string Text = "", UINode? ReturnTo = null);
@@ -33,6 +35,11 @@ public class ClientModalView : UINode<ModalArgs>
         DismissRequested = _ => App.Modals.CloseAsync(this);
         Wire("Center/Close", () => App.Modals.CloseAsync(this));
         Wire("Center/Cancel", CancelAsync);
+        if (Parameters.Kind == "Purchase")
+        {
+            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App.Store, Parameters);
+            this.BindCommand("Purchase.Buy", Get<Button>("Center/Confirm").ClickTarget());
+        }
         Wire("Center/Confirm", ConfirmAsync);
         _pages = await this.CreateContainerAsync<TabContainerNode>("Content", Get<Control>("Center/Pages"), token);
         foreach (var c in Get<Control>("Center/Pages").GetChildren().Cast<Control>())
@@ -104,28 +111,11 @@ public class ClientModalView : UINode<ModalArgs>
         }
 
         await _settings.SwitchAsync("声音", false, token);
-        var volume = Get<HSlider>(path + "SettingPages/声音/Volume");
-        volume.Value = Data.Volume;
-        void Volume(double v)
-        {
-            App.Store.Change(s => s.Volume = v);
-            App.ApplySettings();
-        }
-
-        volume.ValueChanged += Volume;
-        var full = Get<CheckButton>(path + "SettingPages/画面/Fullscreen");
-        full.ButtonPressed = Data.Fullscreen;
-        void Full(bool v)
-        {
-            App.Store.Change(s => s.Fullscreen = v);
-            App.ApplySettings();
-        }
-
-        full.Toggled += Full;
-        var motion = Get<CheckButton>(path + "SettingPages/演出/FullMotion");
-        motion.ButtonPressed = Data.FullMotion;
-        void Motion(bool v) => App.Store.Change(s => s.FullMotion = v);
-        motion.Toggled += Motion;
+        var vm = this.CreateViewModel<ClientSettingsVm>("Settings");
+        vm.Initialize(App.Store, App.ApplySettings);
+        this.Bind("Settings.Volume", Get<HSlider>(path + "SettingPages/声音/Volume").ValueTarget(), BindingMode.TwoWay);
+        this.Bind("Settings.Fullscreen", Get<CheckButton>(path + "SettingPages/画面/Fullscreen").ToggleTarget(), BindingMode.TwoWay);
+        this.Bind("Settings.FullMotion", Get<CheckButton>(path + "SettingPages/演出/FullMotion").ToggleTarget(), BindingMode.TwoWay);
         var quality = Get<OptionButton>(path + "SettingPages/画面/Quality");
         foreach (var n in new[]
         {
@@ -306,7 +296,6 @@ public class ClientModalView : UINode<ModalArgs>
                 await App.ModalAsync(new ModalArgs("Purchase", p.Id, (int)Get<SpinBox>("Center/Pages/Shop/Quantity").Value, p.Text, this));
                 return;
             case "Purchase":
-                App.Store.Buy(Catalog.Items[p.Id].Id, p.Quantity, p.Text != "");
                 await App.Modals.CloseToAsync(p.ReturnTo!);
                 var rewards = new List<RewardEntry>
                 {

@@ -10,7 +10,7 @@ Godot 4.7.2 .NET / .NET 10 的纯 UI 客户端，包含本地业务与存档。
 ./scripts/Run-Demo.ps1
 ```
 
-也可导入本目录 project.godot，构建 C#，运行 Scenes/Client/Main.tscn。布局基准 1600×900。
+运行脚本会准备可选 MVVM 插件源码。也可先执行 `./scripts/Prepare-GodotMvvm.ps1`，再导入本目录 project.godot，构建 C#，运行 Scenes/Client/Main.tscn。布局基准 1600×900。
 
 鼠标操作，Tab 移动焦点，Enter 确认；Esc 依次返回弹窗、对比窗、页面、大厅。左上游戏名打开素材署名。
 
@@ -73,3 +73,9 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 生命周期：客户端 Context 绑定主场景节点；绑定与清理回归位于 Tests/DemoApp.LifetimeTests.cs。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
 
 仅运行生命周期回归：`./scripts/Run-Demo.ps1 -LifetimeTest -Headless`（独立测试档案）。
+
+## MVVM 示例
+
+大厅金币使用 Shared Asset 克隆；设置和装备详情使用节点独立实例；背包使用 ObservableCollection 与条目场景，筛选／排序由项目 VM 维护。购买按钮通过命令提交业务，随后播放奖励。编辑器底部 View Bindings 可编辑条目绑定，原始玩家模板位于 Assets/Mvvm。
+
+[模块入门与 GUI](../../docs/site/manual/mvvm.md)。

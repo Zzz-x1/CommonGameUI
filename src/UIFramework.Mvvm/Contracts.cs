@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Reflection;
 
 namespace UIFramework.Mvvm;
 
@@ -101,10 +100,4 @@ public sealed class BindingValueTarget<T> : IBindingTarget
     public void Write(object? value) => _write((T)value!);
     public event Action? Changed;
     public void Dispose() => _disconnect();
-}
-public static class MvvmMetadata
-{
-    public static PropertyInfo Property(Type type, string name) => type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)
-        ?? throw new MissingMemberException(type.FullName, name);
-    public static bool Observable(Type type, string name) => Property(type, name).IsDefined(typeof(FieldNotifyAttribute), true);
 }

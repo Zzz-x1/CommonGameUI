@@ -24,6 +24,7 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
 }
 public static class GodotMvvmExtensions
 {
+    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : Resource => runtime.GetSharedViewModel(template, new GodotViewModelAssets());
     public static void UseGodotMvvm(this UIContext ui, MvvmRuntime runtime)
     {
         ui.AddNodeExtension(new MvvmNodeExtension(runtime, node => node.Element is GodotUIElement display

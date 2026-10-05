@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using UIFramework;
 using UIFramework.Unity;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Unity;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -27,7 +29,8 @@ namespace StarCourt.UnityDemo
                 await Tabs.BindAsync(name, new UINode { Transition = UnityTransitions.Fade(.18) }, this.GetComponent<RectTransform>("Panel/Pages/" + name), token);
                 Bindings.Button("Panel/Tabs/" + name, () => Tabs.CurrentName == item ? Task.CompletedTask : Tabs.SwitchAsync(item));
             }
-            Bindings.Toggle("Panel/Pages/演出/Motion", value => App.Store.Change(s => s.FullMotion = value));
+            var vm = this.CreateViewModel<ClientSettingsVm>("Settings"); vm.Initialize(App.Store);
+            this.Bind("Settings.FullMotion", this.GetComponent<Toggle>("Panel/Pages/演出/Motion").ToggleTarget(), BindingMode.TwoWay);
             await Tabs.SwitchAsync("画面", false, token);
             DismissRequested = _ => App.Modals.CloseAsync(this);
         }
@@ -72,7 +75,8 @@ namespace StarCourt.UnityDemo
             _bindings = new ViewBindings(this); _bindings.Listen(Refresh);
             _bindings.Text("Panel/Title", ClientStore.Items[Parameters]);
             _bindings.Button("Panel/Close", App.BackAsync);
-            _bindings.Button("Panel/Buy", BuyAsync);
+            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App, Parameters);
+            this.BindCommand("Purchase.Buy", this.GetComponent<Button>("Panel/Buy").ClickTarget());
             _bindings.Dropdown("Panel/Quantity", _ => Refresh());
             DismissRequested = _ => App.Modals.CloseAsync(this);
             Refresh(); return Task.CompletedTask;
@@ -80,16 +84,11 @@ namespace StarCourt.UnityDemo
         private int Quantity => this.GetComponent<Dropdown>("Panel/Quantity").value + 1;
         private void Refresh()
         {
+            this.GetViewModel<ClientPurchaseVm>("Purchase").Quantity = Quantity;
+            this.GetViewModel<ClientPurchaseVm>("Purchase").Gold = App.Store.State.Gold;
             var price = ClientStore.Prices[Parameters] * Quantity;
             _bindings.Text("Panel/Text", "数量 " + Quantity + " · 合计 " + price + " 金币\n\n购买将增加背包库存，推进整装待发任务。");
             this.GetComponent<Button>("Panel/Buy").interactable = App.Store.State.Gold >= price;
-        }
-        private async Task BuyAsync()
-        {
-            int quantity = Quantity;
-            if (!await App.AskAsync("花费 " + ClientStore.Prices[Parameters] * quantity + " 金币购买？")) return;
-            App.Store.Buy(Parameters, quantity);
-            await App.RewardAsync(ClientStore.Items[Parameters] + " × " + quantity + "\n\n已保存至背包");
         }
         protected override void OnActivated(StateChangeContext context) => Refresh();
         protected override Task OnDisposeAsync() { _bindings.Dispose(); return Task.CompletedTask; }

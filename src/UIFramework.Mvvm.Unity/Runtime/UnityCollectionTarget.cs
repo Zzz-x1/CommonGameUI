@@ -11,13 +11,15 @@ namespace UIFramework.Mvvm.Unity
         private readonly UINode _owner; private readonly RectTransform _mount; private readonly GameObject _template;
         private readonly List<(GameObject Object, UINode Node)> _items = new List<(GameObject, UINode)>(); private int _id;
         private readonly bool _preview;
+        private readonly string _name = "Items_" + Guid.NewGuid().ToString("N");
         public UnityCollectionTarget(UINode owner, RectTransform mount, GameObject template, bool preview = false)
         { _owner = owner; _mount = mount; _preview = preview; _template = template ? template : throw new ArgumentNullException(nameof(template)); }
         public void Insert(int index, object item)
         {
             var go = UnityEngine.Object.Instantiate(_template, _mount, false); var node = new ItemNode(item);
             if (_preview) foreach (var child in go.GetComponentsInChildren<Transform>(true)) child.gameObject.hideFlags = HideFlags.HideAndDontSave;
-            var attach = node.AttachToAsync(_owner, "Item" + _id++, (RectTransform)go.transform);
+            go.name = _template.name + _id;
+            var attach = node.AttachToAsync(_owner, _name + "_" + _id++, (RectTransform)go.transform);
             if (!attach.IsCompleted) throw new InvalidOperationException("List item initialization must be synchronous."); attach.GetAwaiter().GetResult();
             index = index == int.MaxValue ? _items.Count : index; _items.Insert(index, (go, node)); go.transform.SetSiblingIndex(index);
         }

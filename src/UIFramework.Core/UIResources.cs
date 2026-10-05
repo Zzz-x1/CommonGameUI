@@ -95,7 +95,7 @@ internal sealed class UIResources
     private static async Task WaitAsync(Task task, CancellationToken token)
     {
         if (task.IsCompleted || !token.CanBeCanceled) { token.ThrowIfCancellationRequested(); await task; return; }
-        var canceled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var canceled = new TaskCompletionSource<bool>();
         using (token.Register(() => canceled.TrySetResult(true)))
         {
             await Task.WhenAny(task, canceled.Task);

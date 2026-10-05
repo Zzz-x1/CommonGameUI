@@ -252,7 +252,7 @@ public class UINode : IAsyncDisposable
                 throw new InvalidOperationException($"Concurrent or reentrant operation on {Name}: {operation}.");
             acquired = true;
             Executing.Value = new OperationFrame(this, previousFrame);
-            _idle = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _idle = new TaskCompletionSource<bool>();
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Lifetime);
             await action(linked.Token);
         }
@@ -284,7 +284,7 @@ public class UINode : IAsyncDisposable
         if (State == NodeState.Detached) throw new InvalidOperationException("Detached node has no lifetime owner.");
         State = NodeState.Disposing;
         // Publish the shared task before cancellation can synchronously call back into disposal.
-        var completion = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<Task>();
         _disposeTask = completion.Task.Unwrap();
         completion.SetResult(DisposeCoreAsync());
         return new ValueTask(_disposeTask);

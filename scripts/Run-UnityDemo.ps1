@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot
 $taskUnityProject = Join-Path $taskWorkspace 'Demo/Unity'
+& (Join-Path $PSScriptRoot 'Prepare-Mvvm.ps1')
 & dotnet build (Join-Path $taskWorkspace 'src/UIFramework.Core/UIFramework.Core.csproj') -c Release --nologo -v quiet
 if ($LASTEXITCODE -ne 0) { throw 'Core build failed.' }
 $taskPluginDirectory = Join-Path $taskWorkspace 'src/UIFramework.Unity/Runtime/Plugins'

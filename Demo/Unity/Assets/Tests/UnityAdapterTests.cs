@@ -164,7 +164,7 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(moving.GetComponent<RectTransform>("Hero").anchoredPosition.x, Is.InRange(506, 759));
             Assert.That(moving.GetComponent<CanvasGroup>("Entries").alpha, Is.EqualTo(0));
             var node = await firstOpening;
-            Assert.That(node.GetComponent<RectTransform>("Hero").anchoredPosition.x, Is.EqualTo(505));
+            Assert.That(node.GetComponent<RectTransform>("Hero").anchoredPosition.x, Is.EqualTo(505).Within(.001f));
             Assert.That(node.GetComponent<CanvasGroup>("Hero").alpha, Is.EqualTo(1)); Assert.That(node.IsInteractive, Is.True);
             await windows.CloseAsync(node);
             using var cancellation = new CancellationTokenSource();

@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using UIFramework;
 using UIFramework.Unity;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Unity;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -28,8 +30,10 @@ namespace StarCourt.UnityDemo
         public LobbyView Home { get; private set; }
         public bool Busy { get; private set; }
         public Task Ready { get; private set; }
-        public Task WhenIdleAsync() => Task.WhenAll(_tasks.ToArray());
+        public Task WhenIdleAsync() => Task.WhenAll(Task.WhenAll(_tasks.ToArray()), _mvvm.WhenIdleAsync());
         private readonly List<Task> _tasks = new List<Task>();
+        private readonly MvvmRuntime _mvvm = new MvvmRuntime();
+        public ClientPlayerVm PlayerVm { get; private set; }
         private string _confirmation;
         private void Awake() { Instance = this; Application.runInBackground = true; }
         private void Start() { Ready = InitializeAsync(); Track(Ready); }
@@ -48,6 +52,9 @@ namespace StarCourt.UnityDemo
         {
             Store = new ClientStore(Path.Combine(Application.persistentDataPath, SaveFile));
             UI = UnityUI.Create(Canvas, Events);
+            UI.UseUnityMvvm(_mvvm);
+            PlayerVm = _mvvm.GetSharedViewModel(Resources.Load<ClientPlayerVm>("MVVM/Player"));
+            await new MvvmLifetime(this).AttachAsync(UI.Root, "MvvmLifetime");
             UI.BindLifetime(gameObject.scene);
             UI.Register<LoginView>("UI/Login"); UI.Register<LobbyView>("UI/Lobby");
             UI.Register<InventoryView>("UI/Inventory"); UI.Register<ItemView>("UI/Item");
@@ -73,9 +80,11 @@ namespace StarCourt.UnityDemo
             Navigation.SetActive(false);
             Store.Changed += Refresh;
             Refresh();
+            var wallet = new WalletNode(); await wallet.AttachToAsync(UI.Root, "Wallet", Wallet.rectTransform);
+            wallet.SetViewModel("Player", PlayerVm); wallet.Bind("Player.Wallet", Wallet.TextTarget());
             await Pages.PushAsync<LoginView>();
         }
-        private void Refresh() => Wallet.text = "金币 " + Store.State.Gold.ToString("N0") + "    经验手记 " + Store.State.Materials;
+        private void Refresh() => PlayerVm.Refresh(Store.State);
         private async Task RunAsync(Func<Task> action)
         {
             if (Busy) throw new InvalidOperationException("A client operation is still running.");
@@ -134,11 +143,16 @@ namespace StarCourt.UnityDemo
             if (Pages.Current == Home && await AskAsync("返回标题？本地档案已保存。"))
             { await Pages.PopAsync(); Navigation.SetActive(false); }
         });
+        private sealed class WalletNode : UINode { protected override bool InitiallyVisible => true; }
+        private sealed class MvvmLifetime : UINode
+        {
+            private readonly UnityClient _app; public MvvmLifetime(UnityClient app) { _app = app; }
+            protected override Task OnDisposeAsync() { _app.Store.Changed -= _app.Refresh; return _app._mvvm.DisposeAsync().AsTask(); }
+        }
         public async Task ShutdownAsync()
         {
             await Task.WhenAll(_tasks.ToArray());
             await UI.DisposeAsync();
-            Store.Changed -= Refresh;
             UI = null;
         }
     }

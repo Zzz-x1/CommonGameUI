@@ -140,7 +140,7 @@ public partial class DemoApp
         await CaptureDuringAsync("purchase-blinds-mid", confirming, .16);
         await confirming;
         await CaptureAsync("purchase");
-        var purchase = ((ClientModalView)Modals.Current!).ConfirmAsync();
+        var purchase = PressAsync(Modals.Current!.GetControl<Button>("Center/Confirm"));
         await CaptureTimelineAsync("reward", purchase);
         await CaptureAsync("reward");
         await BackAsync();
@@ -175,6 +175,6 @@ public partial class DemoApp
     {
         int before = _tasks.Count;
         button.EmitSignal(BaseButton.SignalName.Pressed);
-        await Task.WhenAll(_tasks.Skip(before).ToArray());
+        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _mvvm.WhenIdleAsync());
     }
 }

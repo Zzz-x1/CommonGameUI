@@ -1,6 +1,7 @@
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
+using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo;
 public partial class DemoApp
@@ -44,7 +45,7 @@ public partial class DemoApp
         await Task.WhenAll(observed);
 
         // Actual Demo views own their controls; disposal never re-queries freed widgets.
-        scene = new Control(); AddChild(scene); context = GodotUI.Create(this);
+        scene = new Control(); AddChild(scene); context = GodotUI.Create(this); context.UseGodotMvvm(_mvvm);
         context.Register<CompareView>("res://Scenes/Client/Compare.tscn");
         context.Register<ClientModalView>("res://Scenes/Client/Modal.tscn");
         var panels = await context.Root.CreateContainerAsync<PanelContainerNode>("ActualWindows", scene);
@@ -116,7 +117,7 @@ public partial class DemoApp
 
         foreach (bool cinematic in new[] { false, true })
         {
-            scene = new Control(); AddChild(scene); context = GodotUI.Create(this);
+            scene = new Control(); AddChild(scene); context = GodotUI.Create(this); context.UseGodotMvvm(_mvvm);
             UINode? created = null;
             if (cinematic) context.Register(() => (InventoryView)(created = new InventoryView()), "res://Scenes/Client/Inventory.tscn");
             else context.Register(() => (ClientModalView)(created = new ClientModalView()), "res://Scenes/Client/Modal.tscn");

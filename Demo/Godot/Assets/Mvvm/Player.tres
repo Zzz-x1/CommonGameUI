@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ClientPlayerVm" load_steps=2 format=3]
+[ext_resource type="Script" path="res://Scripts/ClientPlayerVm.cs" id="1"]
+[resource]
+script = ExtResource("1")
+Gold = 12000
+Gems = 300
+Tokens = 20

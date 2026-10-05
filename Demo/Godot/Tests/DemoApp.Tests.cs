@@ -152,7 +152,7 @@ public partial class DemoApp
         await detail.ConfirmAsync();
         var confirmation = (ClientModalView)Modals.Current!;
         int owned = Store.State.Inventory["eq0"];
-        await confirmation.ConfirmAsync();
+        await PressAsync(confirmation.GetControl<Button>("Center/Confirm"));
         Pass(Store.State.Inventory["eq0"] == owned + 1 && Modals.Current is RewardView, "purchase reward");
         Pass(confirmation.State == NodeState.Disposed && detail.State == NodeState.Ready && !detail.IsInteractive, "close to target");
         await BackAsync();
@@ -305,7 +305,7 @@ public partial class DemoApp
                 Pressed = pressed
             }, true);
         Check(_tasks.Count > before, $"鼠标点击未到达 {button.GetPath()}");
-        await Task.WhenAll(_tasks.Skip(before).ToArray());
+        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _mvvm.WhenIdleAsync());
     }
 
     private sealed class TestLog : IUILog

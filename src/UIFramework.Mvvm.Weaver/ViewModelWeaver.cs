@@ -58,7 +58,7 @@ public sealed class ViewModelWeaver
     private bool Weave(TypeDefinition type)
     {
         if (Attribute(type, "WovenViewModelAttribute")) return false;
-        if (!type.IsClass || type.IsAbstract || type.HasGenericParameters) throw new InvalidOperationException("VM must be a concrete non-generic class: " + type.FullName);
+        if (!type.IsClass || type.HasGenericParameters) throw new InvalidOperationException("VM must be a non-generic class: " + type.FullName);
         TypeDefinition? parent = type.BaseType?.Resolve();
         bool inherited = parent != null && Attribute(parent, "ViewModelAttribute");
         if (inherited && parent!.Module == _module) Weave(parent);
@@ -72,6 +72,7 @@ public sealed class ViewModelWeaver
                 commands.AddRange(baseType.Methods.Where(m => Attribute(m, "CommandAttribute") && commands.All(x => x.Name != m.Name)));
             }
         }
+        if (commands.GroupBy(m => m.Name).Any(g => g.Count() > 1)) throw new InvalidOperationException("Command names must be unique: " + type.FullName);
         FieldReference events;
         if (inherited)
         {
@@ -88,7 +89,7 @@ public sealed class ViewModelWeaver
         }
         foreach (var property in type.Properties.Where(p => Attribute(p, "FieldNotifyAttribute")))
         {
-            if (property.GetMethod == null || property.GetMethod.IsStatic || property.HasParameters) throw new InvalidOperationException("Invalid FieldNotify property: " + property.FullName);
+            if (property.GetMethod?.IsPublic != true || property.GetMethod.IsStatic || property.HasParameters || property.PropertyType.IsByReference || property.PropertyType.IsPointer) throw new InvalidOperationException("Invalid FieldNotify property: " + property.FullName);
             if (property.SetMethod != null) Setter(type, property, events, Dependencies(properties, property.Name));
         }
         ValidateDependencies(properties);
@@ -220,6 +221,7 @@ public sealed class ViewModelWeaver
             if (!command.IsPublic || command.IsStatic || command.HasGenericParameters || (command.ReturnType.FullName != "System.Void" && command.ReturnType.FullName != "System.Threading.Tasks.Task")) throw new InvalidOperationException("Unsupported command: " + command.FullName);
             if (command.CustomAttributes.Any(a => a.AttributeType.FullName == "System.Runtime.CompilerServices.AsyncStateMachineAttribute") && command.ReturnType.FullName == "System.Void") throw new InvalidOperationException("async void commands are forbidden.");
             if (command.Parameters.Count(p => p.ParameterType.FullName != "System.Threading.CancellationToken") > 1) throw new InvalidOperationException("Command takes at most one business parameter.");
+            if (command.Parameters.Count(p => p.ParameterType.FullName == "System.Threading.CancellationToken") > 1 || command.Parameters.Any(p => p.ParameterType.IsByReference || p.ParameterType.IsPointer)) throw new InvalidOperationException("Unsupported command parameters: " + command.FullName);
             var next = Compare(il, command.Name);
             if (name == "CanExecute")
             {

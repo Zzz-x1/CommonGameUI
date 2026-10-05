@@ -1758,7 +1758,7 @@ GitHub Actions 的 Documentation 工作流仅在 PR 构建检查和手动 workfl
 
 适配器、Demo、测试离线编译无警告无错误。中英文指南、两端 API 与 Demo 操作说明同步更新；68 个 Markdown 的链接、标题锚点、29 组双语代码一致性及站点构建通过，59 页浏览器检查通过。此前 Unity 教程及完整 Demo 时间轴资源的待验证范围不因本次专项验证而自动宣称完成。未推送、未发布网站。
 
-## 18. 可选 MVVM 模块（2026-10-05，已确认，实施中）
+## 18. 可选 MVVM 模块（2026-10-05，已实现）
 
 采用独立运行时、Mono.Cecil Weaver、Unity／Godot 适配和编辑器模块。普通 VM 无需框架基类；类型使用 ViewModel 标记，逐属性 FieldNotify，计算属性声明依赖，Command 标记业务方法。运行时属性和命令访问由织入代码直接调用，不使用动态代码或反射调用业务方法。
 
@@ -1779,3 +1779,17 @@ Unity 通过 ILPostProcessor 处理项目程序集及 Portable PDB，注入 Pres
 两端编辑器已具备数据源、绑定表、成员拖放、转换器筛选和属性入口。Unity 使用 UXML／USS；Godot 使用 EditorDock／Inspector 插件及原生 Undo 管理器。初始值预览使用独立 Runtime 克隆来源，禁用命令与反向写入，退出时恢复显示值。完整 GUI 操作验证仍在继续。
 
 本阶段验证：核心／生成器 157 项，MVVM 织入后运行测试 13 项通过；Godot 原生 headless 14 项通过，覆盖资产不变、循环引用、原生类型数组独立、双向编辑、命令、清理、预览恢复和场景配置保存重开。Unity 真实 ILPP 编译与原生 Play Mode 1 项资产／绑定流程通过。Godot 插件启用后的 headless 编辑器导入通过。游戏 Demo 业务迁移、完整 GUI Undo／Prefab 验收、双语用户文档和 WebGL IL2CPP 尚未完成，模块仍处于实施中。
+
+### 18.2 客户端迁移与实际流程修正
+
+两端客户端接入可选模块：玩家资产由 Runtime 克隆并共享；设置和装备详情通过 CreateViewModel 建立节点独立实例；购买使用命令；背包通过 ObservableCollection 和原生条目资源绑定，条目采用 Manual / Item，不需要业务 View 类。项目代码继续负责布局、筛选、排序、确认和奖励演出。运行时增加同步 CreateViewModel、共享资产获取及 WhenIdleAsync，代码创建与 GUI 来源使用同一所有权逻辑。
+
+动态列表暴露了适配器静态捕获控件树的问题。输入控制现在遍历当前原生子树，保留各控件的原始输入配置；合法增加、删除列表条目不会留下过期引用，新增条目也参与输入锁。逻辑节点根对象被无绑定销毁仍直接报错，不增加跳过或降级分支。
+
+Unity 已重新保存编排器生成的真实 AnimationClip 轨道，替换旧的仅根透明度资源。Native Play Mode 的游戏客户端、适配、时间轴及生命周期共 26 项通过；客户端测试按约定 16:9 Game View 执行，浮点恢复使用 .001 精度检查。Godot 客户端 139 项、MVVM 原生 14 项通过。Weaver／Runtime 当前 19 项通过，包括不支持声明构建失败、抽象基类、重复织入和 Portable PDB。
+
+隔离 WebGL IL2CPP 高裁剪示例已实际构建并在 Chromium WebGL 中通过 14 项。该流程发现 TaskCompletionSource 的 RunContinuationsAsynchronously 可使单线程 WebGL 清理停滞。核心和 Unity 生命周期共享任务采用直接发布；弹窗结果通过 Context 捕获的 SynchronizationContext 延后发布，普通 CLR 无上下文时使用其默认线程池。已接受结果有独立状态，批量关闭仍优先保留确认结果；不依靠线程池保持 UI 调用次序。核心 157 项回归通过。
+
+双语用户文档新增 MVVM 入门、GUI 操作和 API 三组页面，链接／双语代码检查及站点构建通过。Unity 编辑器实际验证数据源编辑、Undo、Prefab Override、预览与恢复；Godot 编辑器验证来源编辑、原生 Undo、属性绑定入口及配置恢复。最终回归已完成：核心 157、MVVM 19、Godot 客户端 139、存档重启 4、原生 MVVM 14、Unity Play Mode 26、WebGL IL2CPP 高裁剪 14 项通过；74 个 Markdown、32 组双语页面检查及站点构建通过，65 页浏览器检查通过。检查了 MVVM 文档页面截图。最后修复 Godot 删除／重排撤销在切换选择后引用错误界面的问题，新增原生编辑器回归；Manual 缺少预览工厂时在面板显示来源名称。仅本地提交，未推送或发布。
+
+当前使用边界：命令不得等待关闭自己的绑定节点、其祖先或所属 Runtime，因为这些清理操作会等待该命令；关闭流程由 View 在命令结束后执行。首版 GUI 的显式空值内容采用文本，带业务参数的命令通过代码绑定。独立 Unity Getting Started 教程仍只完成离线编译，不能以客户端 Play Mode 验证替代该教程原生验收。

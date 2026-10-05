@@ -10,7 +10,7 @@ Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 ./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-然后手动打开 Demo/Unity，运行 Assets/Scenes/Client.unity。首次打开前必须准备核心 DLL；本地包位于 src/UIFramework.Unity。
+然后手动打开 Demo/Unity，运行 Assets/Scenes/Client.unity。首次打开前必须准备核心及 MVVM DLL；本地包位于 src/UIFramework.Unity 和 src/UIFramework.Mvvm.Unity。
 
 可选 Unity CLI 操作：
 
@@ -21,7 +21,7 @@ Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 | -RebuildAssets | 停止播放后重建场景、Prefab 与 Clip |
 | -Resolution | 1280x720／1600x900／1920x1080 |
 
-这些操作会连接编辑器。当前时间轴资源仍待验证，最新适配修复仅离线编译；状态见[Unity 适配](../../docs/site/integrations/unity.md)。
+这些操作会连接编辑器。客户端、适配和已保存时间轴资源通过 26 项原生 Play Mode 回归；状态见[Unity 适配](../../docs/site/integrations/unity.md)。
 
 ## 功能
 
@@ -56,3 +56,9 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 生命周期：客户端 Context 通过隐藏管理对象绑定所属 Scene；UnityLifetimeTests 覆盖对象销毁、场景卸载、异步清理和动画取消。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
 
 隔离且无窗口的原生生命周期测试：`./scripts/Test-UnityLifetimes.ps1`，可通过 `-UnityPath` 指定编辑器路径。
+
+## MVVM 示例
+
+金币使用共享 ScriptableObject 克隆；详情和设置为节点独立 VM。背包条目使用 ObservableCollection 与 Resources/MVVM/InventoryRow.prefab，购买使用可等待确认的命令。Window → UIFramework → View Bindings 打开 GUI；玩家初始模板位于 Resources/MVVM/Player.asset。
+
+[模块入门与 GUI](../../docs/site/manual/mvvm.md)。

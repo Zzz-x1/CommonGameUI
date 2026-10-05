@@ -37,6 +37,7 @@ namespace UIFramework.Mvvm.Unity
     }
     public static class UnityMvvmExtensions
     {
+        public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : ScriptableObject => runtime.GetSharedViewModel(template, new UnityViewModelAssets());
         public static void UseUnityMvvm(this UIContext ui, MvvmRuntime runtime)
         {
             ui.AddNodeExtension(new MvvmNodeExtension(runtime, node => node.Element is UnityUIElement display ? display.Rect.GetComponent<MvvmBindings>() : null, new UnityViewModelAssets()));

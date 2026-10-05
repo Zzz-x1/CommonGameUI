@@ -17,6 +17,7 @@ if (-not (Test-Path -LiteralPath $GodotPath)) { throw 'Godot .NET executable not
 if ($Headless -and $Capture) { throw 'Capture requires the graphical renderer.' }
 if ((@($SelfTest, $LifetimeTest, $VerifySave, $Capture) | Where-Object { $_ }).Count -gt 1) { throw 'Choose only one run mode.' }
 $taskProject = Join-Path $taskWorkspace 'Demo/Godot'
+& (Join-Path $PSScriptRoot 'Prepare-GodotMvvm.ps1') -Project $taskProject
 & dotnet build (Join-Path $taskProject 'HierarchyDemo.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Demo build failed.' }
 & $GodotPath --headless --path $taskProject --editor --import

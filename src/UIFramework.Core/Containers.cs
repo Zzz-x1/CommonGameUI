@@ -519,7 +519,7 @@ public class ModalContainerNode : ContainerNode
         var current = removed[0];
         var target = firstRemoved == 0 ? null : _modals[firstRemoved - 1];
         var focus = _records[removed[removed.Length - 1]].Focus;
-        var outcome = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outcome = new TaskCompletionSource<Exception?>();
         foreach (var node in removed) _records[node].CloseAttempt = outcome;
         Exception? failure = null;
         try
@@ -643,8 +643,9 @@ internal interface IDialogResult { bool HasResult { get; } }
 
 public class DialogNode<TResult> : UINode, IDialogResult
 {
-    private readonly TaskCompletionSource<TResult> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    bool IDialogResult.HasResult => _result.Task.IsCompletedSuccessfully;
+    private readonly TaskCompletionSource<TResult> _result = new();
+    private bool _completed;
+    bool IDialogResult.HasResult => _completed;
 
     public void Complete(TResult result)
     {
@@ -653,7 +654,9 @@ public class DialogNode<TResult> : UINode, IDialogResult
             Context.Host.VerifyAccess();
             Context.VerifyMutation();
             if (State != NodeState.Ready || !IsInteractive) throw new InvalidOperationException("Dialog is not active.");
-            if (!_result.TrySetResult(result)) throw new InvalidOperationException("Dialog already completed.");
+            if (_completed) throw new InvalidOperationException("Dialog already completed.");
+            _completed = true;
+            Context.Post(() => _result.SetResult(result));
         }
         catch (Exception ex) { Context.Report(ex, $"CompleteDialog {Name}"); throw; }
     }
@@ -661,11 +664,11 @@ public class DialogNode<TResult> : UINode, IDialogResult
     internal async Task<TResult> WaitForResultAsync(CancellationToken token)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, Lifetime);
-        var canceled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var canceled = new TaskCompletionSource<bool>();
         using var registration = linked.Token.Register(() => canceled.TrySetResult(true));
         await Task.WhenAny(_result.Task, canceled.Task);
         token.ThrowIfCancellationRequested();
-        if (_result.Task.IsCompletedSuccessfully) return await _result.Task;
+        if (_completed) return await _result.Task;
         linked.Token.ThrowIfCancellationRequested();
         return await _result.Task;
     }

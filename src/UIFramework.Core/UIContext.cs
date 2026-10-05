@@ -2,6 +2,12 @@ namespace UIFramework;
 
 public sealed class UIContext : IAsyncDisposable
 {
+    private readonly SynchronizationContext? _synchronization = SynchronizationContext.Current;
+    internal void Post(Action action)
+    {
+        if (_synchronization != null) _synchronization.Post(_ => action(), null);
+        else ThreadPool.QueueUserWorkItem(_ => action());
+    }
     private sealed class Registration
     {
         public Registration(Func<UINode> factory, string? resource, WindowInstanceMode windowMode)
@@ -228,7 +234,7 @@ public sealed class UIContext : IAsyncDisposable
         var root = Root.DisposeAsync();
         if (_disposeTask == null)
         {
-            var completion = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var completion = new TaskCompletionSource<Task>();
             _disposeTask = completion.Task.Unwrap();
             completion.SetResult(DisposeCoreAsync(root));
         }

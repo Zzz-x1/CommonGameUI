@@ -23,6 +23,10 @@ namespace StarCourt.UnityDemo.Tests
         { while (!task.IsCompleted) yield return null; task.GetAwaiter().GetResult(); }
         [UnitySetUp] public IEnumerator SetUp()
         {
+            // The client's supported validation sizes use a 16:9 Game View.
+            Type.GetType("StarCourt.UnityDemo.Editor.ClientSceneAuthoring, StarCourt.UnityDemo.Editor", true)
+                .GetMethod("SetResolution").Invoke(null, new object[] { 1600, 900 });
+            yield return null;
             _save = "client-test-" + Guid.NewGuid().ToString("N") + ".json";
             _root = UnityEngine.Object.Instantiate(Resources.Load<GameObject>("UI/ClientRoot"));
             _app = _root.GetComponentInChildren<UnityClient>(); _app.SaveFile = _save;
@@ -44,7 +48,7 @@ namespace StarCourt.UnityDemo.Tests
             var rect = (RectTransform)button.transform;
             var pointer = new PointerEventData(_app.Events) { position = RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(rect.rect.center)) };
             var hits = new List<RaycastResult>(); _app.Events.RaycastAll(pointer, hits);
-            Assert.That(hits, Is.Not.Empty, "No GUI hit for " + button.name);
+            Assert.That(hits, Is.Not.Empty, "No GUI hit for " + button.name + " at " + pointer.position + " screen " + Screen.width + "x" + Screen.height + " groups " + string.Join(";", button.GetComponentsInParent<CanvasGroup>().Select(g => g.name + ":" + g.alpha + "/" + g.interactable + "/" + g.blocksRaycasts)));
             Assert.That(ExecuteEvents.GetEventHandler<IPointerClickHandler>(hits[0].gameObject), Is.EqualTo(button.gameObject), "Blocked GUI hit: " + button.name);
             ExecuteEvents.Execute(button.gameObject, pointer, ExecuteEvents.pointerDownHandler);
             ExecuteEvents.Execute(button.gameObject, pointer, ExecuteEvents.pointerUpHandler);
@@ -90,7 +94,7 @@ namespace StarCourt.UnityDemo.Tests
             await ClickAndWait(_app.Pages.Current, "Panel/Enter"); await Route("Inventory");
             var inventory = (InventoryView)_app.Pages.Current;
             await ClickAndWait(inventory, "Tabs/材料"); Assert.That(inventory.Tabs.CurrentName, Is.EqualTo("材料"));
-            await ClickAndWait(inventory, "Tabs/装备"); await ClickAndWait(inventory, "Pages/装备/C0"); var item = _app.Pages.Current;
+            await ClickAndWait(inventory, "Tabs/装备"); await ClickAndWait(inventory, "Pages/装备/InventoryRow0"); var item = _app.Pages.Current;
             await ClickAndWait(item, "Panel/Compare"); await ClickAndWait(item, "Panel/Compare");
             Assert.That(_app.Windows.Children.Count, Is.EqualTo(2)); Assert.That(item.GetComponent<Button>("Panel/Compare").interactable, Is.False);
             await ClickAndWait(_app.Windows.Children[1], "Panel/Close"); Assert.That(item.GetComponent<Button>("Panel/Compare").interactable, Is.True);

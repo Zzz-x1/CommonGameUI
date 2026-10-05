@@ -7,6 +7,7 @@
 | [Core](core.md) | Context、Node、四种 Container、Dialog、生命周期及适配契约 |
 | [Godot](godot.md) | Control／PackedScene 接入、AnimationPlayer、Tween 配方和遮罩 |
 | [Unity](unity.md) | RectTransform／Resources 接入、legacy AnimationClip 和遮罩 |
+| [MVVM](mvvm.md) | 可选数据源、绑定、命令、列表与编辑器配置 |
 
 按类型查签名与默认值；场景用法见 [Manual](../manual/concepts.md)。
 

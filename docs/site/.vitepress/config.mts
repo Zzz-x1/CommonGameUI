@@ -20,7 +20,9 @@ const groups = [
     ['resources', '资源管理', 'Resources'],
     ['input-and-focus', '输入与焦点', 'Input and focus'],
     ['async-and-errors', '异步、取消与错误', 'Async, cancellation and errors'],
-    ['source-generator', 'Source Generator', 'Source Generator']]],
+    ['source-generator', 'Source Generator', 'Source Generator'],
+    ['mvvm', 'MVVM 入门', 'Getting started with MVVM'],
+    ['mvvm-editor', 'MVVM 编辑器', 'MVVM editor']]],
   ['Integrations', 'integrations', [
     ['godot', 'Godot 适配', 'Godot integration'],
     ['unity', 'Unity 适配', 'Unity integration'],
@@ -32,7 +34,8 @@ const groups = [
     ['index', 'API 索引', 'API index'],
     ['core', 'Core', 'Core'],
     ['godot', 'Godot', 'Godot'],
-    ['unity', 'Unity', 'Unity']]]
+    ['unity', 'Unity', 'Unity'],
+    ['mvvm', 'MVVM', 'MVVM']]]
 ] as const
 
 function sidebar(en: boolean) {

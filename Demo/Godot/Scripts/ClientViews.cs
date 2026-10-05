@@ -1,6 +1,8 @@
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo;
 public abstract class ClientView : UINode
@@ -99,6 +101,8 @@ public class ShellView : ClientView
 
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
+        this.SetViewModel("Player", App.PlayerVm);
+        this.Bind("Player.Wallet", Get<Label>("Top/Wallet").TextTarget());
         Pages = await this.CreateContainerAsync<StackContainerNode>("Pages", Get<Control>("PageMount"), token);
         Pages.ChildTransition = GodotTransitions.SlideHorizontal(.24);
         foreach (var name in new[]
@@ -130,7 +134,6 @@ public class ShellView : ClientView
     public override void Refresh()
     {
         Get<Button>("Top/Profile").Text = Data.Name;
-        Text("Top/Wallet", $"金币  {Data.Gold:N0}     星石  {Data.Gems}     徽章  {Data.Tokens}");
         Get<Button>("Top/Mail").Text = $"邮件 · {Enumerable.Range(0, 8).Count(i => !Data.ReadMail.Contains(i) && !Data.DeletedMail.Contains(i))}";
     }
 
@@ -222,6 +225,7 @@ public abstract class ClientPage : ClientView
     private readonly Dictionary<string, int> _entries = new();
     private bool _favorites;
     private int _sort;
+    private ClientInventoryVm? _inventoryVm;
     public TextureRect SelectedIcon { get; private set; } = null!;
 
     protected override async Task OnInitializeAsync(CancellationToken token)
@@ -232,13 +236,24 @@ public abstract class ClientPage : ClientView
             var name = page.Name.ToString();
             await Tabs.BindAsync(name, new UINode { Transition = ClientTransitions.Category(Module) }, page, token);
             Wire("Tabs/" + name, () => SelectTabAsync(name));
-            foreach (var button in page.GetChildren().OfType<Button>())
+            foreach (var button in page.GetChildren().OfType<Button>().Where(_ => Module != "Inventory"))
             {
                 var path = $"Pages/{name}/{button.Name}";
                 Wire(path, () => SelectEntryAsync(path));
             }
         }
 
+        if (Module == "Inventory")
+        {
+            _inventoryVm = this.CreateViewModel<ClientInventoryVm>("Inventory");
+            var row = GD.Load<PackedScene>("res://Scenes/Client/InventoryRow.tscn");
+            foreach (var name in new[] { "装备", "材料" })
+            {
+                var mount = Get<Control>("Pages/" + name);
+                foreach (var child in mount.GetChildren()) child.Free();
+                this.BindCollection(name == "装备" ? "Inventory.Equipment" : "Inventory.Materials", new InventoryGridTarget(this, mount, row));
+            }
+        }
         if (Module is "Inventory" or "Friends")
         {
             var filter = Get<LineEdit>("Filter");
@@ -294,6 +309,10 @@ public abstract class ClientPage : ClientView
     {
         if (Tabs == null)
             return;
+        if (Module == "Inventory")
+        {
+            UpdateInventory("装备", _inventoryVm!.Equipment); UpdateInventory("材料", _inventoryVm.Materials); return;
+        }
         foreach (var page in Get<Control>("Pages").GetChildren().Cast<Control>())
         {
             var name = page.Name.ToString();
@@ -319,6 +338,20 @@ public abstract class ClientPage : ClientView
             Get<Button>("ClaimAll").Disabled = !Enumerable.Range(0, 8).Any(i => !Data.DeletedMail.Contains(i) && !Data.Claimed.Contains($"m{i}"));
     }
 
+    private void UpdateInventory(string tab, System.Collections.ObjectModel.ObservableCollection<ClientInventoryItemVm> items)
+    {
+        _inventoryVm!.Update(items, Entries(tab).ToArray(), id =>
+        {
+            var row = new ClientInventoryItemVm { Id = id };
+            row.Open = () => OpenInventoryAsync(tab, row); return row;
+        }, row => { var (title, info, icon) = Describe(tab, row.Id); row.Title = title; row.Info = info; row.Icon = icon; });
+    }
+    private Task OpenInventoryAsync(string tab, ClientInventoryItemVm row)
+    {
+        var items = tab == "装备" ? _inventoryVm!.Equipment : _inventoryVm!.Materials;
+        SelectedIcon = Get<Control>("Pages/" + tab).GetChild<Control>(items.IndexOf(row)).GetNode<TextureRect>("Icon");
+        return App.RunAsync(() => App.Shell.Pages.PushAsync<ItemDetailsView>(Catalog.Items[row.Id].Id));
+    }
     private IEnumerable<int> Entries(string tab)
     {
         var ids = Module switch
@@ -554,6 +587,11 @@ public class ItemDetailsView : UINode<string>
         Transition = Transitions.Select(c => c.Source is InventoryView || c.Target is InventoryView ? new ItemPartnerTransition() : GodotTransitions.SlideHorizontal(.24));
         Root.GetNode<Button>("Favorite").Pressed += Favorite;
         Root.GetNode<Button>("Compare").Pressed += Compare;
+        var vm = this.CreateViewModel<ClientItemVm>("Item"); vm.Initialize(App.Store, Parameters);
+        this.Bind("Item.Name", Root.GetNode<Label>("Name").TextTarget());
+        this.Bind("Item.Description", Root.GetNode<Label>("Description").TextTarget());
+        this.Bind("Item.Count", Root.GetNode<Label>("Count").TextTarget());
+        this.Bind("Item.Icon", GodotBindingTargets.Property(Root.GetNode<TextureRect>("Icon"), "Texture"));
         Refresh();
         return Task.CompletedTask;
     }
@@ -580,10 +618,6 @@ public class ItemDetailsView : UINode<string>
     public void Refresh()
     {
         var item = Catalog.Item(Parameters);
-        Root.GetNode<TextureRect>("Icon").Texture = GD.Load<Texture2D>($"res://Assets/Items/{item.Icon}.svg");
-        Root.GetNode<Label>("Name").Text = item.Name;
-        Root.GetNode<Label>("Description").Text = item.Description;
-        Root.GetNode<Label>("Count").Text = $"持有 {App.Store.State.Inventory[Parameters]}  ·  {(item.Power > 0 ? $"属性 +{item.Power}" : "培养材料")}";
         Root.GetNode<Button>("Favorite").Text = App.Store.State.Favorites.Contains(Parameters) ? "取消收藏" : "收藏";
         Root.GetNode<Button>("Compare").Disabled = item.Power == 0 || App.Floating.Children.Count >= 2;
     }

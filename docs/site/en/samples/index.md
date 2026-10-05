@@ -38,3 +38,5 @@ Godot includes characters, inventory, team, stages, shop, tasks, mail, friends, 
 - Each Demo contains operation instructions in README.md and attribution in Assets/SOURCES.md.
 
 [Recipes](game-ui-recipes.md) · [Timelines](../manual/timeline-animation.md)
+
+Both clients use MVVM for shared currency, private equipment details, two-way settings, purchase commands and inventory rows. See [MVVM setup](../manual/mvvm.md).

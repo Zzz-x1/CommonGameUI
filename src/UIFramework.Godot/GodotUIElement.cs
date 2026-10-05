@@ -8,7 +8,6 @@ public sealed class GodotUIElement : IUIElement
 {
     private sealed record ControlState(Control Control, Control.MouseFilterEnum Mouse, Control.FocusModeEnum Focus);
     private static readonly ConditionalWeakTable<Control, ControlState> Defaults = new();
-    private readonly List<ControlState> _controls = new();
     private readonly bool _owned;
     private bool _disposed;
     private bool _lifetimeEnding;
@@ -26,7 +25,7 @@ public sealed class GodotUIElement : IUIElement
         _name = control.Name;
         _owned = owned;
         foreach (var child in Enumerate(control))
-            _controls.Add(Defaults.GetValue(child, c => new ControlState(c, c.MouseFilter, c.FocusMode)));
+            Defaults.GetValue(child, c => new ControlState(c, c.MouseFilter, c.FocusMode));
     }
 
     public Control Control { get; }
@@ -43,10 +42,9 @@ public sealed class GodotUIElement : IUIElement
     {
         if (DisplayWasDestroyed) return;
         VerifyAlive();
-        foreach (var state in _controls)
+        foreach (var control in Enumerate(Control))
         {
-            if (!GodotObject.IsInstanceValid(state.Control) || state.Control.IsQueuedForDeletion())
-                throw new ObjectDisposedException("An embedded control was destroyed outside its UI owner.");
+            var state = Defaults.GetValue(control, c => new(c, c.MouseFilter, c.FocusMode));
             state.Control.MouseFilter = interactive ? state.Mouse : Control.MouseFilterEnum.Ignore;
             state.Control.FocusMode = interactive ? state.Focus : Control.FocusModeEnum.None;
             // Mouse/focus gating must not overwrite a business-controlled Button.Disabled value.
