@@ -7,7 +7,7 @@
 弹窗资源只放内容。Modal 创建遮罩：Shared 共用一层，PerModal 每层独立。需要答案时继承 `DialogNode<TResult>`。Observe 是项目的任务观察入口。
 
 ```csharp
-modals.ConfigureBackdrop(GodotBackdrops.Dim(Observe), ModalBackdropMode.Shared);
+modals.ConfigureBackdrop(Backdrops.Dim(Observe), ModalBackdropMode.Shared);
 var settings = await modals.OpenAsync<SettingsView>();
 var graphics = await modals.OpenAsync<GraphicsView>();
 await modals.CloseAsync(graphics);

@@ -27,9 +27,9 @@ public partial class MvvmVerification : global::Godot.Node
         var button = new Button { Name = "Buy" }; view.AddChild(button); var slider = new HSlider { Name = "Amount", MinValue = 0, MaxValue = 200 }; view.AddChild(slider);
         var config = new MvvmBindings { Name = "MvvmBindings" }; view.AddChild(config); config.Owner = view; label.Owner = view; button.Owner = view; slider.Owner = view;
         config.ViewModels.Add(new ViewModelSourceResource { Name = "Player", Creation = ViewModelCreation.SharedAsset, Template = template });
-        config.Bindings.Add(new ViewBindingResource { Target = new("Gold"), Member = "Text", Source = "Player.Gold", Converter = "FormatNumber" });
-        config.Bindings.Add(new ViewBindingResource { Target = new("Buy"), Kind = ViewBindingKind.Command, Source = "Player.Buy" });
-        config.Bindings.Add(new ViewBindingResource { Target = new("Amount"), Member = "Value", Source = "Player.Gold", Mode = BindingMode.TwoWay, Converter = "IntToFloat", ConvertBack = "FloatToInt" });
+        config.AddBinding(view.GetNode<Control>("Gold"), new ViewBindingResource { Member = "Text", Source = "Player.Gold", Converter = "FormatNumber" });
+        config.AddBinding(view.GetNode<Control>("Buy"), new ViewBindingResource { Kind = ViewBindingKind.Command, Source = "Player.Buy" });
+        config.AddBinding(view.GetNode<Control>("Amount"), new ViewBindingResource { Member = "Value", Source = "Player.Gold", Mode = BindingMode.TwoWay, Converter = "IntToFloat", ConvertBack = "FloatToInt" });
         var runtime = new MvvmRuntime(); var ui = EngineUI.UI.Create(this); ui.ConfigureMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
         var vm = node.GetViewModel<NativePlayerVm>("Player"); Check(vm != template, "Original asset was used"); Check(ReferenceEquals(vm, vm.Other), "Asset cycle not preserved"); Check(label.Text == "100", "Initial display missing");
         button.EmitSignal(BaseButton.SignalName.Pressed); Check(vm.Gold == 90 && template.Gold == 100, "Purchase modified template");

@@ -4,12 +4,12 @@
 
 ## 资源与控件
 
-- PackedScene 根为 Control，注册使用 res:// 路径。
+- PackedScene 根挂载继承适配 UINode 的业务脚本（Control），注册使用 res:// 路径。
 - 空挂载与全屏资源根设 MouseFilter.Ignore；实际面板接收输入。
 - AttachToAsync／BindAsync 借用已有 Control；GetControl 按相对路径访问控件。
 
 ```csharp
-var ui = GodotUI.Create(this);
+var ui = UI.Create(this);
 ui.Register<InventoryView>("res://UI/Inventory.tscn");
 var windows = await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", mount);
 var inventory = await windows.OpenAsync<InventoryView>();

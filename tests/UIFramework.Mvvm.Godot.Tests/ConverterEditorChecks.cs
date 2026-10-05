@@ -31,7 +31,7 @@ public partial class ConverterEditorChecks : MvvmEditorPlugin
         GetTree().Quit();
         void usingPreview()
         {
-            var label = root.GetNode<Label>("Gold");
+            var label = (Label)view.GetTarget(view.Bindings[0]);
             var original = label.Text; var preview = new BindingPreview(view);
             Check(label.Text == "125", "editor preview converter");
             var disposal = preview.DisposeAsync(); Check(disposal.IsCompleted, "preview disposal incomplete"); disposal.GetAwaiter().GetResult();

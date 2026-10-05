@@ -4,13 +4,13 @@
 
 ## 1. 添加 Viewmodels
 
-添加具名来源，例如 `Player`、`Settings`、`Inventory`。选择 VM 类型、创建方式及可选模板资产。
+添加具名来源，例如 `Player`、`Settings`、`Inventory`。选择可引用的 VM 资产及创建方式。
 
 - 独立详情选 **CreateInstance**。
 - 业务传入对象选 **Manual**，在节点初始化调用 `SetViewModel`。
 - 多个窗口使用同一资产时选 **SharedAsset**。
 
-类型列表只显示标记为 `ViewModel` 的项目类型。资产选择原生 `ScriptableObject`／`Resource`；普通 C# 类使用类型配置或注册工厂。
+资产列表只发现标记为 `ViewModel` 的原生 `ScriptableObject`／`Resource`，支持搜索和定位。Godot VM 资源使用 `[Tool]`。类型由资产引用取得，不保存类型名称；普通 C# VM 只通过代码创建与绑定。
 
 ## 2. 建立 View Bindings
 
@@ -44,17 +44,11 @@
 
 点击 **预览初始值**。预览使用独立 Runtime 和资产克隆，只刷新显示及列表，不执行命令、不反向写入原资产。结束后恢复控件原值。
 
-Manual 来源需项目提供样本：
-
-```csharp
-PreviewSources.Register(() => new PlayerVm { Gold = 12000 });
-```
-
-未提供时明确提示“缺少预览来源”。样本是项目明确提供的数据，不会自动制造运行时状态。
+Manual 来源的引用资产用于声明类型和预览样本。预览克隆该资产；运行时仍必须由业务调用 `SetViewModel`，不会自动使用样本代替。缺少资产时不能开始预览。
 
 ## 保存
 
-Unity 配置保存在组件中，随 Prefab／场景保存，支持 Undo 和 Prefab Override。Godot 配置使用场景内的 Resource，支持原生 Undo；保存场景后重开仍保留配置。
+Unity 配置保存在组件中，随 Prefab／场景保存，支持 Undo 和 Prefab Override。Godot 场景组件保存绑定 Resource 和原生控件引用数组，编辑器同步修改两者，支持原生 Undo。控件引用不依赖框架维护的层级路径；重命名、换父节点及保存重开保持引用。
 
 预览不保存场景。编辑配置前先结束预览，避免展示值与编辑值混在一起。
 

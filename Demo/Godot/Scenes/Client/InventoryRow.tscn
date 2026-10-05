@@ -1,38 +1,28 @@
 [gd_scene format=3]
 
-[ext_resource type="Texture2D" path="res://Assets/Items/bow-arrow.svg" id="1_x1edj"]
-[ext_resource type="Script" path="res://addons/ui_framework_mvvm/MvvmBindings.cs" id="2_de8dc"]
-[ext_resource type="Script" path="res://addons/ui_framework_mvvm/ViewModelSourceResource.cs" id="3_ywhmc"]
-[ext_resource type="Script" path="res://addons/ui_framework_mvvm/ViewBindingResource.cs" id="4_n53ty"]
+[ext_resource type="Texture2D" path="res://Assets/Items/bow-arrow.svg" id="1_pppau"]
+[ext_resource type="Script" path="res://addons/ui_framework_mvvm/MvvmBindings.cs" id="2_x1edj"]
+[ext_resource type="Script" path="res://addons/ui_framework_mvvm/ViewBindingResource.cs" id="3_de8dc"]
 
-[sub_resource type="Resource" id="Resource_j0ehp"]
-script = ExtResource("3_ywhmc")
-Name = "Item"
-TypeName = "HierarchyDemo.ClientInventoryItemVm, HierarchyDemo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-Creation = 1
-
-[sub_resource type="Resource" id="Resource_sle7w"]
-script = ExtResource("4_n53ty")
-Target = NodePath("Title")
+[sub_resource type="Resource" id="Resource_ywhmc"]
+script = ExtResource("3_de8dc")
 Source = "Item.Title"
 
-[sub_resource type="Resource" id="Resource_ye28s"]
-script = ExtResource("4_n53ty")
-Target = NodePath("Info")
+[sub_resource type="Resource" id="Resource_n53ty"]
+script = ExtResource("3_de8dc")
 Source = "Item.Info"
 
-[sub_resource type="Resource" id="Resource_orqws"]
-script = ExtResource("4_n53ty")
-Target = NodePath("Icon")
+[sub_resource type="Resource" id="Resource_j0ehp"]
+script = ExtResource("3_de8dc")
 Member = "Texture"
 Source = "Item.Icon"
 
-[sub_resource type="Resource" id="Resource_ax7rb"]
-script = ExtResource("4_n53ty")
+[sub_resource type="Resource" id="Resource_sle7w"]
+script = ExtResource("3_de8dc")
 Source = "Item.Select"
 Kind = 1
 
-[node name="Card" type="Button" unique_id=673478627]
+[node name="Card" type="Button" unique_id=1301056597]
 anchors_preset = -1
 anchor_left = 0.006
 anchor_top = 0.012
@@ -41,7 +31,7 @@ anchor_bottom = 0.32133332
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Icon" type="TextureRect" parent="." unique_id=1579440053]
+[node name="Icon" type="TextureRect" parent="." unique_id=1552956412]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.04
@@ -51,11 +41,11 @@ anchor_bottom = 0.6
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-texture = ExtResource("1_x1edj")
+texture = ExtResource("1_pppau")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Title" type="Label" parent="." unique_id=700839193]
+[node name="Title" type="Label" parent="." unique_id=1220544219]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.32
@@ -67,7 +57,7 @@ grow_vertical = 2
 theme_override_font_sizes/font_size = 21
 autowrap_mode = 2
 
-[node name="Info" type="Label" parent="." unique_id=1260996876]
+[node name="Info" type="Label" parent="." unique_id=1678381804]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.32
@@ -79,7 +69,7 @@ grow_vertical = 2
 theme_override_font_sizes/font_size = 17
 autowrap_mode = 2
 
-[node name="MvvmBindings" type="Node" parent="." unique_id=652861891]
-script = ExtResource("2_de8dc")
-ViewModels = Array[ExtResource("3_ywhmc")]([SubResource("Resource_j0ehp")])
-Bindings = Array[ExtResource("4_n53ty")]([SubResource("Resource_sle7w"), SubResource("Resource_ye28s"), SubResource("Resource_orqws"), SubResource("Resource_ax7rb")])
+[node name="MvvmBindings" type="Node" parent="." unique_id=380820771 node_paths=PackedStringArray("Targets")]
+script = ExtResource("2_x1edj")
+Bindings = Array[ExtResource("3_de8dc")]([SubResource("Resource_ywhmc"), SubResource("Resource_n53ty"), SubResource("Resource_j0ehp"), SubResource("Resource_sle7w")])
+Targets = [NodePath("../Title"), NodePath("../Info"), NodePath("../Icon"), NodePath("..")]

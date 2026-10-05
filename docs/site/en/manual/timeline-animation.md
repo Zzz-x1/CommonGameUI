@@ -7,7 +7,7 @@ Save rewards first, then animate art, text and cards. Skipping changes presentat
 Godot uses AnimationPlayer; Unity supports Timeline/PlayableDirector and legacy Animation/AnimationClip. Tracks affect presentation only; restore resets every owned property.
 
 ```csharp
-Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root =>
+Transition = Transitions.Animation("AnimationPlayer", "enter", "exit", root =>
 {
     root.Modulate = Colors.White;
     root.GetNode<Control>("Content").Scale = Vector2.One;
@@ -21,12 +21,12 @@ Lobby art, welcome text and buttons can use separate Animation tracks. Add `Tran
 Capture every property your tracks write, then configure the transition in node initialization:
 
 ```csharp
-var root = this.GetRect();
+var root = this.GetRoot();
 var rects = root.GetComponentsInChildren<RectTransform>(true)
     .ToDictionary(r => r, r => (r.anchoredPosition, r.localScale, r.localRotation));
 var groups = root.GetComponentsInChildren<CanvasGroup>(true)
     .ToDictionary(g => g, g => g.alpha);
-Transition = UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
+Transition = Transitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
 {
     foreach (var pair in rects)
     {

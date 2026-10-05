@@ -7,8 +7,8 @@ Fade inventory in from the lobby, slide it in from the shop, and use a short ret
 Priority: node Transition → direct container ChildTransition → Context.DefaultTransition. The default is Instant; configuration does not cross descendant containers.
 
 ```csharp
-var fade = GodotTransitions.Fade(.15);
-var slide = GodotTransitions.SlideHorizontal(.20, targetPath: "Content");
+var fade = Transitions.Fade(.15);
+var slide = Transitions.SlideHorizontal(.20, targetPath: "Content");
 ui.DefaultTransition = fade;
 pages.ChildTransition = Transitions.Select(context =>
     context.Direction == TransitionDirection.Backward ? fade :

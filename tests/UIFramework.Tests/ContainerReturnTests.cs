@@ -31,7 +31,7 @@ public class ContainerReturnTests
     {
         public readonly TaskCompletionSource<bool> Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<bool> Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public override Task DisposeAsync(UINode node) { Started.TrySetResult(true); return Gate.Task; }
+        public override Task DisposeAsync(IUINode node) { Started.TrySetResult(true); return Gate.Task; }
     }
     private sealed class ExitGate : IUITransition, IUITransitionRun
     {

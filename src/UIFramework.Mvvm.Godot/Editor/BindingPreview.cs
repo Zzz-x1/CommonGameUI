@@ -19,13 +19,14 @@ public sealed class BindingPreview : IAsyncDisposable
         {
             if (View == null) return;
             foreach (var b in View.Bindings.Where(b => b.Enabled && b.Kind == ViewBindingKind.Property))
-                node.Bind(b.Source, EngineMvvm.BindingTargets.Property(View.GetParent().GetNode<Control>(b.Target), b.Member), Converters.Configure(b.Converter, "", BindingMode.OneWay, b.ConverterInput, b.ConverterConstant, b.HasNullValue, b.NullValue));
+            {
+                var options = b.GetOptions(true);
+                node.Bind(b.Source, EngineMvvm.BindingTargets.Property(View.GetTarget(b), b.Member), options);
+            }
         }
     }
     public BindingPreview(MvvmBindings view)
     {
-        foreach (var source in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
-        { if (!PreviewSources.Has(source.Type)) throw new InvalidOperationException("缺少预览来源：" + source.Name); var type = source.Type; _runtime.RegisterFactory(type, () => PreviewSources.Create(type)); }
         _ui = EngineUI.UI.Create(view);
         _ui.ConfigureMvvm(_runtime, node => node.Name == "Preview" ? new Configuration { Sources = CloneSources(view.Sources, true) }
             : node.Element is EngineUI.UIElement display && display.Control.GetChildren().OfType<MvvmBindings>().SingleOrDefault() is { } binding ? new Configuration { Sources = CloneSources(binding.Sources, false), View = binding } : null, new EngineMvvm.ViewModelAssets());
@@ -34,14 +35,14 @@ public sealed class BindingPreview : IAsyncDisposable
             var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview"); if (!attached.IsCompleted) throw new InvalidOperationException("Preview initialization must be immediate."); attached.GetAwaiter().GetResult();
             foreach (var b in view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command))
             {
-                var control = view.GetParent().GetNode<Control>(b.Target);
+                var control = view.GetTarget(b);
                 if (b.Kind == ViewBindingKind.Collection)
                 { foreach (var child in control.GetChildren().OfType<Control>()) { _children.Add((child, child.Visible)); child.Hide(); } node.BindCollection(b.Source, new EngineMvvm.CollectionTarget(node, control, b.ItemScene!), b.OneTimeCollection); }
                 else
-                { var target = EngineMvvm.BindingTargets.Property(control, b.Member); _values.Add((target, target.Read())); node.Bind(b.Source, target, Converters.Configure(b.Converter, "", b.Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay, b.ConverterInput, b.ConverterConstant, b.HasNullValue, b.NullValue)); }
+                { var options = b.GetOptions(true); var target = EngineMvvm.BindingTargets.Property(control, b.Member); _values.Add((target, target.Read())); node.Bind(b.Source, target, options); }
             }
         }
-        catch { GodotPreviewTasks.Observe(DisposeAsync().AsTask()); throw; }
+        catch { EditorMvvmTasks.Observe(DisposeAsync().AsTask()); throw; }
     }
     private static IReadOnlyList<ViewModelSource> CloneSources(IReadOnlyList<ViewModelSource> sources, bool root) => sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = !root && s.Creation == ViewModelCreation.Manual ? ViewModelCreation.Manual : ViewModelCreation.CreateInstance, Template = s.Template }).ToArray();
     public ValueTask DisposeAsync() { _dispose ??= Close(); return new ValueTask(_dispose); }
@@ -56,7 +57,7 @@ public sealed class BindingPreview : IAsyncDisposable
     private static void Failure(ref Exception? first, Exception error)
     { if (first == null) first = error; else { if (first.Data[UIFailure.SecondaryExceptionsKey] is not List<Exception> errors) first.Data[UIFailure.SecondaryExceptionsKey] = errors = new(); errors.Add(error); } }
 }
-internal static class GodotPreviewTasks
+internal static class EditorMvvmTasks
 {
     private static readonly List<Task> Tasks = new();
     private static bool _attached;

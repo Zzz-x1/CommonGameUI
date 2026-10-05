@@ -55,7 +55,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 0.15, g: 0.25, b: 0.29, a: 1}
@@ -78,7 +78,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text:
+  m_Text: 
 --- !u!1 &8808993966345536099
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,7 +137,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.91, g: 0.92, b: 0.85, a: 1}
@@ -167,7 +167,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
     m_Mode: 3
@@ -211,14 +211,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7eedde526d1a485c9bcb3774f2706979, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UIFramework.Mvvm.Unity::UIFramework.Mvvm.Unity.MvvmBindings
-  ViewModels:
-  - Name: Item
-    TypeName: StarCourt.UnityDemo.ClientInventoryItemVm, StarCourt.UnityDemo, Version=0.0.0.0,
-      Culture=neutral, PublicKeyToken=null
-    Creation: 1
-    Template: {fileID: 0}
+  ViewModels: []
   Bindings:
   - Enabled: 1
     Target: {fileID: 6838524965142333167}
@@ -226,10 +221,12 @@ MonoBehaviour:
     Source: Item.Text
     Mode: 1
     Kind: 0
-    Converter:
-    ConvertBack:
+    Converter: 
+    ConvertBack: 
+    ConverterInput: 0
+    ConverterConstant: 
     HasNullValue: 0
-    NullValue:
+    NullValue: 
     ItemPrefab: {fileID: 0}
     OneTimeCollection: 0
   - Enabled: 1
@@ -238,9 +235,11 @@ MonoBehaviour:
     Source: Item.Select
     Mode: 1
     Kind: 1
-    Converter:
-    ConvertBack:
+    Converter: 
+    ConvertBack: 
+    ConverterInput: 0
+    ConverterConstant: 
     HasNullValue: 0
-    NullValue:
+    NullValue: 
     ItemPrefab: {fileID: 0}
     OneTimeCollection: 0

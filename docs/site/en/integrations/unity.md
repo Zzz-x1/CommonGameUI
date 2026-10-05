@@ -4,17 +4,17 @@ Follow [Unity Getting Started](../getting-started/unity.md) for setup.
 
 ## Resources and controls
 
-- Prefab roots use RectTransform under Resources; register paths without extensions.
+- Prefab roots use RectTransform and a business script inheriting the adapter UINode (MonoBehaviour) under Resources; register paths without extensions.
 - Mounts/roots have no raycastable full-screen Graphic. Modal creates the backdrop.
-- Tabs bind existing RectTransforms without cloning. GetRect/GetComponent access native controls.
+- Tabs bind existing RectTransforms without cloning. GetRoot/GetControl access native controls.
 
 ```csharp
-var ui = UnityUI.Create(canvas, eventSystem);
+var ui = UI.Create(canvas, eventSystem);
 ui.Register<InventoryView>("UI/Inventory");
 var pages = await ui.Root.CreateContainerAsync<StackContainerNode>("Pages", pageMount);
-pages.ChildTransition = UnityTransitions.SlideHorizontal(targetPath: "Content");
+pages.ChildTransition = Transitions.SlideHorizontal(targetPath: "Content");
 var inventory = await pages.PushAsync<InventoryView>();
-Button close = inventory.GetComponent<Button>("Content/Close");
+Button close = inventory.GetControl<Button>("Content/Close");
 ```
 
 ## Lifecycle and animation

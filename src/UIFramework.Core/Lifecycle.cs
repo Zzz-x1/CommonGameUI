@@ -28,7 +28,7 @@ public sealed class StateChangeContext
 
 public interface INodeLifecycle
 {
-    Task InitializeAsync(UINode node, CancellationToken token);
+    Task InitializeAsync(IUINode node, CancellationToken token);
     Task EnteringAsync(LifecycleContext context, CancellationToken token);
     void Entered(LifecycleContext context);
     Task ExitingAsync(LifecycleContext context, CancellationToken token);
@@ -36,13 +36,13 @@ public interface INodeLifecycle
     void Activated(StateChangeContext context);
     void Deactivated(StateChangeContext context);
     void VisibilityChanged(StateChangeContext context);
-    Task DisposeAsync(UINode node);
+    Task DisposeAsync(IUINode node);
 }
 
 /// <summary>Override only the stages your reusable behavior needs.</summary>
 public abstract class NodeLifecycle : INodeLifecycle
 {
-    public virtual Task InitializeAsync(UINode node, CancellationToken token) => Task.CompletedTask;
+    public virtual Task InitializeAsync(IUINode node, CancellationToken token) => Task.CompletedTask;
     public virtual Task EnteringAsync(LifecycleContext context, CancellationToken token) => Task.CompletedTask;
     public virtual void Entered(LifecycleContext context) { }
     public virtual Task ExitingAsync(LifecycleContext context, CancellationToken token) => Task.CompletedTask;
@@ -50,5 +50,5 @@ public abstract class NodeLifecycle : INodeLifecycle
     public virtual void Activated(StateChangeContext context) { }
     public virtual void Deactivated(StateChangeContext context) { }
     public virtual void VisibilityChanged(StateChangeContext context) { }
-    public virtual Task DisposeAsync(UINode node) => Task.CompletedTask;
+    public virtual Task DisposeAsync(IUINode node) => Task.CompletedTask;
 }

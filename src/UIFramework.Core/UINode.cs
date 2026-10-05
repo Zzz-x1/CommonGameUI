@@ -170,7 +170,7 @@ public class UINode : IUINode
                 foreach (var handler in _handlers)
                 {
                     _initializedHandlers.Add(handler);
-                    await handler.InitializeAsync(this, token);
+                    await handler.InitializeAsync(Owner, token);
                 }
                 foreach (var extension in _initializedExtensions) extension.AfterInitialize(this);
                 token.ThrowIfCancellationRequested();
@@ -337,7 +337,7 @@ public class UINode : IUINode
                 await Attempt(async () => await extension.DisposeAsync(this));
             await Attempt(OnDisposeAsync);
             foreach (var handler in _initializedHandlers.AsEnumerable().Reverse())
-                await Attempt(() => handler.DisposeAsync(this));
+                await Attempt(() => handler.DisposeAsync(Owner));
             if (Element != null) await Attempt(async () => await Element.DisposeAsync());
             await Attempt(() => { ResourceLease?.Dispose(); ResourceLease = null; return Task.CompletedTask; });
             var formerParent = Parent;

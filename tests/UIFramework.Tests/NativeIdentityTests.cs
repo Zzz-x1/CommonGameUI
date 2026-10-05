@@ -72,6 +72,22 @@ public sealed class NativeIdentityTests
     private static async Task<T> Container<T>(UIContext ui) where T : ContainerNode, new()
     { var container = new T(); await container.AttachAsync(ui.Root, typeof(T).Name); return container; }
 
+    private sealed class OwnerLifecycle : NodeLifecycle
+    {
+        public IUINode? Initialized, Disposed;
+        public override Task InitializeAsync(IUINode node, CancellationToken token) { Initialized = node; return Task.CompletedTask; }
+        public override Task DisposeAsync(IUINode node) { Disposed = node; return Task.CompletedTask; }
+    }
+    [Fact] public async Task ReusableLifecycleReceivesBusinessOwnerForInitializationAndDisposal()
+    {
+        var handler = new OwnerLifecycle();
+        var loader = new Loader(() => { var owner = new View { Configured = true }; owner.AddLifecycle(handler); return owner; });
+        var host = new TestHost(); await using var ui = new UIContext(host, loader, host);
+        ui.Register<View>("native"); var windows = await Container<PanelContainerNode>(ui);
+        var view = await windows.OpenAsync<View>(); Assert.Same(view, handler.Initialized);
+        await windows.CloseAsync(view); Assert.Same(view, handler.Disposed);
+    }
+
     [Fact] public async Task ResourceOwnersPreserveSingleIdentityAndCreationConfiguration()
     {
         var loader = new Loader(() => new View()); var host = new TestHost();

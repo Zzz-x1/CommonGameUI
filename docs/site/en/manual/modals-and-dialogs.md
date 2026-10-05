@@ -7,7 +7,7 @@ Open graphics over settings and return to settings on close; await confirmation 
 Modal resources contain content only. Shared uses one backdrop; PerModal uses one per layer. Inherit `DialogNode<TResult>` for an answer. Observe is the project task observer.
 
 ```csharp
-modals.ConfigureBackdrop(GodotBackdrops.Dim(Observe), ModalBackdropMode.Shared);
+modals.ConfigureBackdrop(Backdrops.Dim(Observe), ModalBackdropMode.Shared);
 var settings = await modals.OpenAsync<SettingsView>();
 var graphics = await modals.OpenAsync<GraphicsView>();
 await modals.CloseAsync(graphics);

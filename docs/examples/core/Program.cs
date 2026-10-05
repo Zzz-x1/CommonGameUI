@@ -5,11 +5,11 @@ int checks = 0;
 void Check(bool condition)
 { if (!condition) throw new InvalidOperationException("Documentation scenario failed."); checks++; }
 await using var ui = new UIContext(new MemoryHost(), new MemoryLoader());
-ui.Register<LobbyView>("lobby");
-ui.Register<InventoryView>("inventory");
-ui.Register<ItemDetailsView>("details");
-ui.Register<CompareView>("compare", windowMode: WindowInstanceMode.Multiple);
-ui.Register<ConfirmView>("confirm");
+ui.Register(() => new LobbyView(), "lobby");
+ui.Register(() => new InventoryView(), "inventory");
+ui.Register(() => new ItemDetailsView(), "details");
+ui.Register(() => new CompareView(), "compare", windowMode: WindowInstanceMode.Multiple);
+ui.Register(() => new ConfirmView(), "confirm");
 var pages = new StackContainerNode();
 var windows = new PanelContainerNode();
 var tabs = new TabContainerNode();

@@ -7,8 +7,8 @@
 优先级：节点 Transition → 直接容器 ChildTransition → Context.DefaultTransition。默认 Instant；容器配置不穿透后代容器。
 
 ```csharp
-var fade = GodotTransitions.Fade(.15);
-var slide = GodotTransitions.SlideHorizontal(.20, targetPath: "Content");
+var fade = Transitions.Fade(.15);
+var slide = Transitions.SlideHorizontal(.20, targetPath: "Content");
 ui.DefaultTransition = fade;
 pages.ChildTransition = Transitions.Select(context =>
     context.Direction == TransitionDirection.Backward ? fade :

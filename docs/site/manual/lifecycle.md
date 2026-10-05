@@ -23,26 +23,26 @@ using System.Threading.Tasks;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
+using EngineUI = UIFramework.Godot;
 
 public sealed class PlayerProfile
 {
     public string Nickname { get; set; } = "Traveller";
 }
-public sealed class ProfileView : UINode
+public partial class ProfileView : EngineUI.UINode
 {
-    private readonly PlayerProfile _profile;
+    public PlayerProfile Profile { get; set; } = null!;
     private AnimationPlayer _decoration = null!;
-    public ProfileView(PlayerProfile profile) { _profile = profile; }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _decoration = this.GetControl().GetNode<AnimationPlayer>("Decoration");
+        _decoration = this.GetRoot().GetNode<AnimationPlayer>("Decoration");
         _decoration.Play("idle");
         _decoration.Active = false;
         return Task.CompletedTask;
     }
     protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
     {
-        this.GetControl<Label>("Content/PlayerName").Text = _profile.Nickname;
+        this.GetControl<Label>("Content/PlayerName").Text = Profile.Nickname;
         return Task.CompletedTask;
     }
     protected override void OnActivated(StateChangeContext context) => _decoration.Active = true;
@@ -51,7 +51,7 @@ public sealed class ProfileView : UINode
 ```
 
 ```csharp
-ui.Register(() => new ProfileView(profile), "res://Profile.tscn");
+ui.Register<ProfileView>("res://Profile.tscn", view => view.Profile = profile);
 await pages.PushAsync<ProfileView>();
 ```
 
@@ -66,6 +66,7 @@ var objectLifetime = gameUI.BindLifetime(gameObject);
 var sceneLifetime = ui.BindLifetime(gameObject.scene);
 
 // Godot: using UIFramework.Godot;
+using EngineUI = UIFramework.Godot;
 // A scene is represented by its root node.
 var godotLifetime = gameUI.BindLifetime(sceneRoot);
 ```
@@ -73,7 +74,7 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - Node 绑定清理自身及子树；Context／Root 绑定还释放 Context 资源。
 - Unity 的场景管理对象和持续观察对象均隐藏于 Hierarchy。Godot 不增加场景节点。
 - 销毁触发清理；禁用、隐藏或移出层级不触发。Godot QueueFree 也会触发。
-- 每个节点同时只允许一个绑定。`binding.Dispose()` 解除绑定，保留节点和传入的引擎对象。
+- 原生业务脚本自动绑定所属组件生命周期；还可显式绑定一个其他对象或场景。`binding.Dispose()` 解除绑定，保留节点和传入的引擎对象。
 - 销毁后在后续引擎帧开始清理，不假定 Destroy／Free 返回时已经完成。
 - `binding.Completion` 等待清理结束；明确解除绑定时立即完成。正常主动关闭仍 await 容器关闭或 DisposeAsync。
 - 绑定不负责切换到主菜单。自动清理不播放退出转场；进行中的操作取消。项目仍须观察自己发起的操作任务。

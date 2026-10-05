@@ -30,7 +30,7 @@ public class PlayerVm
 正常创建 UIContext 即可，MVVM 自动初始化和释放：
 
 ```csharp
-var ui = GodotUI.Create(this); // Unity: UnityUI.Create(canvas, events)
+var ui = UI.Create(this); // Unity: UI.Create(canvas, events)
 ```
 
 在节点初始化中提供数据源并绑定：
@@ -82,7 +82,7 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 
 ## 列表和命令
 
-动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `GodotCollectionTarget`／`UnityCollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，声明 **Manual / Item** 来源。条目可以是基础节点，无需业务 View 类。
+动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `CollectionTarget`／`CollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，声明 **Manual / Item** 来源。条目可以是基础节点，无需业务 View 类。
 
 移动保留条目实例，删除解除绑定并释放条目。普通数组只能一次性展示。布局由项目资源决定，模块不提供虚拟化、排序或对象池。
 

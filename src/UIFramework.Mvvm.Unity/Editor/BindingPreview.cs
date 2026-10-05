@@ -33,16 +33,15 @@ namespace UIFramework.Mvvm.EditorUnity
             public void Apply(UINode node)
             {
                 foreach (var binding in View.Bindings.Where(b => b.Enabled && b.Kind == ViewBindingKind.Property))
-                    node.Bind(binding.Source, EngineMvvm.BindingTargets.Property(binding.Target, binding.Member), Converters.Configure(binding.Converter, "", BindingMode.OneWay, binding.ConverterInput, binding.ConverterConstant, binding.HasNullValue, binding.NullValue));
+                {
+                    var options = binding.GetOptions(true);
+                    node.Bind(binding.Source, EngineMvvm.BindingTargets.Property(binding.Target, binding.Member), options);
+                }
             }
         }
         public BindingPreview(MvvmBindings view)
         {
             var sources = view.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.CreateInstance }).ToArray();
-            foreach (var manual in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
-                if (!PreviewSources.Has(manual.Type)) throw new InvalidOperationException("缺少预览来源：" + manual.Name);
-            foreach (var manual in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
-                _runtime.RegisterFactory(manual.Type, () => PreviewSources.Create(manual.Type));
             _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(EngineUI.FramePump)) { hideFlags = HideFlags.HideAndDontSave };
             var host = new EngineUI.UIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<EngineUI.FramePump>());
             _ui = new UIContext(host, new EngineUI.UIResourceLoader(host));
@@ -61,8 +60,8 @@ namespace UIFramework.Mvvm.EditorUnity
                     }
                     else
                     {
-                        var target = EngineMvvm.BindingTargets.Property(b.Target, b.Member); _values.Add((target, target.Read()));
-                        node.Bind(b.Source, target, Converters.Configure(b.Converter, "", b.Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay, b.ConverterInput, b.ConverterConstant, b.HasNullValue, b.NullValue));
+                        var options = b.GetOptions(true); var target = EngineMvvm.BindingTargets.Property(b.Target, b.Member); _values.Add((target, target.Read()));
+                        node.Bind(b.Source, target, options);
                     }
                 }
             }

@@ -7,7 +7,7 @@
 Godot 使用 AnimationPlayer；Unity 同时支持 Timeline／PlayableDirector 和 legacy Animation／AnimationClip。轨道只写表现，restore 回调恢复所有轨道属性。
 
 ```csharp
-Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root =>
+Transition = Transitions.Animation("AnimationPlayer", "enter", "exit", root =>
 {
     root.Modulate = Colors.White;
     root.GetNode<Control>("Content").Scale = Vector2.One;
@@ -21,12 +21,12 @@ Transition = GodotTransitions.Animation("AnimationPlayer", "enter", "exit", root
 在节点初始化时捕获轨道修改的属性并配置转场：
 
 ```csharp
-var root = this.GetRect();
+var root = this.GetRoot();
 var rects = root.GetComponentsInChildren<RectTransform>(true)
     .ToDictionary(r => r, r => (r.anchoredPosition, r.localScale, r.localRotation));
 var groups = root.GetComponentsInChildren<CanvasGroup>(true)
     .ToDictionary(g => g, g => g.alpha);
-Transition = UnityTransitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
+Transition = Transitions.Timeline("Transitions/Enter", "Transitions/Exit", _ =>
 {
     foreach (var pair in rects)
     {

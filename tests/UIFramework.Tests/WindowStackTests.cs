@@ -11,7 +11,7 @@ public class WindowStackTests
     private sealed class DerivedCounter : CounterView { }
     private sealed class OrderBehavior(List<int> order, int number) : NodeLifecycle
     {
-        public override Task DisposeAsync(UINode node) { order.Add(number); return Task.CompletedTask; }
+        public override Task DisposeAsync(IUINode node) { order.Add(number); return Task.CompletedTask; }
     }
     private sealed class GateTransition : IUITransition, IUITransitionRun
     {

@@ -90,4 +90,6 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 
 自定义适配实现 `IViewModelAssets`、`IBindingTarget`、`ICommandTarget`、`ICollectionTarget`，或使用 `BindingValueTarget<T>`。目标负责原生控件读写和事件；模块负责订阅、路径、转换、所有权及任务。
 
+`ViewBindingData`／`ViewBindingResource.GetOptions(bool preview = false)` 校验转换配置，预览只更新显示。Unity 来源使用 `ViewModelSourceData.Template`；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
+
 相关：[入门](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)

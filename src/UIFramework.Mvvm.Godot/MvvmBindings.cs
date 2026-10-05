@@ -7,17 +7,25 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
 {
     [Export] public global::Godot.Collections.Array<ViewModelSourceResource> ViewModels { get; set; } = new();
     [Export] public global::Godot.Collections.Array<ViewBindingResource> Bindings { get; set; } = new();
+    [Export] public global::Godot.Collections.Array<Control> Targets { get; set; } = new();
+    public void AddBinding(Control target, ViewBindingResource binding) { Targets.Add(target); Bindings.Add(binding); }
+    public Control GetTarget(ViewBindingResource binding)
+    {
+        if (Targets.Count != Bindings.Count) throw new InvalidOperationException("Each binding must have a native target reference.");
+        var target = Targets[Bindings.IndexOf(binding)];
+        return GodotObject.IsInstanceValid(target) ? target : throw new InvalidOperationException("Missing binding target: " + binding.Source);
+    }
     public IReadOnlyList<ViewModelSource> Sources => ViewModels.Select(s => new ViewModelSource
-    { Name = s.Name, Type = s.Template?.GetType() ?? Type.GetType(s.TypeName, throwOnError: true)!, Creation = s.Creation, Template = s.Template }).ToArray();
+    { Name = s.Name, Type = s.Template?.GetType() ?? throw new InvalidOperationException("VM asset is required: " + s.Name), Creation = s.Creation, Template = s.Template }).ToArray();
     public void Apply(UINode node)
     {
         foreach (var binding in Bindings.Where(b => b.Enabled))
         {
-            var control = GetParent().GetNode<Control>(binding.Target);
+            var control = GetTarget(binding);
             if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget());
             else if (binding.Kind == ViewBindingKind.Collection)
                 node.BindCollection(binding.Source, new CollectionTarget(node, control, binding.ItemScene ?? throw new InvalidOperationException("Item scene is required.")), binding.OneTimeCollection);
-            else node.Bind(binding.Source, BindingTargets.Property(control, binding.Member), Converters.Configure(binding.Converter, binding.ConvertBack, binding.Mode, binding.ConverterInput, binding.ConverterConstant, binding.HasNullValue, binding.NullValue));
+            else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(control, binding.Member), options); }
         }
     }
 }

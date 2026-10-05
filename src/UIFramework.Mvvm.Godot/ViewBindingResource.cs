@@ -5,7 +5,6 @@ public enum ViewBindingKind { Property, Command, Collection }
 public partial class ViewBindingResource : Resource
 {
     [Export] public bool Enabled { get; set; } = true;
-    [Export] public NodePath Target { get; set; } = new(".");
     [Export] public string Member { get; set; } = "Text";
     [Export] public string Source { get; set; } = "";
     [Export] public BindingMode Mode { get; set; } = BindingMode.OneWay;
@@ -18,4 +17,10 @@ public partial class ViewBindingResource : Resource
     [Export] public string NullValue { get; set; } = "";
     [Export] public PackedScene? ItemScene { get; set; }
     [Export] public bool OneTimeCollection { get; set; }
+    public BindingOptions GetOptions(bool preview = false)
+    {
+        var options = Converters.Configure(Converter, ConvertBack, Mode, ConverterInput, ConverterConstant, HasNullValue, NullValue);
+        if (preview) { options.Mode = Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay; options.ConvertBack = null; }
+        return options;
+    }
 }

@@ -1842,7 +1842,7 @@ Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源�
 验证：文档链接、标题锚点、32 组双语代码与两个窗口源码同步检查通过；VitePress 站点构建通过，Chromium 检查 65 页、搜索、语言切换、复制、窄屏导航与六步目录。Godot 教程工程构建无警告，通过 8 项 headless 检查；Unity 示例脚本由 Unity 6000.3.24f1 batchmode 编译，未执行原生 UI。检查了桌面教程截图。未修改核心 API 或游戏 Demo 业务。
 
 
-## 21. 原生业务节点与引擎 MVVM 适配重构（已确认，待实现）
+## 21. 原生业务节点与引擎 MVVM 适配重构（已实现）
 
 用户要求业务 UI 直接继承对应引擎的节点基类，挂载在 Prefab／场景上，使用原生序列化字段、编辑器配置和引擎能力。已确认完整迁移 Unity、Godot 的适配、生成器、MVVM、Demo、测试和全部用户文档。Core 保持渲染无关，结构 Root 和逻辑容器仍由 Core 管理；业务节点由资源实例化取得，不通过普通 C# 构造函数建立原生对象。
 
@@ -1856,10 +1856,10 @@ Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源�
 
 控件重命名、移动到其他父节点后，同一控件的绑定应保持有效；保存重开、Undo／Redo、Prefab Override、PackedScene／Prefab 克隆及多个实例必须验证引用正确指向各自实例，不交叉引用其他窗口或模板控件。删除控件或真正丢失引用时直接报错，不按旧路径、同名节点或其他控件保底重绑，不以每帧扫描维持引用。
 
-本节记录后续重构要求，不代表原生节点或编辑器发现优化已实现。第 20 节教程与现有用户文档反映当前实现，实施重构时一并替换资源、代码和说明。
+本节是当前设计契约，实施与验证结果见 21.1–21.5。第 20 节为旧教程阶段记录；当前 Getting Started、Manual、Demo 与 API 使用原生业务脚本工作流。
 
 
-### 21.1 Core 身份与创建阶段（实施中）
+### 21.1 Core 身份与创建阶段（阶段记录）
 
 Core 增加 IUINode，业务对象通过一个 Core UINode 执行状态与清理。容器泛型、查询、历史和输入所有者返回业务身份；生命周期和转场 Node／Source／Target 同样保留实际业务对象。资源原生业务节点通过 IUIResourceNodeProvider 取得；注册配置回调在 Context 与参数建立后、MVVM／业务初始化前执行。纯 Core／自定义后端使用显式工厂，生成器对 Core 类生成工厂，对原生资源节点使用资源注册；不反射构造引擎脚本。
 
@@ -1867,7 +1867,7 @@ Core 增加 IUINode，业务对象通过一个 Core UINode 执行状态与清理
 
 用户进一步要求编辑器可配置转换器，参考 [UE MVVM 工作流](https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-viewmodel-for-unreal-engine)。绑定行支持类型筛选的转换函数选择；选择后显示函数参数配置，遵循 UE 一个输入、一个返回值的转换函数范围，输入可来自明确常量或 VM 成员，成员变更触发重新求值；本轮不添加多输入转换机制。双向绑定的正向和反向分别配置，不能猜测逆转换。沿用显式 Converter 标记与 Cecil 直接调用，不增加运行时反射业务调用或新 Analyzer；GUI 配置、预览和运行时使用同一转换执行逻辑，错误原样传播。
 
-### 21.2 原生基类与资源阶段（实施中）
+### 21.2 原生基类与资源阶段（阶段记录）
 
 两端业务基类已改为原生组件：Unity UINode 继承 MonoBehaviour，Godot UINode 继承 Control。资源注册从 Prefab／PackedScene 根节点取得实际业务脚本，配置回调在 Context 与参数建立后执行，框架初始化前完成 Awake／_Ready；原生回调仅负责本地控件准备，Context 业务使用框架初始化。GetRoot 与 GetControl 使用统一名称；业务脚本可直接序列化原生控件引用。Godot 的原生 Name／IsVisible 与逻辑命名冲突，因此两端业务基类统一暴露 UIName／IsUIVisible，IUINode 接口仍使用 Name／IsVisible。
 
@@ -1888,3 +1888,15 @@ Godot 编辑配置后保留选中绑定并重建详情；选择转换函数后�
 两端业务窗口均继承引擎原生 UINode／参数节点／结果弹窗，独立脚本与资源根节点对应；Core 工厂仅用于结构节点和隔离适配测试。Godot 确认窗口使用独立 Confirm.tscn，不再与业务 Modal 的根脚本混用同一场景。确认文本通过 Register 配置回调赋值，移除引擎脚本的业务构造参数。Unity 窗口 Prefab 已通过原生 Editor API 挂载对应组件，资源编排器同步生成原生业务脚本；控件查询使用统一 GetControl，列表所属节点采用 IUINode。
 
 两端 Demo 构建无错误。Godot 完整客户端 139 项、Unity 原生 Play Mode 31 项通过，Godot 生命周期独立检查 13 项通过。Godot 退出仍出现少量 RefCounted 引用计数为零的 ObjectDB 警告（完整客户端 3 个，独立生命周期 2 个），尚未定位，不标为已解决，不在业务添加 GC 或降级掩盖。完整资产发现、原生绑定目标引用及其余用户文档仍在迁移。
+
+### 21.5 原生 MVVM 配置与用户文档（2026-10-06）
+
+两端来源配置仅保存 VM 资产引用，删除 TypeName，不再列出普通 C# 类型。编辑器按 ViewModel 的显式标记发现 ScriptableObject／Resource 资产，提供搜索与定位。Manual 资产声明类型并提供明确预览样本；预览独立克隆，运行时仍必须由业务提供实例。列表 Item 来源由条目节点直接提供，项目普通 C# 条目不保存类型引用；无需另外声明 Item 来源资产。
+
+Unity 的 MvvmBindings 继续保存组件引用与数据列表，所有 GUI 配置通过 SerializedObject／SerializedProperty 写入，支持 Undo／Prefab 修改；控件 Inspector 的绑定入口按需通过 Undo 添加可选组件。Godot MvvmBindings 同时保存原生 Control 引用数组和绑定 Resource，新增、删除、移动及 Undo 同步修改两组数据；ViewBindingResource 移除 Target NodePath，运行时不按控件路径解析。真正丢失引用直接报错。
+
+两端预览和运行时共用 GetOptions：先校验原始转换配置，再将预览设为只更新显示，避免掩盖无效反向函数或常量写回。先完成配置校验再连接控件事件，失败不残留订阅。可复用 NodeLifecycle 的初始化和清理统一接受 IUINode，传入实际业务身份；新增回归。节点扩展仍面向 Core 状态，负责框架模块的低层接入。
+
+全站更新统一适配名称、原生业务基类与资源挂载、注册回调依赖注入、生命周期身份及资产配置说明。Core／生成器 165、MVVM 41、Godot 客户端 139、原生 MVVM 14、Unity Play Mode 31 项通过。两端原生编辑器验证转换器参数、Undo、预览恢复、Manual 样本、资源保存重开及控件重命名／换父节点／克隆后的引用映射；验证脚本可重复运行。WebGL IL2CPP 高裁剪示例实际构建并在 Chromium 通过 17 项，结果弹窗改为原生组件。用户文档链接／双语代码、站点构建、65 页浏览器检查及 15 项无引擎示例通过；参数与生命周期原生示例编译无警告无错误。Godot 退出 RefCounted 警告继续如 21.4 保留记录，尚未定位。
+
+最终补验：Godot 原生首个窗口教程 8 项、Unity 原生节点 7 项通过；Unity 的转换配置 SerializedProperty 修改产生 Prefab Override，Undo 恢复原始配置。转换器、原生绑定引用和资产来源阶段已完成并验证；Godot SDK 退出时 RefCounted 警告作为明确未解决项保留。

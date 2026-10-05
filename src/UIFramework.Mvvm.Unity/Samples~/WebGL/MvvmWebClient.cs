@@ -1,3 +1,4 @@
+using UINode = global::UIFramework.UINode;
 using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections.ObjectModel;
@@ -30,13 +31,12 @@ namespace MvvmWebSample
     [ViewModel] public sealed class PlayerAsset : ScriptableObject
     { [SerializeField] private int gold; [FieldNotify] public int Gold { get => gold; set => gold = value; } }
     public static class TextConversions { [Converter] public static string Gold(int value) => "Gold " + value; }
-    public sealed class Confirm : DialogNode<bool> { }
     internal sealed class Views : IUIResourceLoader, IUIResource
     {
         public EngineUI.UIHost Host;
         public Task<IUIResource> LoadAsync(string path, CancellationToken token) => Task.FromResult<IUIResource>(this);
         public IUIElement Instantiate(IUIElement mount)
-        { var go = new GameObject("Dialog", typeof(RectTransform)); var rect = (RectTransform)go.transform; rect.SetParent(((EngineUI.UIElement)mount).Rect, false); return new EngineUI.UIElement(Host, rect, true); }
+        { var go = new GameObject("Dialog", typeof(RectTransform), typeof(Confirm)); var rect = (RectTransform)go.transform; rect.SetParent(((EngineUI.UIElement)mount).Rect, false); return new EngineUI.UIElement(Host, rect, true); }
         public void Dispose() { }
     }
     public sealed class MvvmWebClient : MonoBehaviour

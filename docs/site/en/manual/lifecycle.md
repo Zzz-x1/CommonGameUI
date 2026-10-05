@@ -23,26 +23,26 @@ using System.Threading.Tasks;
 using Godot;
 using UIFramework;
 using UIFramework.Godot;
+using EngineUI = UIFramework.Godot;
 
 public sealed class PlayerProfile
 {
     public string Nickname { get; set; } = "Traveller";
 }
-public sealed class ProfileView : UINode
+public partial class ProfileView : EngineUI.UINode
 {
-    private readonly PlayerProfile _profile;
+    public PlayerProfile Profile { get; set; } = null!;
     private AnimationPlayer _decoration = null!;
-    public ProfileView(PlayerProfile profile) { _profile = profile; }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _decoration = this.GetControl().GetNode<AnimationPlayer>("Decoration");
+        _decoration = this.GetRoot().GetNode<AnimationPlayer>("Decoration");
         _decoration.Play("idle");
         _decoration.Active = false;
         return Task.CompletedTask;
     }
     protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
     {
-        this.GetControl<Label>("Content/PlayerName").Text = _profile.Nickname;
+        this.GetControl<Label>("Content/PlayerName").Text = Profile.Nickname;
         return Task.CompletedTask;
     }
     protected override void OnActivated(StateChangeContext context) => _decoration.Active = true;
@@ -51,7 +51,7 @@ public sealed class ProfileView : UINode
 ```
 
 ```csharp
-ui.Register(() => new ProfileView(profile), "res://Profile.tscn");
+ui.Register<ProfileView>("res://Profile.tscn", view => view.Profile = profile);
 await pages.PushAsync<ProfileView>();
 ```
 
@@ -66,6 +66,7 @@ var objectLifetime = gameUI.BindLifetime(gameObject);
 var sceneLifetime = ui.BindLifetime(gameObject.scene);
 
 // Godot: using UIFramework.Godot;
+using EngineUI = UIFramework.Godot;
 // A scene is represented by its root node.
 var godotLifetime = gameUI.BindLifetime(sceneRoot);
 ```
@@ -73,7 +74,7 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - A Node binding cleans up its subtree. A Context/Root binding also releases Context resources.
 - Unity hides both its scene anchor and persistent observer in the Hierarchy. Godot adds no scene nodes.
 - Destruction triggers cleanup; disabling, hiding or removing from the hierarchy does not. Godot QueueFree also triggers it.
-- One binding per node. `binding.Dispose()` disconnects it, preserving the node and the supplied engine object.
+- Native scripts automatically bind to their component lifetime; one additional explicit owner binding is allowed. `binding.Dispose()` disconnects it, preserving the node and the supplied engine object.
 - Cleanup starts on a subsequent engine frame. Do not assume Destroy/Free completes it synchronously.
 - `binding.Completion` waits for cleanup, or completes immediately when explicitly disconnected. For normal closure, still await the container operation or DisposeAsync.
 - Binding does not navigate to the main menu. Automatic cleanup plays no exit transition and cancels active operations. Observe all operation tasks started by your project.
@@ -83,7 +84,7 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 ## Key points
 
 - Initialize runs once; enter/exit may repeat. Hide retains; disposal ends the subtree.
-- IsVisible is visibility, IsActive stable activity, and IsInteractive also includes input locks.
+- Native scripts expose UIName / IsUIVisible to avoid engine name collisions. IsActive describes stable activity; IsInteractive also includes input locks.
 - Synchronous notifications are read-only toward the framework. Lifecycle cannot dispose its node/ancestors.
 - Register AddLifecycle before attach. Idle removal stops notifications; initialized behavior still needs disposal.
 

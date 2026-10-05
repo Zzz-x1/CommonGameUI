@@ -4,7 +4,7 @@
 
 ## 用法
 
-将生成器作为 Analyzer 引用；业务类使用公开、顶层、非泛型且可无参构造的类型。服务构造仍用手写工厂。
+将生成器作为 Analyzer 引用；业务类使用公开、顶层、非泛型的原生节点，并挂载到所声明的场景根节点。Godot 脚本需要 partial。依赖注入使用手写资源注册的配置回调。
 
 项目引用如下，按项目位置调整路径：
 
@@ -15,6 +15,7 @@
 
 ```csharp
 using UIFramework;
+using EngineUI = UIFramework.Godot;
 
 namespace Game.UI
 {
@@ -24,9 +25,9 @@ namespace Game.UI
         public ItemArgs(string itemId) { ItemId = itemId; }
     }
     [UIResource("res://Inventory.tscn")]
-    public sealed class InventoryView : UINode { }
+    public partial class InventoryView : EngineUI.UINode { }
     [UIResource("res://Compare.tscn", WindowMode = WindowInstanceMode.Multiple)]
-    public sealed class CompareView : UINode<ItemArgs> { }
+    public partial class CompareView : EngineUI.UINode<ItemArgs> { }
 }
 // In caller code: using UIFramework.Generated; using Game.UI;
 // ui.RegisterGeneratedUI();

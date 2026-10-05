@@ -12,11 +12,11 @@ UINode Root { get; }
 IUIHost Host { get; }
 IUIResourceLoader Loader { get; }
 IUILog Log { get; }
-UINode? InputOwner { get; } // Set by the framework.
+IUINode? InputOwner { get; } // Set by the framework.
 IUITransition DefaultTransition { get; set; }
-void Register<T>(string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode, new()
-void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode
-Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : UINode
+void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : class, IUINode
+void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null) where T : class, IUINode
+Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
 ValueTask DisposeAsync()
 ```
 
@@ -33,6 +33,24 @@ interface IUIContextExtension
 void UIContextExtensions.Register(Func<IUIContextExtension> factory);
 ```
 
+## 共有节点身份
+
+Core 结构节点与引擎业务脚本均实现 `IUINode`。容器的返回值、Children、History、Current、输入所有者和生命周期描述使用实际业务身份。接口的 Name／IsVisible 对应原生基类 UIName／IsUIVisible；业务通常无需访问背后的 Core Node。
+
+```csharp
+// IUINode: common state and lifecycle operations listed below.
+UINode Node { get; }
+IUINode? Parent { get; }
+IReadOnlyList<IUINode> Children { get; }
+// IParameterizedNode<out TArgs> : IUINode
+TArgs Parameters { get; }
+// IDialogNode<TResult> : IUINode
+void Complete(TResult result);
+Task<TResult> WaitForResultAsync(CancellationToken cancellationToken);
+// IUIResourceNodeProvider: implemented by native display adapters.
+IUINode GetNode(Type businessType);
+```
+
 ## UINode / `UINode<TArgs>`
 
 普通节点初始隐藏；Context 在未挂载时不可取。状态属性由框架维护；Transition=null 表示继承。AddLifecycle 仅挂载前，RemoveLifecycle 可在静止的 Ready 状态取消后续通知，但已初始化行为仍在销毁时清理。Attach 不支持重挂载。
@@ -41,7 +59,7 @@ void UIContextExtensions.Register(Func<IUIContextExtension> factory);
 Guid Id { get; }
 string Name { get; }
 UINode? Parent { get; }
-IReadOnlyList<UINode> Children { get; }
+IReadOnlyList<IUINode> Children { get; }
 UIContext Context { get; }
 IUIElement? Element { get; }
 NodeState State { get; }
@@ -60,8 +78,8 @@ event Action<TransitionState>? TransitionChanged;
 Func<CancellationToken, Task>? DismissRequested { get; set; }
 void AddLifecycle(INodeLifecycle handler)
 void RemoveLifecycle(INodeLifecycle handler)
-Task AttachAsync(UINode parent, string name, IUIElement? element = null, CancellationToken cancellationToken = default)
-UINode GetChild(string name)
+Task AttachAsync(IUINode parent, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null)
+IUINode GetChild(string name)
 ValueTask DisposeAsync()
 // UINode<TArgs>:
 TArgs Parameters { get; }
@@ -98,7 +116,7 @@ protected virtual void OnOperationLockChanged(bool locked)
 protected Task<T> OperateAsync<T>(string operation, Func<CancellationToken, Task<T>> action, CancellationToken token, Action? beforeLock = null)
 protected LifecycleContext Describe(UINode node, LifecycleReason reason, UINode? source, UINode? target)
 protected void CompleteChange(LifecycleContext operation, UINode? exiting, LifecycleContext? exit, UINode? entering, LifecycleContext? enter, Action? focus = null)
-protected Task FinishCloseAsync(UINode node, Action notify)
+protected Task FinishCloseAsync(IUINode node, Action notify)
 protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation, TransitionDirection direction = TransitionDirection.None)
 ```
 
@@ -121,11 +139,11 @@ IUITransition? ChildTransition { get; set; }
 独立窗口；隐藏保留，关闭销毁。
 
 ```csharp
-Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
-bool TryGet<T>(out T? node) where T : UINode
-Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
-Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
-Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
+bool TryGet<T>(out T? node) where T : class, IUINode
+Task HideAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task ShowAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
 
 ### `StackContainerNode`
@@ -133,11 +151,11 @@ Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancel
 页面历史；返回恢复原实例。
 
 ```csharp
-IReadOnlyList<UINode> History { get; }
-UINode? Current { get; }
-Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
+IReadOnlyList<IUINode> History { get; }
+IUINode? Current { get; }
+Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
 Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
-Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task PopToAsync(IUINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
 
 ### `TabContainerNode`
@@ -145,12 +163,12 @@ Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken canc
 绑定内嵌页面并选择显示项。
 
 ```csharp
-IReadOnlyDictionary<string, UINode> Items { get; }
+IReadOnlyDictionary<string, IUINode> Items { get; }
 string? CurrentName { get; }
-UINode? Current { get; }
-Task BindAsync(string name, UINode node, IUIElement? embeddedElement = null, CancellationToken cancellationToken = default)
+IUINode? Current { get; }
+Task BindAsync(string name, IUINode node, IUIElement? embeddedElement = null, CancellationToken cancellationToken = default)
 Task SwitchAsync(string name, bool playAnimation = true, CancellationToken cancellationToken = default)
-Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
+Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
 Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
 
@@ -159,15 +177,15 @@ Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = 
 嵌套弹窗；只有顶层接受输入。
 
 ```csharp
-UINode? Current { get; }
+IUINode? Current { get; }
 ModalBackdropMode BackdropMode { get; }
 IUIBackdrop? CurrentBackdrop { get; }
 void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
 Task<bool> RequestDismissAsync(CancellationToken token = default)
-Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
-Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
-Task CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
-Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : DialogNode<TResult>
+Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
+Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task CloseToAsync(IUINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IDialogNode<TResult>
 ```
 
 ### `DialogNode<TResult>`
@@ -183,12 +201,12 @@ void Complete(TResult result)
 IsFirstEnter 由 HasEntered 决定。Reason 区分实际操作原因，Source／Target 可能为 null。StateChangeContext 的 Previous／Current 是有效状态，非局部控件开关。
 
 ```csharp
-LifecycleContext(UINode node, ContainerNode? container, LifecycleReason reason, UINode? source = null, UINode? target = null)
+LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source = null, IUINode? target = null)
 // Properties: Node, Container, Reason, Source, Target, IsFirstEnter (all get-only).
 StateChangeContext(LifecycleContext operation, bool previous, bool current)
 // Properties: Operation, Node, Previous, Current (all get-only).
 // INodeLifecycle; NodeLifecycle provides virtual no-op implementations:
-Task InitializeAsync(UINode node, CancellationToken token)
+Task InitializeAsync(IUINode node, CancellationToken token)
 Task EnteringAsync(LifecycleContext context, CancellationToken token)
 void Entered(LifecycleContext context)
 Task ExitingAsync(LifecycleContext context, CancellationToken token)
@@ -196,7 +214,7 @@ void Exited(LifecycleContext context)
 void Activated(StateChangeContext context)
 void Deactivated(StateChangeContext context)
 void VisibilityChanged(StateChangeContext context)
-Task DisposeAsync(UINode node)
+Task DisposeAsync(IUINode node)
 ```
 
 ## Transitions / resources / failures

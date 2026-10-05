@@ -90,4 +90,6 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 
 Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTarget`, `ICollectionTarget`, or use `BindingValueTarget<T>`. Targets handle native control access and events; the module handles subscriptions, paths, conversions, ownership and tasks.
 
+`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Sources use `ViewModelSourceData.Template` in Unity and `ViewModelSourceResource.Template` in Godot, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
+
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)

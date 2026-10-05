@@ -4,12 +4,12 @@ Follow [Godot Getting Started](../getting-started/godot.md) for setup.
 
 ## Resources and controls
 
-- PackedScene roots use Control; register res:// paths.
+- Attach a business script inheriting the adapter UINode (Control) to the PackedScene root; register res:// paths.
 - Empty mounts/full-screen roots use MouseFilter.Ignore; actual panels receive input.
 - AttachToAsync/BindAsync borrow Controls. GetControl accesses widgets by relative path.
 
 ```csharp
-var ui = GodotUI.Create(this);
+var ui = UI.Create(this);
 ui.Register<InventoryView>("res://UI/Inventory.tscn");
 var windows = await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", mount);
 var inventory = await windows.OpenAsync<InventoryView>();

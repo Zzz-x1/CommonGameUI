@@ -30,7 +30,7 @@ public class PlayerVm
 Create your UIContext as usual. MVVM initializes and releases automatically:
 
 ```csharp
-var ui = GodotUI.Create(this); // Unity: UnityUI.Create(canvas, events)
+var ui = UI.Create(this); // Unity: UI.Create(canvas, events)
 ```
 
 Provide sources and bindings during node initialization:
@@ -82,7 +82,7 @@ Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive prope
 
 ## Lists and commands
 
-Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `GodotCollectionTarget` / `UnityCollectionTarget`. Add `MvvmBindings` to the item scene or Prefab and declare a **Manual / Item** source. Items can be basic nodes without a business View class.
+Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `CollectionTarget` / `CollectionTarget`. Add `MvvmBindings` to the item scene or Prefab and declare a **Manual / Item** source. Items can be basic nodes without a business View class.
 
 Moving retains item instances; removal detaches bindings and releases the item. Ordinary arrays support one-time display. Project resources define layout. The module provides no virtualization, sorting or extra pool.
 

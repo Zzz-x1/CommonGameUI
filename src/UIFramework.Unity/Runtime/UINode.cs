@@ -89,7 +89,7 @@ public abstract class UINode : MonoBehaviour, IUINode
     {
         private readonly UINode _owner;
         public NativeLifecycle(UINode owner) { _owner = owner; }
-        public override Task InitializeAsync(CoreNode node, CancellationToken token)
+        public override Task InitializeAsync(IUINode node, CancellationToken token)
         { _owner.PrepareLifetime(); return _owner.OnInitializeAsync(token); }
         public override Task EnteringAsync(LifecycleContext context, CancellationToken token) => _owner.OnEnteringAsync(context, token);
         public override void Entered(LifecycleContext context) => _owner.OnEntered(context);
@@ -98,7 +98,7 @@ public abstract class UINode : MonoBehaviour, IUINode
         public override void Activated(StateChangeContext context) => _owner.OnActivated(context);
         public override void Deactivated(StateChangeContext context) => _owner.OnDeactivated(context);
         public override void VisibilityChanged(StateChangeContext context) => _owner.OnVisibilityChanged(context);
-        public override Task DisposeAsync(CoreNode node) => _owner.OnDisposeAsync();
+        public override Task DisposeAsync(IUINode node) => _owner.OnDisposeAsync();
     }
 }
 

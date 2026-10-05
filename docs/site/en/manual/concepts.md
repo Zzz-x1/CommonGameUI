@@ -2,6 +2,8 @@
 
 A Node can represent a screen or simply organize the hierarchy. A Container is a Node with opening, switching or return operations.
 
+Business UI scripts inherit `UIFramework.Unity.UINode` (MonoBehaviour) or `UIFramework.Godot.UINode` (Control) and attach to the resource root. Core `UINode` provides Root, containers and renderer-independent extensions. Containers return the actual business script; `IUINode` represents shared identity and state.
+
 ## Usage
 
 UIContext provides registration, resource services and Root. A business class can be named InventoryView; IUIElement connects it to engine widgets.

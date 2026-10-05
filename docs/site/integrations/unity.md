@@ -4,17 +4,17 @@
 
 ## 资源与控件
 
-- Prefab 根为 RectTransform，保存在 Resources 下，注册路径不带扩展名。
+- Prefab 根为 RectTransform，并挂载继承适配 UINode 的业务脚本（MonoBehaviour），保存在 Resources 下，注册路径不带扩展名。
 - 挂载和资源根不放可命中的全屏 Graphic；弹窗遮罩由 Modal 创建。
-- Tab 绑定既有 RectTransform，不克隆。GetRect／GetComponent 访问真实控件。
+- Tab 绑定既有 RectTransform，不克隆。GetRoot／GetControl 访问真实控件。
 
 ```csharp
-var ui = UnityUI.Create(canvas, eventSystem);
+var ui = UI.Create(canvas, eventSystem);
 ui.Register<InventoryView>("UI/Inventory");
 var pages = await ui.Root.CreateContainerAsync<StackContainerNode>("Pages", pageMount);
-pages.ChildTransition = UnityTransitions.SlideHorizontal(targetPath: "Content");
+pages.ChildTransition = Transitions.SlideHorizontal(targetPath: "Content");
 var inventory = await pages.PushAsync<InventoryView>();
-Button close = inventory.GetComponent<Button>("Content/Close");
+Button close = inventory.GetControl<Button>("Content/Close");
 ```
 
 ## 生命周期与动画

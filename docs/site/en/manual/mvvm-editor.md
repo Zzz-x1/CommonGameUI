@@ -4,13 +4,13 @@ Add `MvvmBindings` to the view root. In Unity open **Window → UIFramework → 
 
 ## 1. Add Viewmodels
 
-Add named sources such as `Player`, `Settings` and `Inventory`. Select the VM type, creation mode and optional template asset.
+Add named sources such as `Player`, `Settings` and `Inventory`. Select a native VM asset and its creation mode.
 
 - Use **CreateInstance** for independent details.
 - Use **Manual** for business-owned objects; call `SetViewModel` during node initialization.
 - Use **SharedAsset** when several views reference the same asset.
 
-The type list includes project types marked with `ViewModel`. Pick native `ScriptableObject` / `Resource` assets. Plain C# classes use a type configuration or registered factory.
+The asset list discovers native `ScriptableObject` / `Resource` VMs marked `ViewModel`, with search and locate actions. Godot VM resources require `[Tool]`. Asset references determine types; type names are not stored. Plain C# VMs use code creation and binding.
 
 ## 2. Create View Bindings
 
@@ -44,17 +44,11 @@ Custom functions are static methods marked `[Converter]`, with one argument and 
 
 Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.
 
-Manual sources require a project sample:
-
-```csharp
-PreviewSources.Register(() => new PlayerVm { Gold = 12000 });
-```
-
-Without one, the editor explicitly reports a missing preview source. Samples are project-provided data; the module never invents runtime state.
+A Manual source references an asset to declare its type and provide a preview sample. Preview clones the asset. Runtime still requires the business to call `SetViewModel`; it never substitutes the sample. Missing assets prevent preview.
 
 ## Save
 
-Unity stores configuration in the component and saves it with the Prefab / scene, including Undo and Prefab Overrides. Godot uses scene Resources and native Undo. Saving and reopening retains the configuration.
+Unity stores configuration in the component and saves it with the Prefab / scene, including Undo and Prefab Overrides. Godot stores binding Resources and a native control reference array on the scene component; the editor edits both together with native Undo. Targets do not depend on framework-maintained hierarchy paths. Renaming, reparenting and reopening preserve references.
 
 Preview does not save the scene. Stop preview before editing configuration so display values remain separate from authored values.
 

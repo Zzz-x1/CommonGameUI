@@ -47,8 +47,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private void StartPreview()
     {
         StopPreview(); RequireView();
-        var missing = _view!.Sources.FirstOrDefault(s => s.Creation == ViewModelCreation.Manual && !PreviewSources.Has(s.Type));
-        if (missing != null) { _status.Text = "缺少预览来源：" + missing.Name; return; }
+        var missing = _view!.ViewModels.FirstOrDefault(s => s.Template == null);
+        if (missing != null) { _status.Text = "缺少 VM 资产：" + missing.Name; return; }
         _preview = new EngineMvvm.BindingPreview(_view);
         _status.Text = "预览中：不执行命令或修改原始资产";
     }
@@ -67,8 +67,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
         while (_view == null && current != null) { _view = current.GetChildren().OfType<MvvmBindings>().SingleOrDefault(); current = current.GetParent() as Control; }
         if (_view == null) throw new InvalidOperationException("先在界面根节点添加 MvvmBindings。");
         var view = _view;
-        var binding = new ViewBindingResource { Target = view.GetParent().GetPathTo(control), Member = member.Length == 0 ? DefaultMember(control) : member };
-        Change("Add View Binding", () => view.Bindings.Add(binding), () => view.Bindings.Remove(binding));
+        var binding = new ViewBindingResource { Member = member.Length == 0 ? DefaultMember(control) : member };
+        Change("Add View Binding", () => view.AddBinding(control, binding), () => { var index = view.Bindings.IndexOf(binding); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); });
         _editorDock.MakeVisible();
     }
     private static string DefaultMember(Control control) => control is BaseButton ? "ButtonPressed" : control is global::Godot.Range ? "Value" : "Text";
@@ -78,7 +78,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
         Change("Add Viewmodel", () => view.ViewModels.Add(source), () => view.ViewModels.Remove(source));
     }
     private void AddBinding(string path = "")
-    { RequireView(); var view = _view!; var b = new ViewBindingResource { Source = path }; Change("Add View Binding", () => view.Bindings.Add(b), () => view.Bindings.Remove(b)); }
+    { RequireView(); var view = _view!; var b = new ViewBindingResource { Source = path }; Change("Add View Binding", () => view.AddBinding(null!, b), () => { var index = view.Bindings.IndexOf(b); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }); }
     private void RequireView() { if (_view == null) throw new InvalidOperationException("选择界面上的 MvvmBindings。"); }
     private void Change(string label, Action perform, Action reverse)
     {
@@ -94,8 +94,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
         _sources.Clear(); _bindings.Clear(); ClearDetails();
         if (_view == null) return;
         var sourceRoot = _sources.CreateItem(); foreach (var source in _view.ViewModels) { var row = _sources.CreateItem(sourceRoot); row.SetText(0, source.Name + " · " + source.Creation); row.SetMetadata(0, source); if (source == selectedSource) row.Select(0); }
-        var root = _bindings.CreateItem(); foreach (var b in _view.Bindings.Where(b => (b.Target + " " + b.Source + " " + b.Member).Contains(_search.Text, StringComparison.OrdinalIgnoreCase)))
-        { var row = _bindings.CreateItem(root); row.SetText(0, b.Target + " · " + b.Member); row.SetText(1, b.Source); row.SetText(2, b.Kind == ViewBindingKind.Property ? b.Mode.ToString() : b.Kind.ToString()); row.SetMetadata(0, b); if (b == selectedBinding) row.Select(0); }
+        var root = _bindings.CreateItem(); foreach (var b in _view.Bindings.Where(b => (TargetName(b) + " " + b.Source + " " + b.Member).Contains(_search.Text, StringComparison.OrdinalIgnoreCase)))
+        { var row = _bindings.CreateItem(root); row.SetText(0, TargetName(b) + " · " + b.Member); row.SetText(1, b.Source); row.SetText(2, b.Kind == ViewBindingKind.Property ? b.Mode.ToString() : b.Kind.ToString()); row.SetMetadata(0, b); if (b == selectedBinding) row.Select(0); }
         _status.Text = _view.Bindings.Count + " 条绑定 · 双向绑定初始以 VM 为准";
         if (_bindings.GetSelected() != null) BindingDetails();
         else if (_sources.GetSelected() != null) SourceDetails();
@@ -104,7 +104,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
     {
         var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = view.Bindings.IndexOf(binding); Change("Delete Binding", () => view.Bindings.Remove(binding), () => view.Bindings.Insert(index, binding)); }
+        { var index = view.Bindings.IndexOf(binding); var target = view.Targets[index]; Change("Delete Binding", () => { view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }, () => { view.Targets.Insert(index, target); view.Bindings.Insert(index, binding); }); }
         else if (_sources.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewModelSourceResource source)
         { var index = view.ViewModels.IndexOf(source); Change("Delete Viewmodel", () => view.ViewModels.Remove(source), () => view.ViewModels.Insert(index, source)); }
     }
@@ -112,18 +112,29 @@ public partial class MvvmEditorPlugin : EditorPlugin
     {
         var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = view.Bindings.IndexOf(binding); var next = index + offset; if (next < 0 || next >= view.Bindings.Count) return; Change("Reorder Binding", () => { view.Bindings.RemoveAt(index); view.Bindings.Insert(next, binding); }, () => { view.Bindings.RemoveAt(next); view.Bindings.Insert(index, binding); }); }
+        { var index = view.Bindings.IndexOf(binding); var target = view.Targets[index]; var next = index + offset; if (next < 0 || next >= view.Bindings.Count) return; Change("Reorder Binding", () => { view.Targets.RemoveAt(index); view.Targets.Insert(next, target); view.Bindings.RemoveAt(index); view.Bindings.Insert(next, binding); }, () => { view.Targets.RemoveAt(next); view.Targets.Insert(index, target); view.Bindings.RemoveAt(next); view.Bindings.Insert(index, binding); }); }
     }
     private void ClearDetails() { foreach (var n in _details.GetChildren()) { _details.RemoveChild(n); n.QueueFree(); } }
     private void SourceDetails()
     {
         ClearDetails(); if (_sources.GetSelected()?.GetMetadata(0).AsGodotObject() is not ViewModelSourceResource s) return;
         Text("名称", s.Name, value => Edit(s.Name, value, v => s.Name = v)); Choice("创建方式", s.Creation, v => Edit(s.Creation, v, value => s.Creation = value));
-        var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes()).Where(t => t.IsDefined(typeof(ViewModelAttribute), true) && !t.IsAbstract && !t.IsGenericType).OrderBy(t => t.FullName).ToArray();
-        var picker = new OptionButton(); foreach (var type in types) picker.AddItem(type.FullName); var current = Array.FindIndex(types, t => t.AssemblyQualifiedName == s.TypeName); picker.Selected = current;
-        picker.ItemSelected += index => Edit(s.TypeName, types[index].AssemblyQualifiedName!, value => s.TypeName = value); _details.AddChild(new Label { Text = "VM 类型" }); _details.AddChild(picker);
-        Asset("初始值资产", s.Template, "Resource", value => Edit(s.Template, value, v => s.Template = v));
-        var vmType = s.Template?.GetType() ?? Type.GetType(s.TypeName); if (vmType == null) return;
+        var assets = ViewModelAssetsInProject().ToArray();
+        var filtered = assets;
+        var search = new LineEdit { PlaceholderText = "搜索 VM 资产" }; _details.AddChild(search);
+        var picker = new OptionButton();
+        void Filter(string text)
+        {
+            filtered = assets.Where(asset => asset.ResourcePath.Contains(text, StringComparison.OrdinalIgnoreCase)).ToArray();
+            picker.Clear(); picker.AddItem("选择 VM 资产"); foreach (var asset in filtered) picker.AddItem(asset.ResourcePath);
+            picker.Selected = s.Template == null ? 0 : Array.FindIndex(filtered, asset => asset == s.Template) + 1;
+        }
+        Filter(""); search.TextChanged += Filter;
+        picker.ItemSelected += index => { if (index > 0) Edit(s.Template, filtered[index - 1], value => s.Template = value); };
+        _details.AddChild(new Label { Text = "VM 资产" }); _details.AddChild(picker);
+        if (s.Template == null) return;
+        Button(_details, "定位资产", () => EditorInterface.Singleton.EditResource(s.Template));
+        var vmType = s.Template.GetType();
         var members = new MvvmMemberTree { HideRoot = true, CustomMinimumSize = new Vector2(0, 150) }; _details.AddChild(members); var root = members.CreateItem();
         foreach (var property in vmType.GetProperties().Where(p => p.IsDefined(typeof(FieldNotifyAttribute), true))) { var row = members.CreateItem(root); row.SetText(0, property.Name + " : " + property.PropertyType.Name); row.SetMetadata(0, s.Name + "." + property.Name); }
         foreach (var method in vmType.GetMethods().Where(m => m.IsDefined(typeof(CommandAttribute), true))) { var row = members.CreateItem(root); row.SetText(0, method.Name + " : Command"); row.SetMetadata(0, s.Name + "." + method.Name); }
@@ -131,10 +142,10 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private void BindingDetails()
     {
         ClearDetails(); if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is not ViewBindingResource b) return;
-        Text("控件路径", b.Target, v => Edit(b.Target, new NodePath(v), value => b.Target = value)); Text("目标属性", b.Member, v => Edit(b.Member, v, value => b.Member = value));
+        Target(b); Text("目标属性", b.Member, v => Edit(b.Member, v, value => b.Member = value));
         if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel) Text("来源路径", b.Source, v => Edit(b.Source, v, value => b.Source = value));
-        Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value)); Choice("方向", b.Mode, v => Edit(b.Mode, v, value => b.Mode = value));
-        var sourceType = SourceType(b.Source); var target = _view!.GetParent().GetNodeOrNull<Control>(b.Target); Type? targetType = null;
+        Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value)); Choice("方向", b.Mode, v => { var oldMode = b.Mode; var oldInput = b.ConverterInput; Change("Change Binding Direction", () => { b.Mode = v; if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) b.ConverterInput = ConverterInput.ViewModel; }, () => { b.Mode = oldMode; b.ConverterInput = oldInput; }); });
+        var sourceType = SourceType(b.Source); var target = _view!.Targets[_view.Bindings.IndexOf(b)]; Type? targetType = null;
         if (target != null && b.Kind == ViewBindingKind.Property) { using var property = EngineMvvm.BindingTargets.Property(target, b.Member); targetType = property.ValueType; }
         if (b.Kind != ViewBindingKind.Property)
         {
@@ -154,8 +165,36 @@ public partial class MvvmEditorPlugin : EditorPlugin
         var nullable = new CheckButton { Text = "显式空值显示", ButtonPressed = b.HasNullValue }; nullable.Toggled += v => Edit(b.HasNullValue, v, value => b.HasNullValue = value); _details.AddChild(nullable);
         Text("空值内容", b.NullValue, v => Edit(b.NullValue, v, value => b.NullValue = value)); Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
     }
+    private string TargetName(ViewBindingResource binding)
+    { var target = _view!.Targets[_view.Bindings.IndexOf(binding)]; return GodotObject.IsInstanceValid(target) ? target.Name.ToString() : "选择控件"; }
+    private void Target(ViewBindingResource binding)
+    {
+        var view = _view!; var index = view.Bindings.IndexOf(binding); var original = view.Targets[index];
+        var controls = Controls(view.GetParent()).ToArray(); var picker = new OptionButton(); picker.AddItem("选择控件");
+        foreach (var control in controls) picker.AddItem(control.Name.ToString() + " · " + control.GetType().Name);
+        picker.Selected = Array.IndexOf(controls, original) + 1;
+        picker.ItemSelected += selected => { if (selected > 0) Edit(original, controls[selected - 1], value => view.Targets[index] = value); };
+        _details.AddChild(new Label { Text = "目标控件引用" }); _details.AddChild(picker);
+    }
+    private static IEnumerable<Control> Controls(global::Godot.Node node)
+    { if (node is Control control) yield return control; foreach (var child in node.GetChildren()) foreach (var nested in Controls(child)) yield return nested; }
+    private static IEnumerable<Resource> ViewModelAssetsInProject()
+    {
+        return Read(EditorInterface.Singleton.GetResourceFilesystem().GetFilesystem());
+        static IEnumerable<Resource> Read(EditorFileSystemDirectory directory)
+        {
+            for (int i = 0; i < directory.GetFileCount(); i++)
+            {
+                var path = directory.GetFilePath(i);
+                if (path.GetExtension() is not ("tres" or "res")) continue;
+                var resource = ResourceLoader.Load<Resource>(path);
+                if (resource.GetType().IsDefined(typeof(ViewModelAttribute), false)) yield return resource;
+            }
+            for (int i = 0; i < directory.GetSubdirCount(); i++) foreach (var asset in Read(directory.GetSubdir(i))) yield return asset;
+        }
+    }
     private Type? SourceType(string path)
-    { var parts = path.Split('.'); var source = _view!.ViewModels.FirstOrDefault(s => s.Name == parts[0]); var type = source?.Template?.GetType() ?? Type.GetType(source?.TypeName ?? ""); foreach (var part in parts.Skip(1)) type = type?.GetProperty(part)?.PropertyType; return type; }
+    { var parts = path.Split('.'); var source = _view!.ViewModels.FirstOrDefault(s => s.Name == parts[0]); var type = source?.Template?.GetType(); foreach (var part in parts.Skip(1)) type = type?.GetProperty(part)?.PropertyType; return type; }
     private void Converter(string label, string current, Type? input, Type? output, bool constant, Action<string> set)
     { var choices = new[] { "" }.Concat(Converters.Discover().Where(c => (input != null || constant) && output != null && (constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name)).ToArray(); var field = new OptionButton(); foreach (var name in choices) field.AddItem(name.Length == 0 ? "无" : name); field.Selected = Array.IndexOf(choices, current); field.ItemSelected += index => set(choices[index]); _details.AddChild(new Label { Text = label }); _details.AddChild(field); }
     private void Edit<T>(T old, T value, Action<T> set) => Change("Edit View Binding", () => set(value), () => set(old));

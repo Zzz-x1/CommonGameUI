@@ -9,7 +9,7 @@ public sealed class RecordingLifecycle : NodeLifecycle
     public Action<StateChangeContext>? OnActive;
     public Action<StateChangeContext>? OnInactive;
     public Exception? InitializeFailure, DisposeFailure;
-    public override Task InitializeAsync(UINode node, CancellationToken token)
+    public override Task InitializeAsync(IUINode node, CancellationToken token)
     { Events.Add("initialize"); if (InitializeFailure != null) throw InitializeFailure; return Task.CompletedTask; }
     public override Task EnteringAsync(LifecycleContext c, CancellationToken t) { Events.Add("entering:" + c.Reason); return Task.CompletedTask; }
     public override void Entered(LifecycleContext c) { Events.Add("entered:" + c.Reason); OnEntered?.Invoke(c); }
@@ -18,7 +18,7 @@ public sealed class RecordingLifecycle : NodeLifecycle
     public override void Activated(StateChangeContext c) { Events.Add("active"); OnActive?.Invoke(c); }
     public override void Deactivated(StateChangeContext c) { Events.Add("inactive"); OnInactive?.Invoke(c); }
     public override void VisibilityChanged(StateChangeContext c) => Events.Add("visible:" + c.Current);
-    public override Task DisposeAsync(UINode node)
+    public override Task DisposeAsync(IUINode node)
     { Events.Add("dispose"); if (DisposeFailure != null) throw DisposeFailure; return Task.CompletedTask; }
 }
 

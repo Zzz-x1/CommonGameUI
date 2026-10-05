@@ -29,7 +29,7 @@ public partial class MvvmEditorVerification : global::Godot.Node
         Check(config.ViewModels[0].Name == "Renamed", "GUI did not update source");
         var manager = plugin.GetUndoRedo(); manager.GetHistoryUndoRedo(manager.GetObjectHistoryId(view)).Undo(); Check(config.ViewModels[0].Name == "Player", "Native Undo did not restore source");
         var label = new Label { Name = "Gold" }; view.AddChild(label); label.Owner = this; plugin.BindControl(label, "Text");
-        Check(config.Bindings.Count == 1 && config.Bindings[0].Target == new NodePath("Gold"), "Inspector binding entry");
+        Check(config.Bindings.Count == 1 && config.GetTarget(config.Bindings[0]) == label, "Inspector binding entry");
         var bindings = (Tree)typeof(MvvmEditorPlugin).GetField("_bindings", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(plugin)!;
         bindings.GetRoot().GetFirstChild().Select(0);
         typeof(MvvmEditorPlugin).GetMethod("Delete", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(plugin, null);
@@ -43,10 +43,10 @@ public partial class MvvmEditorVerification : global::Godot.Node
         other.QueueFree();
         selection.Clear(); selection.AddNode(config);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        config.ViewModels.Add(new ViewModelSourceResource { Name = "Manual", TypeName = typeof(ClientSettingsVm).AssemblyQualifiedName!, Creation = UIFramework.Mvvm.ViewModelCreation.Manual });
+        config.ViewModels.Add(new ViewModelSourceResource { Name = "Manual", Template = null, Creation = UIFramework.Mvvm.ViewModelCreation.Manual });
         typeof(MvvmEditorPlugin).GetMethod("StartPreview", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(plugin, null);
         var status = (Label)typeof(MvvmEditorPlugin).GetField("_status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(plugin)!;
-        Check(status.Text.Contains("缺少预览来源：Manual"), "Missing Manual preview source was not displayed");
+        Check(status.Text.Contains("缺少 VM 资产：Manual"), "Missing Manual preview source was not displayed");
         config.ViewModels.RemoveAt(1);
         config.Owner = view; label.Owner = view;
         var packed = new PackedScene(); Check(packed.Pack(view) == Error.Ok, "Pack GUI configuration");

@@ -4,7 +4,7 @@ Generate registration and typed calls from resource attributes to reduce repetit
 
 ## Usage
 
-Reference the generator as an Analyzer. Use public top-level non-generic classes with parameterless constructors. Keep service constructors in handwritten factories.
+Reference the generator as an Analyzer. Use public top-level native node classes attached to their declared scene root. Godot scripts require partial. Use handwritten resource registration with a configuration callback to supply services.
 
 Add this project reference, adjusting the relative path:
 
@@ -15,6 +15,7 @@ Add this project reference, adjusting the relative path:
 
 ```csharp
 using UIFramework;
+using EngineUI = UIFramework.Godot;
 
 namespace Game.UI
 {
@@ -24,9 +25,9 @@ namespace Game.UI
         public ItemArgs(string itemId) { ItemId = itemId; }
     }
     [UIResource("res://Inventory.tscn")]
-    public sealed class InventoryView : UINode { }
+    public partial class InventoryView : EngineUI.UINode { }
     [UIResource("res://Compare.tscn", WindowMode = WindowInstanceMode.Multiple)]
-    public sealed class CompareView : UINode<ItemArgs> { }
+    public partial class CompareView : EngineUI.UINode<ItemArgs> { }
 }
 // In caller code: using UIFramework.Generated; using Game.UI;
 // ui.RegisterGeneratedUI();
