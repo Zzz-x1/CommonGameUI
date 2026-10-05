@@ -23,6 +23,7 @@ public class UINode : IAsyncDisposable
     internal bool PublishedVisible, PublishedActive;
     private readonly List<INodeLifecycle> _handlers = new();
     private readonly List<INodeLifecycle> _initializedHandlers = new();
+    private readonly List<IUINodeExtension> _initializedExtensions = new();
     private UIContext? _context;
 
     public bool HasEntered { get; internal set; }
@@ -148,12 +149,18 @@ public class UINode : IAsyncDisposable
             SetLocalState(false, false);
             await RunAsync("Initialize", async token =>
             {
+                foreach (var extension in Context.NodeExtensions)
+                {
+                    _initializedExtensions.Add(extension);
+                    extension.BeforeInitialize(this);
+                }
                 await OnInitializeAsync(token);
                 foreach (var handler in _handlers)
                 {
                     _initializedHandlers.Add(handler);
                     await handler.InitializeAsync(this, token);
                 }
+                foreach (var extension in _initializedExtensions) extension.AfterInitialize(this);
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
                 SetLocalState(InitiallyVisible, InitiallyVisible);
@@ -304,6 +311,8 @@ public class UINode : IAsyncDisposable
             await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
             foreach (var child in Enumerable.Reverse(_children.ToArray()))
                 await Attempt(async () => await child.DisposeAsync());
+            foreach (var extension in _initializedExtensions.AsEnumerable().Reverse())
+                await Attempt(async () => await extension.DisposeAsync(this));
             await Attempt(OnDisposeAsync);
             foreach (var handler in _initializedHandlers.AsEnumerable().Reverse())
                 await Attempt(() => handler.DisposeAsync(this));

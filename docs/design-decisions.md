@@ -1757,3 +1757,15 @@ GitHub Actions 的 Documentation 工作流仅在 PR 构建检查和手动 workfl
 验证：核心／生成器 157 项通过，Godot 客户端 headless 139 项通过，存档重启 4 项通过；新增生命周期专项 13 项单独通过，包含真实设置与对比窗口的外部销毁、项目时间轴／Shader 过场清理及材质释放、异步清理、重叠绑定和原始异常。Unity 6000.3.24f1 隔离 batchmode Play Mode 7 项通过，涵盖隐藏场景管理对象、场景卸载、资源与多层遮罩、未激活对象、解除绑定、重叠绑定、淡入与 AnimationClip 取消、原始错误及未绑定销毁报错。新增 scripts/Test-UnityLifetimes.ps1 和 Run-Demo.ps1 -LifetimeTest 可重复运行专项；测试存档／隔离工程／日志均在忽略目录。
 
 适配器、Demo、测试离线编译无警告无错误。中英文指南、两端 API 与 Demo 操作说明同步更新；68 个 Markdown 的链接、标题锚点、29 组双语代码一致性及站点构建通过，59 页浏览器检查通过。此前 Unity 教程及完整 Demo 时间轴资源的待验证范围不因本次专项验证而自动宣称完成。未推送、未发布网站。
+
+## 18. 可选 MVVM 模块（2026-10-05，已确认，实施中）
+
+采用独立运行时、Mono.Cecil Weaver、Unity／Godot 适配和编辑器模块。普通 VM 无需框架基类；类型使用 ViewModel 标记，逐属性 FieldNotify，计算属性声明依赖，Command 标记业务方法。运行时属性和命令访问由织入代码直接调用，不使用动态代码或反射调用业务方法。
+
+项目显式创建 MvvmRuntime，可跨多个 UIContext。Create Instance 每个界面独立创建；Manual 接受借用实例；Shared Asset 对每个原生 VM 资产克隆一次，同一 Runtime 共享，原始资产不参与运行时写入。Unity 资产为 ScriptableObject，Godot 为 Resource。UseMvvm 一次启用，核心仅提供初始化前／后和异步清理的渲染无关节点扩展接口。
+
+支持四种绑定方向、嵌套路径重新订阅、显式空值表现、静态转换函数、同步／Task 命令与 CanExecute，以及 ObservableCollection／INotifyCollectionChanged 增量列表。默认错误必须抛出，缺失成员、类型错误不得变为空值表现。首版无虚拟化或额外对象池。
+
+两端 GUI 参考 UE Viewmodels、View Bindings、控件属性入口；Unity 使用 UXML／USS，不使用 IMGUI，运行时保持 uGUI。支持原生资产发现、三种来源、拖放搜索、方向与转换、列表条目资源、保存／Undo／Prefab override，以及独立临时 Runtime 安全预览；预览不执行命令、不写原资产。Manual 无预览工厂时明确显示缺少预览来源。
+
+验收包含两端真实游戏 UI 示例、核心和织入回归、Godot headless、Unity 原生编辑器／Play Mode、隔离 WebGL IL2CPP 示例。阶段验证后本地提交，不推送。当前已完成节点扩展和通知／访问 Weaver 初始接入：原有核心 157 项、织入后运行测试 5 项通过（setter 副作用与相等值、计算依赖、继承通知、直接命令与异常身份、双向归一化、嵌套替换与解除订阅）；列表、完整错误边界、两端适配／GUI／预览、Demo 和 AOT 验收仍在实施，不能据此宣称模块完成。

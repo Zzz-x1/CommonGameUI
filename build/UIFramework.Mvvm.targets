@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <MvvmWeaverProject>$(MSBuildThisFileDirectory)../src/UIFramework.Mvvm.Weaver.Tool/UIFramework.Mvvm.Weaver.Tool.csproj</MvvmWeaverProject>
+    <MvvmWeaverDll>$(MSBuildThisFileDirectory)../src/UIFramework.Mvvm.Weaver.Tool/bin/$(Configuration)/net10.0/UIFramework.Mvvm.Weaver.Tool.dll</MvvmWeaverDll>
+  </PropertyGroup>
+  <Target Name="BuildMvvmWeaver" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(MvvmWeaverProject)" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" />
+  </Target>
+  <Target Name="WeaveViewModels" AfterTargets="CoreCompile" BeforeTargets="CopyFilesToOutputDirectory;GenerateBuildDependencyFile;GeneratePublishDependencyFile" Condition="'$(DesignTimeBuild)' != 'true' and Exists('@(IntermediateAssembly)')">
+    <Exec Command="dotnet &quot;$(MvvmWeaverDll)&quot; &quot;@(IntermediateAssembly)&quot; @(ReferencePath->'&quot;%(FullPath)&quot;', ' ')" />
+  </Target>
+</Project>

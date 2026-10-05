@@ -12,6 +12,17 @@ public sealed class UIContext : IAsyncDisposable
     }
     private readonly Dictionary<Type, Registration> _registrations = new();
     private readonly UIResources _resources;
+    private readonly List<IUINodeExtension> _extensions = new();
+    internal IReadOnlyList<IUINodeExtension> NodeExtensions => _extensions;
+    public void AddNodeExtension(IUINodeExtension extension)
+    {
+        Host.VerifyAccess(); VerifyMutation();
+        if (extension == null) throw new ArgumentNullException(nameof(extension));
+        if (Root.Children.Count != 0 || Root.State != NodeState.Ready)
+            throw new InvalidOperationException("Configure node extensions before creating nodes.");
+        if (_extensions.Contains(extension)) throw new InvalidOperationException("Extension already registered.");
+        _extensions.Add(extension);
+    }
     private Task? _disposeTask;
 
     public UIContext(IUIHost host, IUIResourceLoader loader, IUILog? log = null)
