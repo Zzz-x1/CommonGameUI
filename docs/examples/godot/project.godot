@@ -1,0 +1,11 @@
+config_version=5
+[application]
+config/name="UIFramework Tutorial"
+run/main_scene="res://Main.tscn"
+[display]
+window/size/viewport_width=1000
+window/size/viewport_height=700
+[dotnet]
+project/assembly_name="Tutorial"
+[rendering]
+renderer/rendering_method="gl_compatibility"

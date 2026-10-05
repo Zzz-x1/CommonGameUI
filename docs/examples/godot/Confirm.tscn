@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[node name="Confirm" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Content" type="Panel" parent="."]
+offset_left = 280.0
+offset_top = 140.0
+offset_right = 720.0
+offset_bottom = 520.0
+mouse_filter = 0
+
+[node name="Question" type="Label" parent="Content"]
+offset_left = 20.0
+offset_top = 20.0
+text = "Quit the application?"
+
+[node name="Yes" type="Button" parent="Content"]
+offset_left = 20.0
+offset_top = 100.0
+offset_right = 200.0
+offset_bottom = 140.0
+text = "Confirm"
+
+[node name="No" type="Button" parent="Content"]
+offset_left = 220.0
+offset_top = 100.0
+offset_right = 400.0
+offset_bottom = 140.0
+text = "Cancel"

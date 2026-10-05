@@ -1,0 +1,51 @@
+import { createRequire } from 'node:module'
+import { mkdir } from 'node:fs/promises'
+import assert from 'node:assert/strict'
+
+const { chromium } = createRequire(new URL('../docs/site/package.json', import.meta.url))('playwright')
+const base = process.env.DOCS_TEST_URL || 'http://127.0.0.1:4173/'
+const shots = new URL('../artifacts/docs-browser/', import.meta.url)
+await mkdir(shots, { recursive: true })
+const browser = await chromium.launch({ headless: true, executablePath: process.env.DOCS_BROWSER_PATH })
+const errors = []
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('response', response => {
+    if (response.status() >= 400 && response.url().startsWith(base)) errors.push(`${response.status()} ${response.url()}`)
+  })
+  await page.goto(base + 'getting-started/godot.html')
+  await page.locator('.VPSidebar').waitFor({ state: 'visible' })
+  await page.getByRole('heading', { level: 1, name: 'Godot Getting Started' }).waitFor()
+  assert.ok(await page.locator('.language-csharp .copy').count(), 'Copy button missing')
+  await page.screenshot({ path: new URL('desktop.png', shots).pathname.replace(/^\/([A-Z]:)/, '$1'), fullPage: false })
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.locator('.language-csharp .copy').first().click()
+  assert.ok((await page.evaluate(() => navigator.clipboard.readText())).startsWith('using Godot;'), 'Copied code differs')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.locator('.VPNavBarSearch button').click()
+  const input = page.locator('.VPLocalSearchBox input')
+  await input.fill('生命周期')
+  await page.locator('.VPLocalSearchBox .results a').first().waitFor()
+  assert.ok((await page.locator('.VPLocalSearchBox').innerText()).includes('生命周期'), 'Chinese search result missing')
+  await page.keyboard.press('Escape')
+  await page.locator('.VPNavBarTranslations button').click()
+  await page.getByRole('link', { name: 'English', exact: true }).click()
+  await page.waitForURL(/\/en\/getting-started\/godot(?:\.html)?$/)
+  await page.waitForFunction(() => document.documentElement.lang === 'en')
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en')
+  await page.locator('.VPNavBarSearch button').click()
+  await input.fill('Lifecycle')
+  await page.locator('.VPLocalSearchBox .results a').first().waitFor()
+  await page.keyboard.press('Escape')
+  await page.screenshot({ path: new URL('english.png', shots).pathname.replace(/^\/([A-Z]:)/, '$1'), fullPage: false })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  await page.locator('.VPLocalNav .menu').click()
+  await page.locator('.VPSidebar.open').waitFor({ state: 'visible' })
+  await page.waitForFunction(() => document.querySelector('.VPSidebar.open').getBoundingClientRect().left >= -1)
+  assert.ok(await page.locator('.VPSidebar.open').getByText('Manual', { exact: true }).count())
+  await page.screenshot({ path: new URL('mobile-menu.png', shots).pathname.replace(/^\/([A-Z]:)/, '$1'), fullPage: false })
+  assert.deepEqual(errors, [], 'Browser or asset errors')
+  console.log('Browser checks passed: desktop/sidebar, localized search, same-page language switch, code-copy control, mobile menu and base-path assets.')
+} finally { await browser.close() }

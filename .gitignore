@@ -1,5 +1,8 @@
 **/bin/
 **/obj/
+**/node_modules/
+docs/site/.vitepress/cache/
+docs/site/.vitepress/dist/
 **/.godot/
 .tools/
 TestResults/
