@@ -4,7 +4,7 @@
 
 | 入口 | 你将学到什么 |
 | --- | --- |
-| [Getting Started](getting-started/index.md) | 在 Godot 或 Unity 中搭建第一个菜单与设置流程 |
+| [Getting Started](getting-started/index.md) | 在 Godot 或 Unity 中创建并接入第一个窗口 |
 | [Manual](manual/concepts.md) | 按实际游戏场景理解实例、生命周期、资源和动画 |
 | [Integrations](integrations/custom-engine.md) | 引擎适配与自定义资源后端 |
 | [Samples](samples/index.md) | 运行「星庭远征」客户端与常见业务组合 |

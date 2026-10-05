@@ -1,86 +1,90 @@
 # Godot Getting Started
 
-Build a menu, settings categories and quit confirmation. The repository provides a standalone tutorial to run or copy into your project.
+This tutorial starts with a window that has a title and a close button. When finished, a scene button opens it; closing and opening it again creates a new instance.
 
-## 1. Prepare the environment
+## 1. Create a project and reference the framework
 
-Install Godot 4.7.2 .NET and the .NET 10 SDK.
-
-## 2. Open the tutorial
-
-Run from the repository root:
-
-```powershell
-dotnet build docs/examples/godot/Tutorial.csproj
-```
-
-Open docs/examples/godot/project.godot in Godot. Its main scene is Main.tscn and it uses no player save.
-
-## 3. Connect your project
-
-Add these references to your .csproj, adjusting relative paths:
+Install Godot 4.7.2 .NET and the .NET 10 SDK, then create a Godot .NET project. Add references to Core and the Godot adapter in the project `.csproj`. These relative paths apply to `docs/examples/godot` inside this repository; adjust them for your project:
 
 ```xml
-<ProjectReference Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
-<ProjectReference Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
+<ItemGroup>
+  <ProjectReference
+    Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
+  <ProjectReference
+    Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
+</ItemGroup>
 ```
 
-Copy TutorialHost.cs, Main.tscn, Menu.tscn, Settings.tscn and Confirm.tscn to your project root. The code uses these fixed resource paths.
+Create `HelloWindow.cs` and `TutorialHost.cs` in the project root. The repository's `docs/examples/godot` folder contains the finished scenes for reference; this tutorial builds `HelloWindow.tscn` and `Main.tscn` step by step in the editor.
 
-## 4. Check the scene structure
+## 2. Create the HelloWindow scene
+
+Create the scene in this order:
+
+1. Create a Control scene and save it as `HelloWindow.tscn`. Set the root Control layout to Full Rect and Mouse Filter to Ignore.
+2. Add a Panel under the root and name it `Content`. Set Layout to Center and Offsets to Left=-210, Top=-120, Right=210, Bottom=120 for a 420×240 panel. Keep Mouse Filter at Stop.
+3. Add a Label under Content and name it `Title`; set Text to `Hello, UIFramework!`. Set its rectangle to Left=20, Top=28, Right=400, Bottom=84, and center both horizontal and vertical alignment.
+4. Add a Button under Content and name it `Close`; set Text to `Close`. Set its rectangle to Left=140, Top=154, Right=280, Bottom=198.
+
+```text
+HelloWindow (Control, Full Rect, Mouse Filter=Ignore)
+└── Content (Panel, centered 420×240)
+    ├── Title (Label: "Hello, UIFramework!")
+    └── Close (Button)
+```
+
+Keep Mouse Filter=Stop on `Content` so the panel receives input. The script expects the relative paths `Content/Title` and `Content/Close`; use those node names. Save the scene as `HelloWindow.tscn`.
+
+## 3. Write the window script
+
+Create `HelloWindow.cs`. It derives from the framework's `UINode`, not a Godot `Node`, and is not attached to the scene. The framework creates this business node when it opens the resource; the node finds the button by path and closes itself.
+
+```csharp
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Godot;
+using UIFramework;
+using UIFramework.Godot;
+
+public sealed class HelloWindow : UINode
+{
+    private readonly PanelContainerNode _windows;
+    private readonly Action<Task> _observe;
+
+    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    {
+        _windows = windows;
+        _observe = observe;
+    }
+
+    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
+    {
+        var closeButton = this.GetControl<Button>("Content/Close");
+        closeButton.Pressed += () => _observe(_windows.CloseAsync(this));
+        return Task.CompletedTask;
+    }
+}
+```
+
+## 4. Create the Main scene and its host
+
+Create a Control scene and save it as `Main.tscn`. Add a `Windows` Control under the root; set its layout to Full Rect and Mouse Filter to Ignore. Add a Button named `OpenWindow`; set Layout to Bottom Center, Offsets to Left=-90, Top=-64, Right=90, Bottom=-20, Text to `Open window`, and enable Disabled initially.
 
 ```text
 Main (Control, TutorialHost.cs)
-├── Pages (Control)
-└── Dialogs (Control)
-
-Menu.tscn
-└── Content → Settings, Quit (Button)
-
-Settings.tscn
-└── Content (Panel)
-    ├── AudioTab, GraphicsTab, Close (Button)
-    └── Body (Control)
-        ├── Audio → Volume (HSlider)
-        └── Graphics → Quality (CheckButton)
-
-Confirm.tscn
-└── Content (Panel) → Question (Label), Yes, No (Button)
+├── Windows (Control, Full Rect, Mouse Filter=Ignore)
+└── OpenWindow (Button)
 ```
 
-- Roots/empty mounts: Full Rect and Mouse Filter=Ignore.
-- Modal Content: actual panel area with Mouse Filter=Stop; the framework creates the backdrop.
-- Both Tab pages live in Settings.tscn; runtime only changes selection.
-- Keep keyboard focus enabled and match object names to code paths.
-
-## 5. Connect the logic
-
-Attach TutorialHost.cs to Main. MenuView, SettingsView and ConfirmView are plain C# nodes, not Godot scene scripts.
-
-The host creates containers, registers resources and opens the menu. This excerpt is already in the complete source:
-
-```csharp
-UI = GodotUI.Create(this);
-Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Pages", GetNode<Control>("Pages"));
-Dialogs = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("Dialogs"));
-Dialogs.ConfigureBackdrop(GodotBackdrops.Dim(Observe));
-
-UI.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "res://Menu.tscn");
-UI.Register(() => new SettingsView(Dialogs, Observe), "res://Settings.tscn");
-UI.Register<ConfirmView>("res://Confirm.tscn");
-await Pages.PushAsync<MenuView>();
-```
-
-Observe collects button tasks; _Process propagates failures. Category switching disables selectors and Close together.
+The host creates a Context and Panel container, registers the window scene, and opens it on startup. `OpenAsync` reuses the current single instance; after closing it, another click creates a new one. Save the complete code below as `TutorialHost.cs`:
 
 <details>
-<summary>Expand complete TutorialHost.cs</summary>
+<summary>Expand the complete TutorialHost.cs</summary>
 
 ```csharp
 using Godot;
-using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using UIFramework;
 using UIFramework.Godot;
@@ -88,33 +92,47 @@ using UIFramework.Godot;
 public partial class TutorialHost : Control
 {
     private readonly List<Task> _tasks = new();
+    private Button _openWindowButton = null!;
+    private PanelContainerNode _windows = null!;
+
     public UIContext UI { get; private set; } = null!;
-    public StackContainerNode Pages { get; private set; } = null!;
-    public ModalContainerNode Dialogs { get; private set; } = null!;
     public Task Initialization { get; private set; } = null!;
-    private bool _stopping;
 
     public override void _Ready()
     {
-        GetTree().AutoAcceptQuit = false;
         Initialization = InitializeAsync();
         Observe(Initialization);
     }
+
     private async Task InitializeAsync()
     {
+        _openWindowButton = GetNode<Button>("OpenWindow");
         UI = GodotUI.Create(this);
-        Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Pages", GetNode<Control>("Pages"));
-        Dialogs = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("Dialogs"));
-        Dialogs.ConfigureBackdrop(GodotBackdrops.Dim(Observe));
-        UI.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "res://Menu.tscn");
-        UI.Register(() => new SettingsView(Dialogs, Observe), "res://Settings.tscn");
-        UI.Register<ConfirmView>("res://Confirm.tscn");
-        await Pages.PushAsync<MenuView>();
+        UI.BindLifetime(this);
+        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
+        UI.Register(() => new HelloWindow(_windows, Observe), "res://HelloWindow.tscn");
+        await _windows.OpenAsync<HelloWindow>();
+        _openWindowButton.Pressed += OpenWindow;
+        _openWindowButton.Disabled = false;
     }
-    public void Observe(Task task) { _tasks.Add(task); }
+
+    private void OpenWindow()
+    {
+        _openWindowButton.Disabled = true;
+        Observe(OpenWindowAsync());
+    }
+
+    private async Task OpenWindowAsync()
+    {
+        await _windows.OpenAsync<HelloWindow>();
+        _openWindowButton.Disabled = false;
+    }
+
+    private void Observe(Task task) => _tasks.Add(task);
+
     public override void _Process(double delta)
     {
-        for (int i = _tasks.Count - 1; i >= 0; i--)
+        for (var i = _tasks.Count - 1; i >= 0; i--)
         {
             var task = _tasks[i];
             if (!task.IsCompleted) continue;
@@ -122,110 +140,19 @@ public partial class TutorialHost : Control
             task.GetAwaiter().GetResult();
         }
     }
-    public Task OpenSettingsAsync() => Dialogs.OpenAsync<SettingsView>();
-    public async Task AskQuitAsync()
-    {
-        // false is an explicit answer; external closure cancels the waiting task.
-        if (await Dialogs.ShowDialogAsync<ConfirmView, bool>()) await ShutdownAsync(true);
-    }
-    public async Task ShutdownAsync(bool quit)
-    {
-        _stopping = true;
-        await UI.DisposeAsync();
-        if (quit) GetTree().Quit();
-    }
-    public override void _UnhandledKeyInput(InputEvent input)
-    {
-        if (!input.IsActionPressed("ui_cancel") || input.IsEcho() || _stopping || !Initialization.IsCompletedSuccessfully) return;
-        if (Dialogs.Current is ConfirmView confirm && confirm.IsInteractive) { confirm.Answer(false); GetViewport().SetInputAsHandled(); }
-        else if (Dialogs.Current is SettingsView settings && settings.IsInteractive && !settings.Switching)
-        { Observe(Dialogs.CloseAsync(settings)); GetViewport().SetInputAsHandled(); }
-        else if (Dialogs.Current == null && Pages.IsInteractive)
-        { Observe(AskQuitAsync()); GetViewport().SetInputAsHandled(); }
-    }
-    public override void _Notification(int what)
-    {
-        if (what == NotificationWMCloseRequest && !_stopping && Initialization.IsCompletedSuccessfully && Dialogs.Current == null && Pages.IsInteractive)
-            Observe(AskQuitAsync());
-    }
-}
-
-public sealed class MenuView : UINode
-{
-    private readonly Func<Task> _settings, _quit;
-    private readonly Action<Task> _observe;
-    private Button _settingsButton = null!, _quitButton = null!;
-    public MenuView(Func<Task> settings, Func<Task> quit, Action<Task> observe)
-    { _settings = settings; _quit = quit; _observe = observe; }
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _settingsButton = this.GetControl<Button>("Content/Settings");
-        _quitButton = this.GetControl<Button>("Content/Quit");
-        _settingsButton.Pressed += () => _observe(_settings());
-        _quitButton.Pressed += () => _observe(_quit());
-        return Task.CompletedTask;
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _settingsButton.Disabled = !IsInteractive; _quitButton.Disabled = !IsInteractive; }
-}
-
-public sealed class SettingsView : UINode
-{
-    private readonly ModalContainerNode _dialogs;
-    private readonly Action<Task> _observe;
-    private TabContainerNode _tabs = null!;
-    private Button _audio = null!, _graphics = null!, _close = null!;
-    public bool Switching { get; private set; }
-    public string? Selected => _tabs.CurrentName;
-    public SettingsView(ModalContainerNode dialogs, Action<Task> observe) { _dialogs = dialogs; _observe = observe; }
-    protected override async Task OnInitializeAsync(CancellationToken token)
-    {
-        _audio = this.GetControl<Button>("Content/AudioTab");
-        _graphics = this.GetControl<Button>("Content/GraphicsTab");
-        _close = this.GetControl<Button>("Content/Close");
-        _tabs = await this.CreateContainerAsync<TabContainerNode>("Categories", this.GetControl<Control>("Content/Body"), token);
-        await _tabs.BindAsync("Audio", this.GetControl<Control>("Content/Body/Audio"), token);
-        await _tabs.BindAsync("Graphics", this.GetControl<Control>("Content/Body/Graphics"), token);
-        await _tabs.SwitchAsync("Audio", playAnimation: false, cancellationToken: token);
-        _audio.Pressed += () => _observe(SwitchAsync("Audio"));
-        _graphics.Pressed += () => _observe(SwitchAsync("Graphics"));
-        _close.Pressed += () => _observe(_dialogs.CloseAsync(this));
-    }
-    public async Task SwitchAsync(string name)
-    {
-        Switching = true; RefreshInput();
-        try { if (_tabs.CurrentName != name) await _tabs.SwitchAsync(name); }
-        finally { Switching = false; if (State == NodeState.Ready) RefreshInput(); }
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput()
-    { bool disabled = !IsInteractive || Switching; _audio.Disabled = disabled; _graphics.Disabled = disabled; _close.Disabled = disabled; }
-}
-
-public sealed class ConfirmView : DialogNode<bool>
-{
-    private Button _yes = null!, _no = null!;
-    private bool _answered;
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _yes = this.GetControl<Button>("Content/Yes"); _no = this.GetControl<Button>("Content/No");
-        _yes.Pressed += () => Answer(true); _no.Pressed += () => Answer(false);
-        return Task.CompletedTask;
-    }
-    public void Answer(bool value) { Complete(value); _answered = true; RefreshInput(); }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _yes.Disabled = !IsInteractive || _answered; _no.Disabled = !IsInteractive || _answered; }
 }
 ```
 
 </details>
 
-## 6. Run the flow
+## 5. Attach the script and set the main scene
 
-1. Settings → Graphics → Audio retains volume.
-2. Back restores the menu and keyboard focus.
-3. Quit → Cancel keeps the menu; Confirm disposes Context before exiting.
+Attach `TutorialHost.cs` to the root Control in Main. Do not attach `HelloWindow.cs` to the HelloWindow scene; the registration factory creates that framework node. Match the node names to the `GetNode` paths in the script, then set `Main.tscn` as the main scene in Project Settings → Application → Run.
 
-Esc returns/cancels; Enter activates focus. Await ShutdownAsync before releasing the scene. Volume/quality demonstrate widget values only.
+## 6. Run and check
 
-[Next steps](next-steps.md) · [Tabs](../manual/tabs.md) · [Lifecycle](../manual/lifecycle.md)
+Run the project. The window appears first. Click Close to destroy the instance; click OpenWindow to load the resource and create a new one. While it is open, another `OpenAsync` call reuses the same single instance.
+
+The host observes button tasks each frame, and failures propagate as their original exceptions. The lifetime binding disposes the Context when Main leaves the scene tree.
+
+[Next steps](next-steps.md) · [Panel instances](../manual/panels.md) · [Lifecycle](../manual/lifecycle.md)

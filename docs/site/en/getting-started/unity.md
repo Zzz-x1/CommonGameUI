@@ -1,146 +1,88 @@
 # Unity Getting Started
 
-Build a main menu that opens settings, switches audio/graphics tabs, returns to the menu and confirms quitting.
+This tutorial starts with a window that has a title and a close button. When finished, a scene button opens it; closing and opening it again creates a new instance.
 
-## 1. Prepare the project
+## 1. Prepare the project and framework
 
-- Install Unity 6000.3.24f1 and the .NET 10 SDK.
-- Create a Unity project and save Assets/Scenes/Main.unity.
-- Set Player Settings → Active Input Handling to **Input Manager (Old)** or **Both**. This tutorial uses the old Input API for Esc.
-
-## 2. Install the framework
-
-Download this repository and run from its root:
+Install Unity 6000.3.24f1 and the .NET 10 SDK. Create a project and a `Main` scene. In the scene, choose **GameObject → UI → Canvas** and keep its CanvasScaler and GraphicRaycaster. Download this repository and prepare its local Unity package from the repository root:
 
 ```powershell
 ./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-This builds the core DLL without starting Unity. In your Unity project:
+In Unity Package Manager, choose **Add package from disk** and select `src/UIFramework.Unity/package.json` in the repository. The package references Core and uGUI.
 
-1. Open Package Manager → **Add package from disk**.
-2. Select src/UIFramework.Unity/package.json in the repository.
-3. Copy docs/examples/unity/TutorialHost.cs into Assets/Scripts.
+## 2. Create the window Prefab
 
-The package declares uGUI dependencies. This tutorial uses manual registration, without Source Generator.
+Build the Prefab in this order:
 
-## 3. Build the scene
-
-Create Canvas and EventSystem, then two mounts under Canvas:
-
-```text
-Canvas
-├── PagesMount
-└── DialogsMount
-EventSystem
-```
-
-| Object | Configuration |
-| --- | --- |
-| Canvas | Screen Space Overlay; keep GraphicRaycaster |
-| CanvasScaler | Scale With Screen Size; reference resolution 1000×700 |
-| PagesMount | Stretch on all sides, zero offsets; no Image |
-| DialogsMount | Same configuration; after PagesMount in the Hierarchy |
-| EventSystem | StandaloneInputModule; Submit=Return, Cancel=Escape |
-
-Create mounts from UI Panels and remove their Image components. PagesMount contains the menu; DialogsMount contains modals and the framework backdrop.
-
-## 4. Create three Prefabs
-
-Save resources under **Assets/Resources/UI**. Object names must match below; labels can differ.
-
-Every Prefab root uses a stretched RectTransform with zero offsets. Center Content at about 440×380 and place controls inside it.
-
-### Menu.prefab: main menu
+1. Select Canvas in the Hierarchy, right-click, then choose **UI → Panel**. Name the new object `HelloWindow`.
+2. Select its root RectTransform and choose the four-sided Stretch preset. Set Left, Top, Right and Bottom to 0. Remove the root Image so a full-screen object does not block scene input.
+3. Create **UI → Panel** under `HelloWindow` and name it `Content`. Set its RectTransform to centered anchors, Pos X/Y 0, Width 420 and Height 240. Keep its Image.
+4. Create **UI → Legacy → Text** under Content and name it `Title`. Set its RectTransform anchors to Center, Width=360, Height=56, Pos X=0 and Pos Y=45. Set the text to `Hello, UIFramework!` and center its horizontal/vertical alignment.
+5. Create **UI → Button** under Content and name it `Close`. Set its RectTransform anchors to Center, Width=140, Height=44, Pos X=0 and Pos Y=-65. Change its child Text to `Close`.
 
 ```text
-Menu (RectTransform)
-└── Content
-    ├── Settings (Button)
-    └── Quit (Button)
+HelloWindow (RectTransform, Stretch)
+└── Content (Image, centered 420×240)
+    ├── Title (Text: "Hello, UIFramework!")
+    └── Close (Button)
 ```
 
-Settings opens settings; Quit opens confirmation.
+Drag `HelloWindow` into `Assets/Resources/UI/HelloWindow.prefab`, then delete the temporary scene instance. The resource root has no Image; the visible `Content` panel receives mouse input.
 
-### Settings.prefab: settings
+## 3. Write the window script
 
-```text
-Settings (RectTransform)
-└── Content (Image)
-    ├── AudioTab (Button)
-    ├── GraphicsTab (Button)
-    ├── Close (Button)
-    └── Body (RectTransform)
-        ├── Audio (RectTransform)
-        │   └── Volume (Slider)
-        └── Graphics (RectTransform)
-            └── Quality (Toggle)
-```
-
-Author Audio and Graphics in the same Prefab, each filling Body. Runtime selects one. Place category buttons above and Close below. Volume can start at .65.
-
-### Confirm.prefab: quit confirmation
-
-```text
-Confirm (RectTransform)
-└── Content (Image)
-    ├── Question (Text or TextMeshProUGUI)
-    ├── Yes (Button)
-    └── No (Button)
-```
-
-Question displays “Quit?”. Yes confirms; No cancels.
-
-Modal Content Images receive raycasts. Disable label Raycast Target and keep button navigation. Roots/mounts have no full-screen Image; the framework creates the backdrop.
-
-## 5. Connect the framework
-
-Attach **TutorialHost** to Canvas and assign:
-
-| Field | Scene object |
-| --- | --- |
-| Canvas | Canvas |
-| Events | EventSystem |
-| PagesMount | PagesMount |
-| DialogsMount | DialogsMount |
-
-The script subscribes to buttons; do not add duplicate Inspector OnClick handlers.
-
-Initialization creates Context/containers, registers resources and shows the menu. This excerpt is already in TutorialHost; do not paste it again:
-
-```csharp
-_ui = UnityUI.Create(Canvas, Events);
-_pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
-_dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
-_dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
-
-_ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
-_ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
-_ui.Register<ConfirmView>("UI/Confirm");
-
-await _pages.PushAsync<MenuView>();
-```
-
-The flow uses these APIs:
-
-| Action | Call |
-| --- | --- |
-| Show menu | `_pages.PushAsync<MenuView>()` |
-| Open settings | `_dialogs.OpenAsync<SettingsView>()` |
-| Select category | `_tabs.SwitchAsync("Audio")` |
-| Return to menu | `_dialogs.CloseAsync(settings)` |
-| Await quit answer | `ShowDialogAsync<ConfirmView, bool>()` |
-| Answer | `Complete(result)` |
-
-MenuView, SettingsView and ConfirmView are plain C# nodes, not GameObject components. Update observes tasks; category switching disables selectors and Close.
-
-<details>
-<summary>Expand complete TutorialHost.cs</summary>
+Create `HelloWindow.cs`. This is a framework business node created by the registration factory. It is not a MonoBehaviour and is not attached to the Prefab. It finds the close button by its resource path and asks its container to close the current node.
 
 ```csharp
 using System;
-using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
+using UIFramework;
+using UIFramework.Unity;
+using UnityEngine.UI;
+
+public sealed class HelloWindow : UINode
+{
+    private readonly PanelContainerNode _windows;
+    private readonly Action<Task> _observe;
+
+    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    {
+        _windows = windows;
+        _observe = observe;
+    }
+
+    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
+    {
+        var closeButton = this.GetComponent<Button>("Content/Close");
+        closeButton.onClick.AddListener(() => _observe(_windows.CloseAsync(this)));
+        return Task.CompletedTask;
+    }
+}
+```
+
+## 4. Build the Main scene and write its host
+
+Delete the temporary `HelloWindow` instance from the scene after saving its Prefab. Under Canvas, create an Empty UI Object named `WindowsMount`; set its RectTransform to four-sided Stretch with all offsets at 0, and do not add an Image. Add a Button named `OpenWindowButton`; use bottom-center anchors, Width 180, Height 44, Pos Y 40, and the label `Open Window`.
+
+Set Canvas to Screen Space - Overlay. Set CanvasScaler to **Scale With Screen Size** with a reference resolution of `1000 × 700`. The scene needs an EventSystem; if Unity created one when you added a Button, keep that object.
+
+```text
+Canvas (Canvas, CanvasScaler, TutorialHost)
+├── WindowsMount (RectTransform, Stretch, no Image)
+└── OpenWindowButton (Button)
+EventSystem
+```
+
+The host creates a Context and Panel container, registers the Prefab, and opens the window at startup. A later `OpenAsync` reuses the current single instance; after it closes, the next click creates a new instance. Copy the full script into `TutorialHost.cs`:
+
+<details>
+<summary>Expand the complete TutorialHost.cs</summary>
+
+```csharp
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UIFramework;
 using UIFramework.Unity;
@@ -152,141 +94,72 @@ public sealed class TutorialHost : MonoBehaviour
 {
     public Canvas Canvas;
     public EventSystem Events;
-    public RectTransform PagesMount, DialogsMount;
+    public RectTransform WindowsMount;
+    public Button OpenWindowButton;
+
     private readonly List<Task> _tasks = new List<Task>();
     private UIContext _ui;
-    private StackContainerNode _pages;
-    private ModalContainerNode _dialogs;
-    private Task _ready;
-    private bool _stopping;
-    private bool _shutdownComplete;
-    private void Start() { _ready = InitializeAsync(); Observe(_ready); }
+    private PanelContainerNode _windows;
+
+    private void Start() => Observe(InitializeAsync());
+
     private async Task InitializeAsync()
     {
         _ui = UnityUI.Create(Canvas, Events);
-        _pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
-        _dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
-        _dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
-        _ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
-        _ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
-        _ui.Register<ConfirmView>("UI/Confirm");
-        await _pages.PushAsync<MenuView>();
+        _ui.BindLifetime(gameObject);
+        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
+        _ui.Register(() => new HelloWindow(_windows, Observe), "UI/HelloWindow");
+        await _windows.OpenAsync<HelloWindow>();
+        OpenWindowButton.onClick.AddListener(OpenWindow);
+        OpenWindowButton.interactable = true;
     }
-    private void Observe(Task task) { _tasks.Add(task); }
+
+    private void OpenWindow()
+    {
+        OpenWindowButton.interactable = false;
+        Observe(OpenWindowAsync());
+    }
+
+    private async Task OpenWindowAsync()
+    {
+        await _windows.OpenAsync<HelloWindow>();
+        OpenWindowButton.interactable = true;
+    }
+
+    private void Observe(Task task) => _tasks.Add(task);
+
     private void Update()
     {
-        for (int i = _tasks.Count - 1; i >= 0; i--)
+        for (var i = _tasks.Count - 1; i >= 0; i--)
         {
             var task = _tasks[i];
             if (!task.IsCompleted) continue;
             _tasks.RemoveAt(i);
             task.GetAwaiter().GetResult();
         }
-        if (_stopping || _ready == null || !_ready.IsCompletedSuccessfully || !Input.GetKeyDown(KeyCode.Escape)) return;
-        if (_dialogs.Current is ConfirmView confirm && confirm.IsInteractive) confirm.Answer(false);
-        else if (_dialogs.Current is SettingsView settings && settings.IsInteractive && !settings.Switching) Observe(_dialogs.CloseAsync(settings));
-        else if (_dialogs.Current == null && _pages.IsInteractive) Observe(AskQuitAsync());
     }
-    private Task OpenSettingsAsync() => _dialogs.OpenAsync<SettingsView>();
-    private async Task AskQuitAsync()
-    { if (await _dialogs.ShowDialogAsync<ConfirmView, bool>()) await ShutdownAsync(); }
-    public async Task ShutdownAsync()
-    {
-        _stopping = true;
-        await _ui.DisposeAsync();
-        _shutdownComplete = true;
-        Application.Quit();
-    }
-    private bool OnApplicationWantsToQuit()
-    {
-        if (_stopping) return _shutdownComplete;
-        if (_ready != null && _ready.IsCompletedSuccessfully && _dialogs.Current == null && _pages.IsInteractive) Observe(AskQuitAsync());
-        return false;
-    }
-    private void OnEnable() { Application.wantsToQuit += OnApplicationWantsToQuit; }
-    private void OnDisable() { Application.wantsToQuit -= OnApplicationWantsToQuit; }
-}
-
-public sealed class MenuView : UINode
-{
-    private readonly Func<Task> _settings, _quit;
-    private readonly Action<Task> _observe;
-    private Button _settingsButton, _quitButton;
-    public MenuView(Func<Task> settings, Func<Task> quit, Action<Task> observe)
-    { _settings = settings; _quit = quit; _observe = observe; }
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _settingsButton = this.GetComponent<Button>("Content/Settings"); _quitButton = this.GetComponent<Button>("Content/Quit");
-        _settingsButton.onClick.AddListener(() => _observe(_settings()));
-        _quitButton.onClick.AddListener(() => _observe(_quit()));
-        return Task.CompletedTask;
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _settingsButton.interactable = IsInteractive; _quitButton.interactable = IsInteractive; }
-}
-
-public sealed class SettingsView : UINode
-{
-    private readonly ModalContainerNode _dialogs;
-    private readonly Action<Task> _observe;
-    private TabContainerNode _tabs;
-    private Button _audio, _graphics, _close;
-    public bool Switching { get; private set; }
-    public SettingsView(ModalContainerNode dialogs, Action<Task> observe) { _dialogs = dialogs; _observe = observe; }
-    protected override async Task OnInitializeAsync(CancellationToken token)
-    {
-        _audio = this.GetComponent<Button>("Content/AudioTab"); _graphics = this.GetComponent<Button>("Content/GraphicsTab");
-        _close = this.GetComponent<Button>("Content/Close");
-        _tabs = await this.CreateContainerAsync<TabContainerNode>("Categories", (RectTransform)this.GetRect().Find("Content/Body"), token);
-        await _tabs.BindAsync("Audio", (RectTransform)this.GetRect().Find("Content/Body/Audio"), token);
-        await _tabs.BindAsync("Graphics", (RectTransform)this.GetRect().Find("Content/Body/Graphics"), token);
-        await _tabs.SwitchAsync("Audio", playAnimation: false, cancellationToken: token);
-        _audio.onClick.AddListener(() => _observe(SwitchAsync("Audio")));
-        _graphics.onClick.AddListener(() => _observe(SwitchAsync("Graphics")));
-        _close.onClick.AddListener(() => _observe(_dialogs.CloseAsync(this)));
-    }
-    public async Task SwitchAsync(string name)
-    {
-        Switching = true; RefreshInput();
-        try { if (_tabs.CurrentName != name) await _tabs.SwitchAsync(name); }
-        finally { Switching = false; if (State == NodeState.Ready) RefreshInput(); }
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput()
-    { bool enabled = IsInteractive && !Switching; _audio.interactable = enabled; _graphics.interactable = enabled; _close.interactable = enabled; }
-}
-
-public sealed class ConfirmView : DialogNode<bool>
-{
-    private Button _yes, _no;
-    private bool _answered;
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _yes = this.GetComponent<Button>("Content/Yes"); _no = this.GetComponent<Button>("Content/No");
-        _yes.onClick.AddListener(() => Answer(true)); _no.onClick.AddListener(() => Answer(false));
-        return Task.CompletedTask;
-    }
-    public void Answer(bool value) { Complete(value); _answered = true; RefreshInput(); }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _yes.interactable = IsInteractive && !_answered; _no.interactable = IsInteractive && !_answered; }
 }
 ```
 
 </details>
 
-## 6. Run the flow
+## 5. Attach the script and assign scene objects
 
-Enter Play Mode:
+Attach `TutorialHost.cs` to the Canvas. Assign these references in the Inspector:
 
-1. Settings → Graphics → Audio retains volume.
-2. Back returns to the menu.
-3. Quit → Cancel keeps the menu.
-4. Quit → Confirm awaits Context disposal, then calls Application.Quit.
+| Field | Object |
+| --- | --- |
+| Canvas | The scene Canvas |
+| Events | The scene EventSystem |
+| WindowsMount | WindowsMount under Canvas |
+| OpenWindowButton | OpenWindowButton under Canvas |
 
-Esc returns/cancels; Enter activates focus. Volume/quality demonstrate widget state only.
+Set OpenWindowButton's Interactable value off initially. Keep both scripts in `Assets`; do not attach the `HelloWindow` class as a component. The container loads its Prefab from the path passed to `Register`.
 
-Application.Quit does not end editor Play Mode. Await ShutdownAsync before unloading a scene in your game; manual Stop is not normal shutdown.
+## 6. Run and check
 
-This tutorial has offline compilation only, without native execution. See [Unity integration](../integrations/unity.md) for status.
+Enter Play Mode. The window should appear at startup. Close destroys it; Open Window creates it again. Clicking Open Window repeatedly while it is open does not stack duplicate windows.
 
-[Next steps](next-steps.md) · [Tabs](../manual/tabs.md) · [Result dialogs](../manual/modals-and-dialogs.md)
+The host observes every asynchronous button operation, so Unity Console receives the original exception on failure. Destroying the scene Canvas cleans up its Context.
+
+[Next steps](next-steps.md) · [Panel instances](../manual/panels.md) · [Lifecycle](../manual/lifecycle.md)

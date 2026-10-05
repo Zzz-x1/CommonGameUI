@@ -4,7 +4,7 @@ Manage game windows, page history, tabs, dialogs and lifecycle in C#. Use native
 
 | Entry | What you will learn |
 | --- | --- |
-| [Getting Started](getting-started/index.md) | Build a menu and settings flow in Godot or Unity |
+| [Getting Started](getting-started/index.md) | Create and connect your first window in Godot or Unity |
 | [Manual](manual/concepts.md) | Understand instances, lifecycle, resources and animation through game scenarios |
 | [Integrations](integrations/custom-engine.md) | Engine adapters and custom resource backends |
 | [Samples](samples/index.md) | Run the Star Court client and combine common UI flows |

@@ -1,146 +1,88 @@
 # Unity Getting Started
 
-本教程制作一个主菜单：打开设置、切换音量／画面分类、返回菜单、确认退出。
+本教程从一个带标题和关闭按钮的窗口开始。完成后，点击场景中的按钮可以打开窗口；关闭后再打开会创建新实例。
 
-## 1. 准备项目
+## 1. 准备项目与框架
 
-- 安装 Unity 6000.3.24f1 和 .NET 10 SDK。
-- 创建一个 Unity 项目，将场景保存为 Assets/Scenes/Main.unity。
-- Player Settings → Active Input Handling 选择 **Input Manager (Old)** 或 **Both**。本教程用旧 Input API 处理 Esc。
-
-## 2. 安装框架
-
-下载本仓库，在仓库根目录执行：
+安装 Unity 6000.3.24f1 和 .NET 10 SDK，创建项目和 `Main` 场景。在场景中用 **GameObject → UI → Canvas** 创建 Canvas；保留自动添加的 CanvasScaler 和 GraphicRaycaster。下载本仓库，在仓库根目录准备本地 Unity 包：
 
 ```powershell
 ./scripts/Run-UnityDemo.ps1 -PrepareOnly
 ```
 
-此命令生成核心 DLL，不启动 Unity。然后在自己的 Unity 项目中：
+然后在 Unity 的 Package Manager 中选择 **Add package from disk**，打开仓库里的 `src/UIFramework.Unity/package.json`。该包会一并引用 Core 和 uGUI。
 
-1. 打开 Package Manager → **Add package from disk**。
-2. 选择仓库中的 src/UIFramework.Unity/package.json。
-3. 将 docs/examples/unity/TutorialHost.cs 复制到 Assets/Scripts。
+## 2. 创建窗口 Prefab
 
-包已声明 uGUI 依赖。本教程使用手写注册，无需 Source Generator。
+按这个顺序制作 Prefab：
 
-## 3. 搭建场景
-
-创建 Canvas 和 EventSystem，Canvas 下放两个挂载：
+1. 在 Hierarchy 选中 Canvas，右键选择 **UI → Panel**，将新对象命名为 `HelloWindow`。
+2. 选中根 RectTransform，在 Anchor Presets 中选四边 Stretch；Left、Top、Right、Bottom 都设为 0。移除根节点的 Image，避免全屏根节点挡住场景输入。
+3. 在 `HelloWindow` 下创建 **UI → Panel**，命名为 `Content`。RectTransform 设为中心锚点、Pos X/Y 为 0、Width 为 420、Height 为 240。保留它的 Image。
+4. 在 Content 下创建 **UI → Legacy → Text**，命名为 `Title`；将 RectTransform 锚点设为 Center，Width=360、Height=56、Pos X=0、Pos Y=45。Text 设为 `Hello, UIFramework!`，水平和垂直对齐居中。
+5. 在 Content 下创建 **UI → Button**，命名为 `Close`；将 RectTransform 锚点设为 Center，Width=140、Height=44、Pos X=0、Pos Y=-65。将其子 Text 改为 `Close`。
 
 ```text
-Canvas
-├── PagesMount
-└── DialogsMount
+HelloWindow (RectTransform, Stretch)
+└── Content (Image, centered 420×240)
+    ├── Title (Text: "Hello, UIFramework!")
+    └── Close (Button)
+```
+
+将 `HelloWindow` 拖到 `Assets/Resources/UI/HelloWindow.prefab`，再从场景中删除临时实例。资源根没有 Image，实际面板 `Content` 接收鼠标输入。
+
+## 3. 编写窗口脚本
+
+新建 `HelloWindow.cs`。这个类是框架的业务节点，由注册工厂创建；它不是 MonoBehaviour，不挂到 Prefab 上。它按资源路径找到关闭按钮，并让所属容器关闭当前节点。
+
+```csharp
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using UIFramework;
+using UIFramework.Unity;
+using UnityEngine.UI;
+
+public sealed class HelloWindow : UINode
+{
+    private readonly PanelContainerNode _windows;
+    private readonly Action<Task> _observe;
+
+    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    {
+        _windows = windows;
+        _observe = observe;
+    }
+
+    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
+    {
+        var closeButton = this.GetComponent<Button>("Content/Close");
+        closeButton.onClick.AddListener(() => _observe(_windows.CloseAsync(this)));
+        return Task.CompletedTask;
+    }
+}
+```
+
+## 4. 搭建 Main 场景并编写宿主
+
+从刚保存的 Prefab 删除场景中的临时 `HelloWindow`。在 Canvas 下创建 Empty UI Object，命名为 `WindowsMount`；RectTransform 设为四边 Stretch、偏移均为 0，不添加 Image。然后添加一个 Button，命名为 `OpenWindowButton`；设为底部中央锚点、Width 180、Height 44、Pos Y 为 40，文字设为 `Open Window`。
+
+Canvas 使用 Screen Space - Overlay。CanvasScaler 设为 **Scale With Screen Size**，参考分辨率 `1000 × 700`。场景需要一个 EventSystem；创建 Button 时若 Unity 已自动创建，就复用现有对象。
+
+```text
+Canvas (Canvas, CanvasScaler, TutorialHost)
+├── WindowsMount (RectTransform, Stretch, no Image)
+└── OpenWindowButton (Button)
 EventSystem
 ```
 
-| 对象 | 配置 |
-| --- | --- |
-| Canvas | Screen Space Overlay；保留 GraphicRaycaster |
-| CanvasScaler | Scale With Screen Size；参考分辨率 1000×700 |
-| PagesMount | RectTransform 四边 Stretch，偏移为 0；不放 Image |
-| DialogsMount | 同上；在 Hierarchy 中位于 PagesMount 后面 |
-| EventSystem | StandaloneInputModule；Submit=Return，Cancel=Escape |
-
-挂载可通过创建 UI Panel 后移除 Image 得到。PagesMount 放主菜单，DialogsMount 放弹窗和框架生成的遮罩。
-
-## 4. 创建三个 Prefab
-
-资源保存到 **Assets/Resources/UI**。对象名称必须与下面一致；按钮文字可以自行修改。
-
-所有 Prefab 根都只用 RectTransform，四边 Stretch、偏移为 0。Content 居中，约 440×380；控件放在 Content 内。
-
-### Menu.prefab：主菜单
-
-```text
-Menu (RectTransform)
-└── Content
-    ├── Settings (Button)
-    └── Quit (Button)
-```
-
-Settings 打开设置，Quit 打开退出确认。
-
-### Settings.prefab：设置
-
-```text
-Settings (RectTransform)
-└── Content (Image)
-    ├── AudioTab (Button)
-    ├── GraphicsTab (Button)
-    ├── Close (Button)
-    └── Body (RectTransform)
-        ├── Audio (RectTransform)
-        │   └── Volume (Slider)
-        └── Graphics (RectTransform)
-            └── Quality (Toggle)
-```
-
-Audio 与 Graphics 都保存在同一个 Prefab 中，填满 Body；运行时选择其中一页。把两个分类按钮放在上方，Close 放在底部。Volume 初始值可设 .65。
-
-### Confirm.prefab：退出确认
-
-```text
-Confirm (RectTransform)
-└── Content (Image)
-    ├── Question (Text or TextMeshProUGUI)
-    ├── Yes (Button)
-    └── No (Button)
-```
-
-Question 显示“是否退出？”。Yes 确认，No 取消。
-
-弹窗 Content 的 Image 接受射线；文字关闭 Raycast Target，按钮保留导航。资源根和挂载不放全屏 Image，遮罩由框架创建。
-
-## 5. 接入框架
-
-将 **TutorialHost** 挂在 Canvas 上，在 Inspector 赋值：
-
-| 字段 | 拖入对象 |
-| --- | --- |
-| Canvas | 场景 Canvas |
-| Events | 场景 EventSystem |
-| PagesMount | PagesMount |
-| DialogsMount | DialogsMount |
-
-完整脚本已包含按钮订阅，Inspector 不再添加 OnClick。
-
-初始化只做三件事：创建 Context 和容器、注册资源、显示主菜单。以下代码来自 TutorialHost，不需要额外复制：
-
-```csharp
-_ui = UnityUI.Create(Canvas, Events);
-_pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
-_dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
-_dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
-
-_ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
-_ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
-_ui.Register<ConfirmView>("UI/Confirm");
-
-await _pages.PushAsync<MenuView>();
-```
-
-业务流程对应这些 API：
-
-| 操作 | 调用 |
-| --- | --- |
-| 显示主菜单 | `_pages.PushAsync<MenuView>()` |
-| 打开设置 | `_dialogs.OpenAsync<SettingsView>()` |
-| 切换分类 | `_tabs.SwitchAsync("Audio")` |
-| 返回菜单 | `_dialogs.CloseAsync(settings)` |
-| 等待退出答案 | `ShowDialogAsync<ConfirmView, bool>()` |
-| 回答 | `Complete(result)` |
-
-MenuView、SettingsView、ConfirmView 是普通 C# 节点，不挂到 GameObject。宿主 Update 观察异步任务；分类切换期间禁用分类与关闭按钮。
+宿主创建 Context 和 Panel 容器、注册 Prefab，并在启动时打开窗口。再次点击时 `OpenAsync` 复用当前单实例；关闭后再点会创建新的实例。完整脚本可复制到 `TutorialHost.cs`：
 
 <details>
 <summary>展开完整 TutorialHost.cs</summary>
 
 ```csharp
-using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using UIFramework;
 using UIFramework.Unity;
@@ -152,141 +94,72 @@ public sealed class TutorialHost : MonoBehaviour
 {
     public Canvas Canvas;
     public EventSystem Events;
-    public RectTransform PagesMount, DialogsMount;
+    public RectTransform WindowsMount;
+    public Button OpenWindowButton;
+
     private readonly List<Task> _tasks = new List<Task>();
     private UIContext _ui;
-    private StackContainerNode _pages;
-    private ModalContainerNode _dialogs;
-    private Task _ready;
-    private bool _stopping;
-    private bool _shutdownComplete;
-    private void Start() { _ready = InitializeAsync(); Observe(_ready); }
+    private PanelContainerNode _windows;
+
+    private void Start() => Observe(InitializeAsync());
+
     private async Task InitializeAsync()
     {
         _ui = UnityUI.Create(Canvas, Events);
-        _pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", PagesMount);
-        _dialogs = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", DialogsMount);
-        _dialogs.ConfigureBackdrop(UnityBackdrops.Dim(Observe));
-        _ui.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "UI/Menu");
-        _ui.Register(() => new SettingsView(_dialogs, Observe), "UI/Settings");
-        _ui.Register<ConfirmView>("UI/Confirm");
-        await _pages.PushAsync<MenuView>();
+        _ui.BindLifetime(gameObject);
+        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
+        _ui.Register(() => new HelloWindow(_windows, Observe), "UI/HelloWindow");
+        await _windows.OpenAsync<HelloWindow>();
+        OpenWindowButton.onClick.AddListener(OpenWindow);
+        OpenWindowButton.interactable = true;
     }
-    private void Observe(Task task) { _tasks.Add(task); }
+
+    private void OpenWindow()
+    {
+        OpenWindowButton.interactable = false;
+        Observe(OpenWindowAsync());
+    }
+
+    private async Task OpenWindowAsync()
+    {
+        await _windows.OpenAsync<HelloWindow>();
+        OpenWindowButton.interactable = true;
+    }
+
+    private void Observe(Task task) => _tasks.Add(task);
+
     private void Update()
     {
-        for (int i = _tasks.Count - 1; i >= 0; i--)
+        for (var i = _tasks.Count - 1; i >= 0; i--)
         {
             var task = _tasks[i];
             if (!task.IsCompleted) continue;
             _tasks.RemoveAt(i);
             task.GetAwaiter().GetResult();
         }
-        if (_stopping || _ready == null || !_ready.IsCompletedSuccessfully || !Input.GetKeyDown(KeyCode.Escape)) return;
-        if (_dialogs.Current is ConfirmView confirm && confirm.IsInteractive) confirm.Answer(false);
-        else if (_dialogs.Current is SettingsView settings && settings.IsInteractive && !settings.Switching) Observe(_dialogs.CloseAsync(settings));
-        else if (_dialogs.Current == null && _pages.IsInteractive) Observe(AskQuitAsync());
     }
-    private Task OpenSettingsAsync() => _dialogs.OpenAsync<SettingsView>();
-    private async Task AskQuitAsync()
-    { if (await _dialogs.ShowDialogAsync<ConfirmView, bool>()) await ShutdownAsync(); }
-    public async Task ShutdownAsync()
-    {
-        _stopping = true;
-        await _ui.DisposeAsync();
-        _shutdownComplete = true;
-        Application.Quit();
-    }
-    private bool OnApplicationWantsToQuit()
-    {
-        if (_stopping) return _shutdownComplete;
-        if (_ready != null && _ready.IsCompletedSuccessfully && _dialogs.Current == null && _pages.IsInteractive) Observe(AskQuitAsync());
-        return false;
-    }
-    private void OnEnable() { Application.wantsToQuit += OnApplicationWantsToQuit; }
-    private void OnDisable() { Application.wantsToQuit -= OnApplicationWantsToQuit; }
-}
-
-public sealed class MenuView : UINode
-{
-    private readonly Func<Task> _settings, _quit;
-    private readonly Action<Task> _observe;
-    private Button _settingsButton, _quitButton;
-    public MenuView(Func<Task> settings, Func<Task> quit, Action<Task> observe)
-    { _settings = settings; _quit = quit; _observe = observe; }
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _settingsButton = this.GetComponent<Button>("Content/Settings"); _quitButton = this.GetComponent<Button>("Content/Quit");
-        _settingsButton.onClick.AddListener(() => _observe(_settings()));
-        _quitButton.onClick.AddListener(() => _observe(_quit()));
-        return Task.CompletedTask;
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _settingsButton.interactable = IsInteractive; _quitButton.interactable = IsInteractive; }
-}
-
-public sealed class SettingsView : UINode
-{
-    private readonly ModalContainerNode _dialogs;
-    private readonly Action<Task> _observe;
-    private TabContainerNode _tabs;
-    private Button _audio, _graphics, _close;
-    public bool Switching { get; private set; }
-    public SettingsView(ModalContainerNode dialogs, Action<Task> observe) { _dialogs = dialogs; _observe = observe; }
-    protected override async Task OnInitializeAsync(CancellationToken token)
-    {
-        _audio = this.GetComponent<Button>("Content/AudioTab"); _graphics = this.GetComponent<Button>("Content/GraphicsTab");
-        _close = this.GetComponent<Button>("Content/Close");
-        _tabs = await this.CreateContainerAsync<TabContainerNode>("Categories", (RectTransform)this.GetRect().Find("Content/Body"), token);
-        await _tabs.BindAsync("Audio", (RectTransform)this.GetRect().Find("Content/Body/Audio"), token);
-        await _tabs.BindAsync("Graphics", (RectTransform)this.GetRect().Find("Content/Body/Graphics"), token);
-        await _tabs.SwitchAsync("Audio", playAnimation: false, cancellationToken: token);
-        _audio.onClick.AddListener(() => _observe(SwitchAsync("Audio")));
-        _graphics.onClick.AddListener(() => _observe(SwitchAsync("Graphics")));
-        _close.onClick.AddListener(() => _observe(_dialogs.CloseAsync(this)));
-    }
-    public async Task SwitchAsync(string name)
-    {
-        Switching = true; RefreshInput();
-        try { if (_tabs.CurrentName != name) await _tabs.SwitchAsync(name); }
-        finally { Switching = false; if (State == NodeState.Ready) RefreshInput(); }
-    }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput()
-    { bool enabled = IsInteractive && !Switching; _audio.interactable = enabled; _graphics.interactable = enabled; _close.interactable = enabled; }
-}
-
-public sealed class ConfirmView : DialogNode<bool>
-{
-    private Button _yes, _no;
-    private bool _answered;
-    protected override Task OnInitializeAsync(CancellationToken token)
-    {
-        _yes = this.GetComponent<Button>("Content/Yes"); _no = this.GetComponent<Button>("Content/No");
-        _yes.onClick.AddListener(() => Answer(true)); _no.onClick.AddListener(() => Answer(false));
-        return Task.CompletedTask;
-    }
-    public void Answer(bool value) { Complete(value); _answered = true; RefreshInput(); }
-    protected override void OnApplyState() { if (State == NodeState.Ready) RefreshInput(); }
-    public void RefreshInput() { _yes.interactable = IsInteractive && !_answered; _no.interactable = IsInteractive && !_answered; }
 }
 ```
 
 </details>
 
-## 6. 运行检查
+## 5. 挂载脚本并连接场景资源
 
-进入 Play Mode，依次操作：
+把 `TutorialHost.cs` 挂到 Canvas。Inspector 中设置以下引用：
 
-1. Settings → Graphics → Audio：音量值保留。
-2. Back：回到主菜单。
-3. Quit → Cancel：留在菜单。
-4. Quit → Confirm：等待 Context 清理，然后调用 Application.Quit。
+| 字段 | 对象 |
+| --- | --- |
+| Canvas | 场景 Canvas |
+| Events | 场景 EventSystem |
+| WindowsMount | Canvas 下的 WindowsMount |
+| OpenWindowButton | Canvas 下的 OpenWindowButton |
 
-Esc 返回或取消，Enter 激活焦点按钮。音量／画质只演示控件状态。
+将 OpenWindowButton 的 Interactable 初始设为关闭。窗口和宿主脚本都放在 `Assets` 中；`HelloWindow` 类不挂组件，容器根据 `Register` 的资源路径加载 Prefab。
 
-Application.Quit 不会结束编辑器 Play Mode。实际项目在卸载场景前 await ShutdownAsync；手动 Stop 不属于正常关闭。
+## 6. 运行并检查
 
-本教程已离线编译，尚未原生运行验证。适配状态见 [Unity 适配](../integrations/unity.md)。
+进入 Play Mode，启动时应看到窗口。点击 Close 后窗口销毁；点击 Open Window 会重新创建。窗口打开时反复点击 Open Window 不会叠出重复窗口。
 
-[下一步](next-steps.md) · [Tab](../manual/tabs.md) · [结果弹窗](../manual/modals-and-dialogs.md)
+所有按钮操作都会观察异步任务；出错时 Unity Console 会收到原始异常。场景中的 Canvas 销毁时，框架会清理对应 Context。
+
+[下一步](next-steps.md) · [窗口实例](../manual/panels.md) · [生命周期](../manual/lifecycle.md)

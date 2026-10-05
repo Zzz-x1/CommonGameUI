@@ -38,7 +38,7 @@
 
 ## 接入状态
 
-Core 目标 netstandard2.1。Godot 持续维护完整 UI 客户端；Unity 客户端、生命周期和时间轴已通过原生 Play Mode 回归。独立 Unity 入门教程仍仅离线编译。详见 [Unity 适配](docs/site/integrations/unity.md)。
+Core 目标 netstandard2.1。Godot 持续维护完整 UI 客户端；Unity 客户端、生命周期和时间轴已通过原生 Play Mode 回归。Unity 入门脚本已在 batchmode 编译，教程 UI 仍未原生运行验证。详见 [Unity 适配](docs/site/integrations/unity.md)。
 
 ## 维护
 

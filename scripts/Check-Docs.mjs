@@ -58,9 +58,11 @@ for (const [path, text] of texts) {
   }
 }
 for (const engine of ['godot', 'unity']) {
-  const source = (await readFile(resolve(root, `docs/examples/${engine}/TutorialHost.cs`), 'utf8')).trim()
-  for (const prefix of ['', 'en/']) {
-    assert.ok(code(texts.get(resolve(site, `${prefix}getting-started/${engine}.md`))).includes(source), `Tutorial drift: ${prefix}${engine}`)
+  for (const file of ['HelloWindow.cs', 'TutorialHost.cs']) {
+    const source = (await readFile(resolve(root, `docs/examples/${engine}/${file}`), 'utf8')).trim()
+    for (const prefix of ['', 'en/']) {
+      assert.ok(code(texts.get(resolve(site, `${prefix}getting-started/${engine}.md`))).includes(source), `Tutorial drift: ${prefix}${engine}/${file}`)
+    }
   }
 }
 console.log(`Documentation checks passed: ${files.length} repository Markdown files, ${pairs} bilingual page pairs; tutorial code, local links and heading anchors verified.`)

@@ -26,6 +26,6 @@ Button close = inventory.GetComponent<Button>("Content/Close");
 
 ## Verification status
 
-Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime, saved Timeline and AnimationClip resources passed 31 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The separate tutorial still has offline compilation only. The Unity Source Generator workflow is not integrated.
+Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime, saved Timeline and AnimationClip resources passed 31 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The standalone tutorial scripts compile in Unity 6000.3.24f1 batch mode; native UI execution of the tutorial remains unverified. The Unity Source Generator workflow is not integrated.
 
 [Unity API](../api/unity.md) · [Timelines](../manual/timeline-animation.md)

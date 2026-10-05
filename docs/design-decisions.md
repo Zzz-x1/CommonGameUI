@@ -1718,7 +1718,7 @@ Unity 适配器、Demo、创作脚本及测试使用本地引擎程序集离线�
 
 使用 VitePress 1.6.4，锁定 npm 依赖，配置双语侧栏、页内目录、本地搜索、代码复制、语言切换和前后篇导航。Markdown 正文使用相对 .md 链接，在 GitHub 不依赖站点插件即可阅读。根 README 改为产品能力、双语入口、运行步骤、支持边界与维护者记录；不把历史候选作为用户功能清单，也不虚构公开包、远程地址、下载版本或框架许可证。
 
-Getting Started 分别提供 Godot 和 Unity 的完整菜单／设置／内嵌 Tab／退出确认宿主。Godot 还提供可编辑的场景、工程和独立 headless 自测；Unity 提供完整宿主与 Prefab／Inspector 配置说明。示例手写注册，不依赖生成器；任务在帧入口被观察并直接传播原异常，正常关闭先等待 Context 清理。UI 参数只示范控件状态，不接真实音频／渲染或玩家存档。测试断言和异常处理仅在独立测试中。
+Getting Started 以 Godot 和 Unity 的“创建一个简单窗口”为第一条可操作路径：手工制作场景资源／Prefab，编写窗口 UINode 与原生宿主脚本，再挂载宿主并连接资源。Godot 提供可编辑资源、教程工程和独立 headless 自测；Unity 明确给出 Prefab 与 Inspector 步骤。示例手写注册，不依赖生成器；按钮异步任务由帧入口观察并直接传播原异常。首课只展示单实例打开、关闭和再次打开，复杂菜单、Tab、确认及退出流程留给 Manual 与 Samples。
 
 Manual 以背包保留、页面返回、设置画质弹窗、购买结果、双对比卡、活动收起和来源动画分支说明实际能力。API 索引按源码核对签名、默认参数与所有权；引擎配方分开描述，不把 Godot 的 delay／Tween 参数写成 Unity 能力。明确手写 Register 不读取 UIResource 属性，生成器把属性路径传给注册；类型化调用位于业务命名空间。AddLifecycle 限挂载前，空闲状态可 RemoveLifecycle 取消通知，已初始化行为仍需最终清理。
 
@@ -1792,7 +1792,7 @@ Unity 已重新保存编排器生成的真实 AnimationClip 轨道，替换旧�
 
 双语用户文档新增 MVVM 入门、GUI 操作和 API 三组页面，链接／双语代码检查及站点构建通过。Unity 编辑器实际验证数据源编辑、Undo、Prefab Override、预览与恢复；Godot 编辑器验证来源编辑、原生 Undo、属性绑定入口及配置恢复。最终回归已完成：核心 157、MVVM 19、Godot 客户端 139、存档重启 4、原生 MVVM 14、Unity Play Mode 26、WebGL IL2CPP 高裁剪 14 项通过；74 个 Markdown、32 组双语页面检查及站点构建通过，65 页浏览器检查通过。检查了 MVVM 文档页面截图。最后修复 Godot 删除／重排撤销在切换选择后引用错误界面的问题，新增原生编辑器回归；Manual 缺少预览工厂时在面板显示来源名称。仅本地提交，未推送或发布。
 
-当前使用边界：首版 GUI 的显式空值内容采用文本，带业务参数的命令通过代码绑定。独立 Unity Getting Started 教程仍只完成离线编译，不能以客户端 Play Mode 验证替代该教程原生验收。
+当前使用边界：首版 GUI 的显式空值内容采用文本，带业务参数的命令通过代码绑定。Unity Getting Started 脚本已在 batchmode 编译，教程 UI 仍未原生运行验证。
 
 ### 18.3 命令发起关闭的生命周期重构
 
@@ -1829,3 +1829,14 @@ Godot 购买确认改为单个命令执行购买、CloseToAsync、奖励展示�
 Runtime 仅新增 Director 引擎模块依赖；Demo 用 Package Manager 安装 Timeline 1.8.13，保存真实多轨 .playable、子 AnimationClip、Animator 与 Director 绑定。大厅和购买奖励迁移到 Timeline，其他来源及简化演出保留已有轻量分支。AnimationClip 是独立有效能力，专项测试迁至 LegacyLobby 测试资源；没有旧业务入口。
 
 专项验证发现转场原本只监听容器 Lifetime，子节点绑定销毁不会取消动画。Core 转场现在同时链接容器及进入／退出节点 Lifetime，防止已释放节点继续播放；新增核心与原生销毁回归。验证：核心 158、MVVM 34、Godot 客户端 139、Unity 原生 Play Mode 31 项通过。Unity 新增 5 项 Timeline 专项，覆盖首帧采样、Time.timeScale=0、完成及退出、跳过、取消后重播、外部停止、原始通知异常、错误配置和绑定销毁；原有客户端来源／简化演出分支同步验证。两种语言的 API、资源结构和使用代码检查及站点构建通过。未推送、未发布。
+
+
+## 20. Getting Started 从第一个窗口开始（2026-10-05）
+
+用户要求教程手把手从创建简单窗口开始，覆盖引擎资源、脚本编写和宿主挂载。原有教程一开始要求读者搭建主菜单、设置 Tab 与确认退出；这会让初次接入同时处理多个容器能力和业务流程，现改为 HelloWindow。
+
+Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源、编写普通 C# UINode、创建 Main 场景宿主、挂载并指定资源，最后运行检查。窗口启动时显示；Open 使用默认单实例，Close 销毁，之后再次打开创建新实例。文档澄清 UINode 是框架逻辑节点，不作为 Godot Node 或 Unity MonoBehaviour 附加到窗口资源；引擎宿主脚本才挂在 Main／Canvas。
+
+`docs/examples` 的两个引擎教程源码随页面同步。Godot 场景和 smoke 检查同步缩小到首次加载、实际按钮关闭／重开、单实例复用与 Context 清理。文档检查逐文件对比 `HelloWindow.cs`、`TutorialHost.cs` 与两种语言的代码块；站点首页和下一步链接由首个窗口场景引导到正式 Manual。
+
+验证：文档链接、标题锚点、32 组双语代码与两个窗口源码同步检查通过；VitePress 站点构建通过，Chromium 检查 65 页、搜索、语言切换、复制、窄屏导航与六步目录。Godot 教程工程构建无警告，通过 8 项 headless 检查；Unity 示例脚本由 Unity 6000.3.24f1 batchmode 编译，未执行原生 UI。检查了桌面教程截图。未修改核心 API 或游戏 Demo 业务。

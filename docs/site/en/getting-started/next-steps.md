@@ -1,6 +1,6 @@
 # Next steps
 
-## From menu to game client
+## From the first window to game UI
 
 | Need | Read |
 | --- | --- |
@@ -13,8 +13,6 @@
 | Use native timelines and continuous image transitions | [Timelines](../manual/timeline-animation.md) |
 | Prepare inventory before entering the lobby | [Resources](../manual/resources.md) |
 
-Put player data into a separate model and inject services through registration factories. Buttons call model operations and refresh after success. Save rewards once; completion or skipping animation must not commit them again.
-
-The project shell handles Esc, shutdown, cross-layer return and controls outside container mounts.
+Window nodes retain UI state. Keep project services and player data in a separate model, then pass them to nodes through registration factories. See the result-dialog chapter for a confirmation flow.
 
 See [Samples](../samples/index.md) for a full client and [Integrations](../integrations/custom-engine.md) for another engine.
