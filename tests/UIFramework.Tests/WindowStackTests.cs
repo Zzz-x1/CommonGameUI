@@ -67,7 +67,7 @@ public class WindowStackTests
 
     [Fact] public async Task ParameterizedSingleReopensWithoutReplacingCreationParameters()
     {
-        await using var ui = Create(); ui.Register<ArgumentView>(); var panels = await Attach<PanelContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<ArgumentView>(() => new ArgumentView()); var panels = await Attach<PanelContainerNode>(ui.Root);
         await Assert.ThrowsAsync<ArgumentException>(() => panels.OpenAsync<ArgumentView>());
         var window = await panels.OpenAsync<ArgumentView>("first");
         await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<ArgumentView>("second"));
@@ -78,13 +78,13 @@ public class WindowStackTests
 
     [Fact] public async Task MultipleQueryRejectsAmbiguityAndRegistrationModeDoesNotAffectStacksOrModals()
     {
-        await using var ui = Create(); ui.Register<CounterView>(windowMode: WindowInstanceMode.Multiple);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var panels = await Attach<PanelContainerNode>(ui.Root);
         var a = await panels.OpenAsync<CounterView>(); var b = await panels.OpenAsync<CounterView>();
         Assert.NotSame(a, b); await panels.HideAsync(a);
         Assert.Throws<InvalidOperationException>(() => panels.TryGet<CounterView>(out _));
         await panels.CloseAsync(b); Assert.True(panels.TryGet<CounterView>(out var remaining)); Assert.Same(a, remaining);
-        ui.Register<ArgumentView>(); var stack = await Attach<StackContainerNode>(ui.Root);
+        ui.Register<ArgumentView>(() => new ArgumentView()); var stack = await Attach<StackContainerNode>(ui.Root);
         Assert.NotSame(await stack.PushAsync<ArgumentView>("a"), await stack.PushAsync<ArgumentView>("b"));
         var modals = await Attach<ModalContainerNode>(ui.Root);
         Assert.NotSame(await modals.OpenAsync<ArgumentView>("a"), await modals.OpenAsync<ArgumentView>("b"));
@@ -92,7 +92,7 @@ public class WindowStackTests
 
     [Fact] public async Task WindowOperationsValidateLocalDisplayRatherThanAncestorVisibility()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); ui.Register<ArgumentView>();
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); ui.Register<ArgumentView>(() => new ArgumentView());
         var outer = await Attach<PanelContainerNode>(ui.Root); var parent = await outer.OpenAsync<CounterView>();
         var inner = await Attach<PanelContainerNode>(parent); var child = await inner.OpenAsync<ArgumentView>("child");
         await outer.HideAsync(parent); Assert.False(child.IsVisible);
@@ -107,7 +107,7 @@ public class WindowStackTests
 
     [Fact] public async Task WindowPrepareFailuresPreserveIdentityAndCommittedDisplay()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var panels = await Attach<PanelContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var panels = await Attach<PanelContainerNode>(ui.Root);
         var n = await panels.OpenAsync<CounterView>(); var failure = new IOException("fade");
         n.Transition = new FailureTransition(failure);
         Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => panels.HideAsync(n)));
@@ -133,7 +133,7 @@ public class WindowStackTests
 
     [Fact] public async Task HideAndShowCancellationRestoreLocalDisplay()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var panels = await Attach<PanelContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var panels = await Attach<PanelContainerNode>(ui.Root);
         var n = await panels.OpenAsync<CounterView>(); n.Transition = new GateTransition();
         using (var ct = new CancellationTokenSource())
         {
@@ -167,7 +167,7 @@ public class WindowStackTests
 
     [Fact] public async Task DirectDisposalRemovesSingleIndexAndHiddenCleanupFailureDoesNotLeaveOwnedEntry()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var panels = await Attach<PanelContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var panels = await Attach<PanelContainerNode>(ui.Root);
         var first = await panels.OpenAsync<CounterView>(); await first.DisposeAsync();
         Assert.False(panels.TryGet<CounterView>(out _)); var next = await panels.OpenAsync<CounterView>(); Assert.NotSame(first, next);
         await panels.HideAsync(next); var failure = new IOException("cleanup"); next.DisposeFailure = failure;
@@ -177,7 +177,7 @@ public class WindowStackTests
 
     [Fact] public async Task ContainerDisposalReleasesHiddenWindowResources()
     {
-        var ui = Create(); ui.Register<CounterView>("window"); var panels = await Attach<PanelContainerNode>(ui.Root);
+        var ui = Create(); ui.Register<CounterView>(() => new CounterView(), "window"); var panels = await Attach<PanelContainerNode>(ui.Root);
         var n = await panels.OpenAsync<CounterView>(); await panels.HideAsync(n); await ui.DisposeAsync();
         Assert.Equal(NodeState.Disposed, n.State); Assert.Equal(1, ((MemoryElement)n.Element!).Disposals);
         Assert.Empty(panels.Children);
@@ -202,7 +202,7 @@ public class WindowStackTests
 
     [Fact] public async Task PopToRejectsCurrentForeignMissingAndDisposedTargets()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var foreign = await Attach<CounterView>(ui.Root);
         await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PopToAsync(b));
@@ -216,7 +216,7 @@ public class WindowStackTests
 
     [Fact] public async Task PopToKeepsEarlierHistoryWhenTargetIsNotTheRootPage()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var c = await stack.PushAsync<CounterView>(); var d = await stack.PushAsync<CounterView>();
         await stack.PopToAsync(b);
@@ -229,7 +229,7 @@ public class WindowStackTests
 
     [Fact] public async Task FailedPopToPreparationRestoresEntireHistoryWithoutIntermediateCleanup()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>(); var c = await stack.PushAsync<CounterView>();
         var failure = new IOException("return target"); a.EnterFailure = failure;
         Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => stack.PopToAsync(a)));
@@ -244,7 +244,7 @@ public class WindowStackTests
 
     [Fact] public async Task ReturnCompletionAndMultipleCleanupFailuresPreserveOriginalAndReleaseEveryPage()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>(); var c = await stack.PushAsync<CounterView>();
         var original = new IOException("completion");
         var sourceBehavior = new RecordingLifecycle { OnExited = _ => throw original };
@@ -259,7 +259,7 @@ public class WindowStackTests
 
     [Fact] public async Task PopToWaitsForCleanupEvenWhenCallerCancelsAfterCommit()
     {
-        await using var ui = Create(); ui.Register<CounterView>(); ui.Register<CleanupView>();
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); ui.Register<CleanupView>(() => new CleanupView());
         var stack = await Attach<StackContainerNode>(ui.Root); var a = await stack.PushAsync<CounterView>();
         var cleanup = await stack.PushAsync<CleanupView>(); using var ct = new CancellationTokenSource();
         var pending = stack.PopToAsync(a, cancellationToken: ct.Token); Assert.Same(a, stack.Current); Assert.False(pending.IsCompleted);

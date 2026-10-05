@@ -25,8 +25,12 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
             foreach (var node in nodes.OrderBy(n => n.Symbol.ToDisplayString(), StringComparer.Ordinal))
             {
                 var type = node.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                source.Append("ui.Register<").Append(type).Append(">(")
-                    .Append(SymbolDisplay.FormatLiteral(node.Resource, true))
+                bool coreNode = false;
+                for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
+                    if (baseType.ToDisplayString() == "UIFramework.UINode") coreNode = true;
+                source.Append("ui.Register<").Append(type).Append(">(");
+                if (coreNode) source.Append("() => new ").Append(type).Append("(), ");
+                source.Append(SymbolDisplay.FormatLiteral(node.Resource, true))
                     .Append(", windowMode: (global::UIFramework.WindowInstanceMode)").Append(node.WindowMode).Append(");\n");
             }
             source.Append("}\n}\n}\n");

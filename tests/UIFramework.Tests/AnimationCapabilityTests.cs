@@ -111,13 +111,13 @@ public class AnimationCapabilityTests
         ui.Register(() => new CounterView { Transition = recipe });
         await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<CounterView>());
         panels.ChildTransition = Transitions.Select(c => { c.ReportProgress(.5f); return new InstantTransition(); });
-        ui.Register<UINode>(); await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<UINode>());
+        ui.Register<UINode>(() => new UINode()); await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<UINode>());
     }
 
     [Theory] [InlineData("preparing")] [InlineData("progress")] [InlineData("completed")] [InlineData("mutation")]
     public async Task ObserverFailureIsVisibleAndBothItemsFinish(string where)
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var first = await stack.PushAsync<CounterView>(); var original = new IOException("observer failure");
         first.TransitionChanged += state =>
         {
@@ -189,7 +189,7 @@ public class AnimationCapabilityTests
     [Fact] public async Task DrawingOrderIsFrozenBeforeLifecyclePreparation()
     {
         var host = new TestHost(); var loader = new Loader(); await using var ui = new UIContext(host, loader, host);
-        var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>("first"); var first = await stack.PushAsync<CounterView>(playAnimation: false);
+        var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), "first"); var first = await stack.PushAsync<CounterView>(playAnimation: false);
         first.TransitionOrder = 10; var second = new ArgumentView();
         second.AddLifecycle(new Preparation { Enter = () => first.TransitionOrder = -10 }); ui.Register(() => second, "second");
         stack.ChildTransition = new Recipe { Play = (_, _) => { Assert.Same(first.Element, loader.Siblings[^1]); return Task.CompletedTask; } };

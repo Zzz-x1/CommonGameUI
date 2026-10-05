@@ -86,11 +86,11 @@ public sealed class TransitionContext
         (TransitionDirection.None, false) => TransitionPhase.Exit,
         _ => throw new InvalidOperationException("Unknown transition direction.")
     };
-    public UINode Node => Lifecycle.Node;
+    public IUINode Node => Lifecycle.Node;
     public IUIElement? Element => Node.Element;
     public ContainerNode? Container => Lifecycle.Container;
-    public UINode? Source => Lifecycle.Source;
-    public UINode? Target => Lifecycle.Target;
+    public IUINode? Source => Lifecycle.Source;
+    public IUINode? Target => Lifecycle.Target;
     public LifecycleReason Reason => Lifecycle.Reason;
     /// <summary>Custom runs report normalized, monotonic animation time. Easing must not alter this value.</summary>
     public void ReportProgress(float progress)
@@ -105,7 +105,7 @@ public sealed class TransitionContext
                 throw new InvalidOperationException("Progress can only be reported during playback.");
             _reportProgress?.Invoke(progress);
         }
-        catch (Exception ex) { Node.ReportFailure(ex, "Report transition progress"); throw; }
+        catch (Exception ex) { Node.Node.ReportFailure(ex, "Report transition progress"); throw; }
     }
     internal void SetProgressReporter(Action<float>? report) { _managed = true; _reportProgress = report; }
 }

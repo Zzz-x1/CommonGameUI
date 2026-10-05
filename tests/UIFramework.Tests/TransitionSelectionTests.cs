@@ -42,7 +42,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task ConstructionIsLazyAndStackPhasesHaveStableSourceTarget()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var contexts = new List<TransitionContext>(); var recipe = new Recipe();
         stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return recipe; });
         Assert.Empty(contexts);
@@ -59,7 +59,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task PopToOnlySelectsTopAndDestination()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var a = await stack.PushAsync<CounterView>(); var skipped = await stack.PushAsync<CounterView>(); var top = await stack.PushAsync<CounterView>();
         var contexts = new List<TransitionContext>(); stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return new InstantTransition(); });
         await stack.PopToAsync(a);
@@ -80,7 +80,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task BothRecipesAreFrozenBeforeEitherPreparation()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var first = await stack.PushAsync<CounterView>(); var chosen = new Recipe(); var other = new Recipe(); var state = false;
         var behavior = new Preparation { Enter = () => state = true };
         var second = new ArgumentView(); second.AddLifecycle(behavior); ui.Register(() => second);
@@ -94,7 +94,7 @@ public class TransitionSelectionTests
         await using var ui = Create(); var global = new Recipe(); var container = new Recipe(); var own = new Recipe();
         ui.DefaultTransition = Transitions.Select(_ => global);
         var panels = await Attach<PanelContainerNode>(ui.Root); panels.ChildTransition = Transitions.Select(_ => container);
-        ui.Register(() => new CounterView { Transition = Transitions.Select(_ => own) }); ui.Register<ArgumentView>();
+        ui.Register(() => new CounterView { Transition = Transitions.Select(_ => own) }); ui.Register<ArgumentView>(() => new ArgumentView());
         var a = await panels.OpenAsync<CounterView>(); await panels.OpenAsync<ArgumentView>("item");
         Assert.Single(own.Created); Assert.Single(container.Created); Assert.Empty(global.Created);
         a.Transition = Transitions.Select(_ => new InstantTransition()); await panels.HideAsync(a); Assert.Single(own.Created);
@@ -115,7 +115,7 @@ public class TransitionSelectionTests
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task PanelAndModalExposeEnterExit(bool modal)
     {
-        await using var ui = Create(); ui.Register<CounterView>(); var recipe = new Recipe(); ui.DefaultTransition = Transitions.Select(_ => recipe);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var recipe = new Recipe(); ui.DefaultTransition = Transitions.Select(_ => recipe);
         if (modal) { var c = await Attach<ModalContainerNode>(ui.Root); var n = await c.OpenAsync<CounterView>(); await c.CloseAsync(n); }
         else { var c = await Attach<PanelContainerNode>(ui.Root); var n = await c.OpenAsync<CounterView>(); await c.HideAsync(n); await c.ShowAsync(n); await c.CloseAsync(n); }
         Assert.All(recipe.Created, c => Assert.Equal(c.Entering ? TransitionPhase.Enter : TransitionPhase.Exit, c.Phase));
@@ -125,7 +125,7 @@ public class TransitionSelectionTests
     [Theory] [InlineData("throw")] [InlineData("null")] [InlineData("cycle")] [InlineData("mutate")]
     public async Task SelectionErrorsPreserveStackAndNeverUseOtherRecipes(string mode)
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var first = await stack.PushAsync<CounterView>(); var spare = new Recipe(); ui.DefaultTransition = spare;
         var original = new IOException("selector"); IUITransition? selector = null;
         selector = Transitions.Select(c => mode switch
@@ -146,7 +146,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task NestedSelectionEvaluatesEachWrapperOnce()
     {
-        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var innerCalls = 0; var outerCalls = 0; var recipe = new Recipe();
         var inner = Transitions.Select(_ => { innerCalls++; return recipe; });
         panels.ChildTransition = Transitions.Select(_ => { outerCalls++; return inner; });
@@ -159,7 +159,7 @@ public class TransitionSelectionTests
     public async Task InstantOpenStillAwaitsResourceAndExposesFailure(bool fail)
     {
         var host = new TestHost { LoadGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
-        await using var ui = new UIContext(host, host, host); ui.Register<CounterView>("window");
+        await using var ui = new UIContext(host, host, host); ui.Register<CounterView>(() => new CounterView(), "window");
         var panels = await Attach<PanelContainerNode>(ui.Root);
         ui.DefaultTransition = Transitions.Select(_ => throw new Exception("Unexpected animation"));
         var opening = panels.OpenAsync<CounterView>(playAnimation: false);
@@ -181,7 +181,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task FalseSkipsAllSelectorsAcrossContainerOperationsButRunsLifecycle()
     {
-        await using var ui = Create(); ui.Register<CounterView>();
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView());
         ui.DefaultTransition = Transitions.Select(_ => throw new IOException("Must never select"));
         var panels = await Attach<PanelContainerNode>(ui.Root); var window = await panels.OpenAsync<CounterView>(playAnimation: false);
         await panels.HideAsync(window, false); Assert.False(window.IsVisible);
@@ -199,7 +199,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task FalseIsPerOperationAndDoesNotModifySharedConfiguration()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
         var recipe = new Recipe(); var selector = Transitions.Select(_ => recipe); stack.ChildTransition = selector;
         await stack.PushAsync<CounterView>(playAnimation: false); Assert.Empty(recipe.Created);
         await stack.PushAsync<CounterView>(); Assert.Equal(2, recipe.Created.Count); Assert.Same(selector, stack.ChildTransition);
@@ -221,7 +221,7 @@ public class TransitionSelectionTests
     public async Task DialogModeCoversOpeningAndClosingBackdropAndNodes(bool cancel)
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory);
-        ui.Register<BoolDialog>(); ui.DefaultTransition = Transitions.Select(_ => throw new IOException("Must not select"));
+        ui.Register<BoolDialog>(() => new BoolDialog()); ui.DefaultTransition = Transitions.Select(_ => throw new IOException("Must not select"));
         using var ct = new CancellationTokenSource(); var pending = modals.ShowDialogAsync<BoolDialog, bool>(playAnimation: false, cancellationToken: ct.Token);
         if (cancel) { ct.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending); }
         else { ((BoolDialog)modals.Current!).Complete(false); Assert.False(await pending); }

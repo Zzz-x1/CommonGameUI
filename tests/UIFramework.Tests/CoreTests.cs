@@ -137,7 +137,7 @@ public class CoreTests
 
     [Fact] public async Task StackReturnsSameInstanceAndDisposesOnlyPoppedPage()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui);
         var first = await stack.PushAsync<CounterView>(); var second = await stack.PushAsync<CounterView>();
         Assert.False(first.IsVisible); Assert.True(second.IsVisible);
         await stack.PopAsync(); Assert.Same(first, stack.Current); Assert.True(first.IsVisible);
@@ -148,7 +148,7 @@ public class CoreTests
 
     [Fact] public async Task IndependentCloseTargetsExactInstance()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
         var first = await panels.OpenAsync<CounterView>(); var second = await panels.OpenAsync<CounterView>();
         await panels.CloseAsync(first); Assert.True(second.IsVisible); Assert.Equal(NodeState.Ready, second.State);
         Assert.Single(panels.Children); await ui.DisposeAsync();
@@ -156,9 +156,9 @@ public class CoreTests
 
     [Fact] public async Task FailedLoadPreservesOriginalExceptionAndCurrentPage()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>("page"); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui);
         var first = await stack.PushAsync<CounterView>(); var error = new IOException("raw load error"); host.LoadFailure = error;
-        ui.Register<ArgumentView>("other-page");
+        ui.Register<ArgumentView>(() => new ArgumentView(), "other-page");
         var received = await Assert.ThrowsAsync<IOException>(() => stack.PushAsync<ArgumentView>("args"));
         Assert.Same(error, received); Assert.Same(first, stack.Current); Assert.True(first.IsVisible);
         Assert.Single(host.Errors); Assert.Contains("LoadAsync", received.StackTrace); await ui.DisposeAsync();
@@ -167,7 +167,7 @@ public class CoreTests
     [Fact] public async Task FailedEnterCleansNewNodeWithoutCommittingHistory()
     {
         var (ui, host) = Create(); var stack = await Attach<StackContainerNode>(ui);
-        ui.Register<CounterView>(); var first = await stack.PushAsync<CounterView>();
+        ui.Register<CounterView>(() => new CounterView()); var first = await stack.PushAsync<CounterView>();
         var error = new InvalidOperationException("enter failed");
         ui.Register<ArgumentView>(() => new ArgumentView { Transition = new FailureTransition(error) }, "page");
         Assert.Same(error, await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PushAsync<ArgumentView>("args")));
@@ -188,7 +188,7 @@ public class CoreTests
 
     [Fact] public async Task ConcurrentOperationThrowsInsteadOfSkipping()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>("page"); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui);
         host.LoadGate = new TaskCompletionSource<bool>(); var pending = stack.PushAsync<CounterView>();
         await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PushAsync<CounterView>());
         host.LoadGate.SetResult(true); await pending; Assert.Single(stack.History); await ui.DisposeAsync();
@@ -196,7 +196,7 @@ public class CoreTests
 
     [Fact] public async Task DisposingScopeCancelsLoadAndWaitsForCleanup()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>("page"); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui);
         host.LoadGate = new TaskCompletionSource<bool>(); var pending = stack.PushAsync<CounterView>();
         await ui.DisposeAsync(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Empty(host.Loaded); Assert.Empty(ui.Root.Children); Assert.Equal(NodeState.Disposed, stack.State);
@@ -204,7 +204,7 @@ public class CoreTests
 
     [Fact] public async Task NestedModalBlocksAllOtherInputAndRestoresFocus()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>();
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView());
         var panels = await Attach<PanelContainerNode>(ui); var page = await panels.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(ui); var initial = new object(); host.Focus = initial;
         var a = await modals.OpenAsync<CounterView>(); Assert.False(page.IsInteractive);
@@ -216,7 +216,7 @@ public class CoreTests
 
     [Fact] public async Task DialogResultReturnsOnlyAfterClosingInstance()
     {
-        var (ui, _) = Create(); ui.Register<BoolDialog>(); var modals = await Attach<ModalContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<BoolDialog>(() => new BoolDialog()); var modals = await Attach<ModalContainerNode>(ui);
         var pending = modals.ShowDialogAsync<BoolDialog, bool>(); var dialog = Assert.IsType<BoolDialog>(modals.Current);
         dialog.Complete(false); Assert.False(await pending); Assert.Null(modals.Current);
         Assert.Equal(NodeState.Disposed, dialog.State); await ui.DisposeAsync();
@@ -224,7 +224,7 @@ public class CoreTests
 
     [Fact] public async Task CallerCancellationClosesWaitingDialogAndPropagatesCancellation()
     {
-        var (ui, _) = Create(); ui.Register<BoolDialog>(); var modals = await Attach<ModalContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<BoolDialog>(() => new BoolDialog()); var modals = await Attach<ModalContainerNode>(ui);
         using var cancel = new CancellationTokenSource(); var pending = modals.ShowDialogAsync<BoolDialog, bool>(cancellationToken: cancel.Token);
         cancel.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Null(modals.Current); Assert.Null(ui.InputOwner); await ui.DisposeAsync();
@@ -255,14 +255,14 @@ public class CoreTests
 
     [Fact] public async Task LifecycleCannotDisposeItsOwnerAndDeadlock()
     {
-        var (ui, _) = Create(); ui.Register<ReentrantView>(); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<ReentrantView>(() => new ReentrantView()); var stack = await Attach<StackContainerNode>(ui);
         await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PushAsync<ReentrantView>().WaitAsync(TimeSpan.FromSeconds(2)));
         Assert.Empty(stack.History); Assert.Empty(stack.Children); await ui.DisposeAsync();
     }
 
     [Fact] public async Task CancelingAnEnterCleansItsInstanceAndLeavesNoHistory()
     {
-        var (ui, _) = Create(); ui.Register<SlowView>(); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<SlowView>(() => new SlowView()); var stack = await Attach<StackContainerNode>(ui);
         using var cancel = new CancellationTokenSource(); var pending = stack.PushAsync<SlowView>(cancellationToken: cancel.Token);
         cancel.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Empty(stack.History); Assert.Empty(stack.Children); await ui.DisposeAsync();
@@ -270,7 +270,7 @@ public class CoreTests
 
     [Fact] public async Task ScopeDisposalEndsWaitingDialogWithoutLeavingInputOwner()
     {
-        var (ui, _) = Create(); ui.Register<BoolDialog>(); var modals = await Attach<ModalContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<BoolDialog>(() => new BoolDialog()); var modals = await Attach<ModalContainerNode>(ui);
         var pending = modals.ShowDialogAsync<BoolDialog, bool>();
         await ui.DisposeAsync(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Null(ui.InputOwner); Assert.Empty(ui.Root.Children);
@@ -278,7 +278,7 @@ public class CoreTests
 
     [Fact] public async Task AllChildrenAreCleanedEvenWhenSeveralDisposalsFail()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var panels = await Attach<PanelContainerNode>(ui);
         var a = await panels.OpenAsync<CounterView>(); var b = await panels.OpenAsync<CounterView>();
         var first = new IOException("B dispose"); var second = new InvalidOperationException("A dispose");
         a.DisposeFailure = second; b.DisposeFailure = first;
@@ -296,7 +296,7 @@ public class CoreTests
 
     [Fact] public async Task InteractionRestoreFailureCannotReplaceOriginalLoadException()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>("page");
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page");
         var element = new MemoryElement(); var panels = new PanelContainerNode();
         await panels.AttachAsync(ui.Root, "Panels", element);
         var primary = new IOException("load"); var secondary = new InvalidOperationException("restore input");

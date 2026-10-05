@@ -8,7 +8,7 @@ public class ContainerReturnTests
     private static (UIContext UI, TestHost Host) Create()
     {
         var host = new TestHost(); var ui = new UIContext(host, host, host);
-        ui.Register<CounterView>("modal"); ui.Register<BoolDialog>();
+        ui.Register<CounterView>(() => new CounterView(), "modal"); ui.Register<BoolDialog>(() => new BoolDialog());
         return (ui, host);
     }
     private static async Task<T> Attach<T>(UIContext ui) where T : UINode, new()

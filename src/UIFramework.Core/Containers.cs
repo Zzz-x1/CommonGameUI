@@ -77,7 +77,7 @@ public class PanelContainerNode : ContainerNode
     private readonly Dictionary<Type, UINode> _single = new();
 
     public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true,
-        CancellationToken cancellationToken = default) where T : UINode =>
+        CancellationToken cancellationToken = default) where T : class, IUINode =>
         OperateAsync("Open", async ct =>
         {
             ct.ThrowIfCancellationRequested();
@@ -88,7 +88,7 @@ public class PanelContainerNode : ContainerNode
                 var record = RequireWindow(existing);
                 if (supplied) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
                 if (!record.Shown) await ShowCoreAsync(existing, record, playAnimation, ct);
-                return (T)existing;
+                return (T)existing.Owner;
             }
             var node = await Context.CreateAsync<T>(this, args, ct);
             var enter = Describe(node, LifecycleReason.Open, null, node);
@@ -97,10 +97,10 @@ public class PanelContainerNode : ContainerNode
             _windows.Add(node, new WindowRecord(typeof(T)));
             if (mode == WindowInstanceMode.Single) _single.Add(typeof(T), node);
             CompleteChange(enter, null, null, node, enter);
-            return node;
+            return (T)node.Owner;
         }, cancellationToken);
 
-    public bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? node) where T : UINode
+    public bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? node) where T : class, IUINode
     {
         try
         {
@@ -108,7 +108,7 @@ public class PanelContainerNode : ContainerNode
             if (State != NodeState.Ready) throw new InvalidOperationException($"Window container is {State}.");
             var matches = _windows.Where(p => p.Value.Type == typeof(T) && p.Key.State == NodeState.Ready).Select(p => p.Key).ToArray();
             if (matches.Length > 1) throw new InvalidOperationException($"Several windows of registered type {typeof(T).Name} exist; use their instance references.");
-            node = matches.Length == 0 ? null : (T)matches[0];
+            node = matches.Length == 0 ? null : (T)matches[0].Owner;
             return node != null;
         }
         catch (Exception ex) { ReportFailure(ex, $"TryGet<{typeof(T).Name}> {Name}"); throw; }
@@ -122,9 +122,10 @@ public class PanelContainerNode : ContainerNode
         return record;
     }
 
-    public Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+    public Task HideAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Hide", async ct =>
         {
+            var node = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
             var record = RequireWindow(node);
             if (!record.Shown) throw new InvalidOperationException("Window is already hidden.");
             var exit = Describe(node, LifecycleReason.Hide, node, null);
@@ -135,9 +136,10 @@ public class PanelContainerNode : ContainerNode
             return true;
         }, cancellationToken);
 
-    public Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+    public Task ShowAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Show", async ct =>
         {
+            var node = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
             var record = RequireWindow(node);
             if (record.Shown) throw new InvalidOperationException("Window is already shown.");
             await ShowCoreAsync(node, record, playAnimation, ct);
@@ -153,9 +155,10 @@ public class PanelContainerNode : ContainerNode
         CompleteChange(enter, null, null, node, enter);
     }
 
-    public Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+    public Task CloseAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("Close", async ct =>
         {
+            var node = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
             var record = RequireWindow(node);
             if (!record.Shown)
             {
@@ -186,13 +189,14 @@ public class PanelContainerNode : ContainerNode
 public class StackContainerNode : ContainerNode
 {
     private readonly List<UINode> _history = new();
-    public IReadOnlyList<UINode> History => _history.AsReadOnly();
-    public UINode? Current => _history.Count == 0 ? null : _history[_history.Count - 1];
+    public IReadOnlyList<IUINode> History => _history.Select(n => n.Owner).ToArray();
+    public IUINode? Current => CurrentNode?.Owner;
+    private UINode? CurrentNode => _history.Count == 0 ? null : _history[_history.Count - 1];
 
-    public Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode =>
+    public Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode =>
         OperateAsync("Push", async ct =>
         {
-            var previous = Current;
+            var previous = CurrentNode;
             var node = await Context.CreateAsync<T>(this, args, ct);
             var enter = Describe(node, LifecycleReason.Push, previous, node);
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Covered, previous, node);
@@ -209,18 +213,19 @@ public class StackContainerNode : ContainerNode
             }
             _history.Add(node);
             CompleteChange(enter, previous, exit, node, enter);
-            return node;
+            return (T)node.Owner;
         }, cancellationToken);
 
     public Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default) => OperateAsync("Pop", async ct =>
     {
-        if (Current == null) throw new InvalidOperationException("Cannot pop an empty stack.");
+        if (CurrentNode == null) throw new InvalidOperationException("Cannot pop an empty stack.");
         await ReturnCoreAsync(_history.Count - 2, playAnimation, ct);
         return true;
     }, cancellationToken);
 
-    public Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) => OperateAsync("PopTo", async ct =>
+    public Task PopToAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) => OperateAsync("PopTo", async ct =>
     {
+        var target = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
         if (target == null) throw new ArgumentNullException(nameof(target));
         var index = _history.IndexOf(target);
         if (target.Parent != this || target.State != NodeState.Ready || index < 0 || index == _history.Count - 1)
@@ -272,13 +277,15 @@ public class StackContainerNode : ContainerNode
 public class TabContainerNode : ContainerNode
 {
     private readonly Dictionary<string, UINode> _items = new(StringComparer.Ordinal);
-    public IReadOnlyDictionary<string, UINode> Items => new System.Collections.ObjectModel.ReadOnlyDictionary<string, UINode>(_items);
+    public IReadOnlyDictionary<string, IUINode> Items => _items.ToDictionary(p => p.Key, p => p.Value.Owner, StringComparer.Ordinal);
     public string? CurrentName { get; private set; }
-    public UINode? Current => CurrentName == null ? null : _items[CurrentName];
+    public IUINode? Current => CurrentNode?.Owner;
+    private UINode? CurrentNode => CurrentName == null ? null : _items[CurrentName];
 
-    public Task BindAsync(string name, UINode node, IUIElement? embeddedElement = null,
+    public Task BindAsync(string name, IUINode owner, IUIElement? embeddedElement = null,
         CancellationToken cancellationToken = default) => OperateAsync("BindTab", async ct =>
     {
+        var node = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Tab name is required.", nameof(name));
         if (_items.ContainsKey(name)) throw new InvalidOperationException($"Duplicate tab name '{name}'.");
         if (node == null) throw new ArgumentNullException(nameof(node));
@@ -292,8 +299,8 @@ public class TabContainerNode : ContainerNode
         OperateAsync("SwitchTab", async ct =>
         {
             if (!_items.TryGetValue(name, out var next)) throw new KeyNotFoundException($"Tab '{name}' does not exist in '{Name}'.");
-            if (ReferenceEquals(Current, next)) throw new InvalidOperationException($"Tab '{name}' is already current.");
-            var previous = Current;
+            if (ReferenceEquals(CurrentNode, next)) throw new InvalidOperationException($"Tab '{name}' is already current.");
+            var previous = CurrentNode;
             var enter = Describe(next, LifecycleReason.Switch, previous, next);
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Switch, previous, next);
             try
@@ -312,11 +319,11 @@ public class TabContainerNode : ContainerNode
             return true;
         }, cancellationToken);
 
-    public async Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
+    public async Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
     {
         try
         {
-            var names = _items.Where(pair => pair.Value is T).Select(pair => pair.Key).ToArray();
+            var names = _items.Where(pair => pair.Value.Owner is T).Select(pair => pair.Key).ToArray();
             if (names.Length != 1) throw new InvalidOperationException($"Expected one tab of type {typeof(T).Name}, found {names.Length}; use its name.");
             await SwitchAsync(names[0], playAnimation, cancellationToken);
         }
@@ -326,7 +333,7 @@ public class TabContainerNode : ContainerNode
     public Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("HideTab", async ct =>
         {
-            var current = Current ?? throw new InvalidOperationException("No tab is selected.");
+            var current = CurrentNode ?? throw new InvalidOperationException("No tab is selected.");
             var exit = Describe(current, LifecycleReason.Hide, current, null);
             try { await PrepareChangeAsync(exit, null, ct, playAnimation); ct.ThrowIfCancellationRequested(); }
             catch (Exception ex)
@@ -364,8 +371,9 @@ public class ModalContainerNode : ContainerNode
     private bool _dismissPending;
     private bool _ownsInputBlock;
     public ModalBackdropMode BackdropMode { get; private set; } = ModalBackdropMode.Shared;
-    public IUIBackdrop? CurrentBackdrop => Current != null && _backdrops.TryGetValue(Current, out var backdrop) ? backdrop : null;
-    public UINode? Current => _modals.LastOrDefault();
+    public IUIBackdrop? CurrentBackdrop => CurrentNode != null && _backdrops.TryGetValue(CurrentNode, out var backdrop) ? backdrop : null;
+    public IUINode? Current => CurrentNode?.Owner;
+    private UINode? CurrentNode => _modals.LastOrDefault();
 
     public void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
     {
@@ -386,7 +394,7 @@ public class ModalContainerNode : ContainerNode
         try
         {
             Context.Host.VerifyAccess(); Context.VerifyMutation(); token.ThrowIfCancellationRequested();
-            var node = Current ?? throw new InvalidOperationException("No modal is available to dismiss.");
+            var node = CurrentNode ?? throw new InvalidOperationException("No modal is available to dismiss.");
             if (_backdropLocked || _dismissPending || !node.IsInteractive) throw new InvalidOperationException("The modal cannot receive a dismiss request now.");
             if (node.DismissRequested == null) return false; // Explicitly non-dismissible business UI.
             _dismissPending = true;
@@ -420,8 +428,8 @@ public class ModalContainerNode : ContainerNode
     {
         if (BackdropMode == ModalBackdropMode.Shared)
         {
-            foreach (var modal in _modals.Where(n => !ReferenceEquals(n, Current))) modal.Element?.BringToFront();
-            _sharedBackdrop?.BringToFront(); Current?.Element?.BringToFront();
+            foreach (var modal in _modals.Where(n => !ReferenceEquals(n, CurrentNode))) modal.Element?.BringToFront();
+            _sharedBackdrop?.BringToFront(); CurrentNode?.Element?.BringToFront();
         }
         else foreach (var modal in _modals)
         {
@@ -430,14 +438,14 @@ public class ModalContainerNode : ContainerNode
         }
     }
 
-    public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
+    public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
     {
         object? focus = null;
         return OperateAsync("OpenModal", async ct =>
         {
-            if (Context.InputOwner != null && Context.InputOwner.Parent != this)
+            if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
                 throw new InvalidOperationException("Independent modal containers cannot own input simultaneously.");
-            var previous = Current;
+            var previous = CurrentNode;
             var node = await Context.CreateAsync<T>(this, args, ct);
             var enter = Describe(node, LifecycleReason.Open, previous, node);
             IUIBackdrop? backdrop = null;
@@ -463,7 +471,7 @@ public class ModalContainerNode : ContainerNode
                 await PrepareChangeAsync(null, enter, ct, playAnimation);
                 node.Element?.BringToFront();
                 ct.ThrowIfCancellationRequested();
-                if (Context.InputOwner != null && Context.InputOwner.Parent != this)
+                if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
                     throw new InvalidOperationException("Another modal container acquired input while this modal was preparing.");
             }
             catch (Exception ex)
@@ -484,27 +492,29 @@ public class ModalContainerNode : ContainerNode
             }
             Context.SetInputOwner(node);
             CompleteChange(enter, null, null, node, enter, () => Context.Host.Focus(node.Element));
-            return node;
+            return (T)node.Owner;
         }, cancellationToken, () =>
         {
-            if (Context.IsModalInputBlocked || (Context.InputOwner != null && Context.InputOwner.Parent != this))
+            if (Context.IsModalInputBlocked || (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this))
                 throw new InvalidOperationException("Another modal container owns input or is preparing a modal operation.");
             focus = Context.Host.CaptureFocus();
         });
     }
 
-    public Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+    public Task CloseAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("CloseModal", async ct =>
         {
+            var node = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
             if (node == null) throw new ArgumentNullException(nameof(node));
-            if (!ReferenceEquals(node, Current)) throw new InvalidOperationException("Only the current modal can be closed.");
+            if (!ReferenceEquals(node, CurrentNode)) throw new InvalidOperationException("Only the current modal can be closed.");
             await CloseRangeAsync(_modals.Count - 1, LifecycleReason.Close, playAnimation, ct);
             return true;
         }, cancellationToken);
 
-    public Task CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default) =>
+    public Task CloseToAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateAsync("CloseToModal", async ct =>
         {
+            var target = owner?.Node ?? throw new ArgumentNullException(nameof(owner));
             if (target == null) throw new ArgumentNullException(nameof(target));
             var index = _modals.IndexOf(target);
             if (index < 0 || target.State != NodeState.Ready || index == _modals.Count - 1)
@@ -584,10 +594,10 @@ public class ModalContainerNode : ContainerNode
     }
 
     public async Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default)
-        where T : DialogNode<TResult>
+        where T : class, IDialogNode<TResult>
     {
         var node = await OpenAsync<T>(args, playAnimation, cancellationToken);
-        var record = _records[node];
+        var record = _records[node.Node];
         TResult result;
         try
         {
@@ -608,14 +618,14 @@ public class ModalContainerNode : ContainerNode
 
     protected override void OnChildRemoved(UINode child)
     {
-        var ownsInput = ReferenceEquals(Context.InputOwner, child);
+        var ownsInput = ReferenceEquals(Context.InputOwnerNode, child);
         _records.TryGetValue(child, out var record);
         _modals.Remove(child); _records.Remove(child);
         if (ownsInput)
         {
-            Context.SetInputOwner(Current);
+            Context.SetInputOwner(CurrentNode);
             Context.Host.RestoreFocus(record?.Focus);
-            Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, Current), continueOnFailure: true);
+            Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, CurrentNode), continueOnFailure: true);
         }
     }
 
@@ -641,8 +651,10 @@ public class ModalContainerNode : ContainerNode
 
 internal interface IDialogResult { bool HasResult { get; } }
 
-public class DialogNode<TResult> : UINode, IDialogResult
+public class DialogNode<TResult> : UINode, IDialogResult, IDialogNode<TResult>
 {
+    public DialogNode() { }
+    protected DialogNode(IUINode owner) : base(owner) { }
     private readonly TaskCompletionSource<TResult> _result = new();
     private bool _completed;
     bool IDialogResult.HasResult => _completed;
@@ -661,7 +673,7 @@ public class DialogNode<TResult> : UINode, IDialogResult
         catch (Exception ex) { Context.Report(ex, $"CompleteDialog {Name}"); throw; }
     }
 
-    internal async Task<TResult> WaitForResultAsync(CancellationToken token)
+    public async Task<TResult> WaitForResultAsync(CancellationToken token)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, Lifetime);
         var canceled = new TaskCompletionSource<bool>();

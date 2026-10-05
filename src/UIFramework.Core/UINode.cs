@@ -2,7 +2,7 @@ using System.Runtime.ExceptionServices;
 
 namespace UIFramework;
 
-public class UINode : IAsyncDisposable
+public class UINode : IUINode
 {
     private sealed class OperationFrame
     {
@@ -26,11 +26,18 @@ public class UINode : IAsyncDisposable
     private readonly List<IUINodeExtension> _initializedExtensions = new();
     private UIContext? _context;
 
+    public UINode() { Owner = this; }
+    protected UINode(IUINode owner) { Owner = owner ?? throw new ArgumentNullException(nameof(owner)); }
+    public IUINode Owner { get; }
+    UINode IUINode.Node => this;
+    IUINode? IUINode.Parent => Parent?.Owner;
+    internal IReadOnlyList<UINode> ChildrenCore => _children;
+
     public bool HasEntered { get; internal set; }
     public Guid Id { get; } = Guid.NewGuid();
     public string Name { get; private set; } = "";
     public UINode? Parent { get; private set; }
-    public IReadOnlyList<UINode> Children => _children.AsReadOnly();
+    public IReadOnlyList<IUINode> Children => _children.Select(n => n.Owner).ToArray();
     public UIContext Context => _context ?? throw new InvalidOperationException("Node is not attached to a UI context.");
     public IUIElement? Element { get; private set; }
     internal UIResourceLease? ResourceLease { get; set; }
@@ -108,7 +115,8 @@ public class UINode : IAsyncDisposable
     protected virtual Task OnDisposeAsync() => Task.CompletedTask;
     protected virtual Task OnChildRemovedAsync(UINode child) => Task.CompletedTask;
     protected virtual void OnChildRemoved(UINode child) { }
-    internal virtual void SetParameters(object? args)
+    internal void SetParameters(object? args) => OnSetParameters(args);
+    protected virtual void OnSetParameters(object? args)
     {
         if (args != null) throw new ArgumentException($"{GetType().Name} does not accept parameters.", nameof(args));
     }
@@ -120,9 +128,10 @@ public class UINode : IAsyncDisposable
     }
 
     /// <summary>Bind an existing display or attach a logical node. Does not load or clone a resource.</summary>
-    public async Task AttachAsync(UINode parent, string name, IUIElement? element = null, CancellationToken cancellationToken = default)
+    public async Task AttachAsync(IUINode owner, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null)
     {
-        if (parent == null) throw new ArgumentNullException(nameof(parent));
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        var parent = owner.Node;
         if (State != NodeState.Detached)
         {
             var failure = new InvalidOperationException("Node is already attached or disposed.");
@@ -149,6 +158,7 @@ public class UINode : IAsyncDisposable
             SetLocalState(false, false);
             await RunAsync("Initialize", async token =>
             {
+                configure?.Invoke();
                 foreach (var extension in Context.NodeExtensions)
                 {
                     _initializedExtensions.Add(extension);
@@ -176,14 +186,14 @@ public class UINode : IAsyncDisposable
         }
     }
 
-    public UINode GetChild(string name)
+    public IUINode GetChild(string name)
     {
         try
         {
             Context.Host.VerifyAccess();
             var matches = _children.Where(x => x.Name == name).ToArray();
             if (matches.Length != 1) throw new InvalidOperationException($"Expected one child named '{name}', found {matches.Length}.");
-            return matches[0];
+            return matches[0].Owner;
         }
         catch (Exception ex) { ReportFailure(ex, $"GetChild {Name}/{name}"); throw; }
     }
@@ -342,10 +352,10 @@ public class UINode : IAsyncDisposable
     }
 }
 
-public class UINode<TArgs> : UINode
+public class UINode<TArgs> : UINode, IParameterizedNode<TArgs>
 {
     public TArgs Parameters { get; private set; } = default!;
-    internal override void SetParameters(object? args)
+    protected override void OnSetParameters(object? args)
     {
         if (!(args is TArgs typed)) throw new ArgumentException($"Expected parameters of type {typeof(TArgs).FullName}.", nameof(args));
         Parameters = typed;

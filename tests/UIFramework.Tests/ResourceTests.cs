@@ -8,7 +8,7 @@ public class ResourceTests
     private static (UIContext UI, TestHost Host) Create()
     {
         var host = new TestHost(); var ui = new UIContext(host, host, host);
-        ui.Register<CounterView>("window", WindowInstanceMode.Multiple);
+        ui.Register<CounterView>(() => new CounterView(), "window", WindowInstanceMode.Multiple);
         return (ui, host);
     }
     private static async Task<PanelContainerNode> Panels(UIContext ui)
@@ -40,7 +40,7 @@ public class ResourceTests
 
     [Fact] public async Task DifferentTypesWithSamePathShareResource()
     {
-        var (ui, host) = Create(); await using var scope = ui; ui.Register<ArgumentView>("window");
+        var (ui, host) = Create(); await using var scope = ui; ui.Register<ArgumentView>(() => new ArgumentView(), "window");
         using var a = await ui.PreloadAsync<CounterView>(); using var b = await ui.PreloadAsync<ArgumentView>();
         Assert.Single(host.Resources);
     }
@@ -73,7 +73,7 @@ public class ResourceTests
     [Fact] public async Task ContextDisposesOutstandingPreloadsAndCancelsPendingLoad()
     {
         var (ui, host) = Create(); var lease = await ui.PreloadAsync<CounterView>();
-        ui.Register<ArgumentView>("other"); host.LoadGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ui.Register<ArgumentView>(() => new ArgumentView(), "other"); host.LoadGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var pending = ui.PreloadAsync<ArgumentView>();
         await ui.DisposeAsync(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Equal(1, Assert.Single(host.Resources).Disposals); lease.Dispose(); await ui.DisposeAsync();
@@ -116,7 +116,7 @@ public class ResourceTests
     {
         var (ui, _) = Create(); await using var scope = ui;
         await Assert.ThrowsAsync<KeyNotFoundException>(() => ui.PreloadAsync<ArgumentView>());
-        ui.Register<ArgumentView>(); await Assert.ThrowsAsync<InvalidOperationException>(() => ui.PreloadAsync<ArgumentView>());
+        ui.Register<ArgumentView>(() => new ArgumentView()); await Assert.ThrowsAsync<InvalidOperationException>(() => ui.PreloadAsync<ArgumentView>());
         await ui.DisposeAsync(); await Assert.ThrowsAsync<ObjectDisposedException>(() => ui.PreloadAsync<CounterView>());
     }
 

@@ -28,7 +28,7 @@ internal static class TransitionFlow
                 item.SetProgressReporter(null);
                 try
                 {
-                    item.Node.PublishTransition(item, stage, stage == TransitionStage.Completed ? 1 : item.Node.TransitionProgress);
+                    item.Node.Node.PublishTransition(item, stage, stage == TransitionStage.Completed ? 1 : item.Node.TransitionProgress);
                 }
                 catch (Exception ex)
                 {
@@ -60,17 +60,17 @@ internal static class TransitionFlow
             foreach (var item in items)
             {
                 item.SetProgressReporter(null);
-                item.Node.PublishTransition(item, TransitionStage.Preparing, 0);
+                item.Node.Node.PublishTransition(item, TransitionStage.Preparing, 0);
             }
             var exitRecipe = playAnimation && exitContext != null ? Resolve(exitContext) : null;
             var enterRecipe = playAnimation && enterContext != null ? Resolve(enterContext) : null;
-            if (exit != null) await exit.Node.PrepareExitAsync(exit, token);
-            if (enter != null) await enter.Node.PrepareEnterAsync(enter, token);
+            if (exit != null) await exit.Node.Node.PrepareExitAsync(exit, token);
+            if (enter != null) await enter.Node.Node.PrepareEnterAsync(enter, token);
             token.ThrowIfCancellationRequested();
             if (!playAnimation)
             {
-                enter?.Node.StageVisibility(true);
-                exit?.Node.StageVisibility(false);
+                enter?.Node.Node.StageVisibility(true);
+                exit?.Node.Node.StageVisibility(false);
                 Finish(TransitionStage.Completed, null);
                 return;
             }
@@ -82,7 +82,7 @@ internal static class TransitionFlow
             {
                 runs.Add(enterRecipe!.Create(enterContext!)
                     ?? throw new InvalidOperationException("Transition factory returned null."));
-                enter.Node.StageVisibility(true);
+                enter.Node.Node.StageVisibility(true);
             }
             if (exit != null && enter != null && sourceOrder != targetOrder)
             {
@@ -100,9 +100,9 @@ internal static class TransitionFlow
                         throw new InvalidOperationException("Progress can only be reported during playback.");
                     if (progress < item.Node.TransitionProgress)
                         throw new InvalidOperationException("Transition progress cannot move backwards.");
-                    if (progress != item.Node.TransitionProgress) item.Node.PublishTransition(item, TransitionStage.Playing, progress);
+                    if (progress != item.Node.TransitionProgress) item.Node.Node.PublishTransition(item, TransitionStage.Playing, progress);
                 });
-                item.Node.PublishTransition(item, TransitionStage.Playing, 0);
+                item.Node.Node.PublishTransition(item, TransitionStage.Playing, 0);
             }
 
             using var cancel = CancellationTokenSource.CreateLinkedTokenSource(items.Select(item => item.Node.Lifetime).Append(token).ToArray());
@@ -124,7 +124,7 @@ internal static class TransitionFlow
             await Task.WhenAll(runs.Select(Play));
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
             cancel.Token.ThrowIfCancellationRequested();
-            exit?.Node.StageVisibility(false);
+            exit?.Node.Node.StageVisibility(false);
             Restore(null);
             Finish(TransitionStage.Completed, null);
         }

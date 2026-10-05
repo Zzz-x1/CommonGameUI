@@ -8,13 +8,12 @@ public sealed class UIContext : IAsyncDisposable
         if (_synchronization != null) _synchronization.Post(_ => action(), null);
         else ThreadPool.QueueUserWorkItem(_ => action());
     }
-    private sealed class Registration
+    private sealed class Registration(Func<IUINode>? factory, string? resource, WindowInstanceMode windowMode, Action<IUINode>? configure)
     {
-        public Registration(Func<UINode> factory, string? resource, WindowInstanceMode windowMode)
-        { Factory = factory; Resource = resource; WindowMode = windowMode; }
-        public Func<UINode> Factory { get; }
-        public string? Resource { get; }
-        public WindowInstanceMode WindowMode { get; }
+        public Func<IUINode>? Factory { get; } = factory;
+        public string? Resource { get; } = resource;
+        public WindowInstanceMode WindowMode { get; } = windowMode;
+        public Action<IUINode>? Configure { get; } = configure;
     }
     private readonly Dictionary<Type, Registration> _registrations = new();
     private readonly UIResources _resources;
@@ -49,7 +48,8 @@ public sealed class UIContext : IAsyncDisposable
     public IUIHost Host { get; }
     public IUIResourceLoader Loader { get; }
     public IUILog Log { get; }
-    public UINode? InputOwner { get; private set; }
+    public IUINode? InputOwner => InputOwnerNode?.Owner;
+    internal UINode? InputOwnerNode { get; private set; }
     private IUITransition _defaultTransition = new InstantTransition();
     public IUITransition DefaultTransition
     {
@@ -83,7 +83,7 @@ public sealed class UIContext : IAsyncDisposable
     internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false)
     {
         var nodes = new List<UINode>();
-        void Visit(UINode node) { nodes.Add(node); foreach (var child in node.Children) Visit(child); }
+        void Visit(UINode node) { nodes.Add(node); foreach (var child in node.ChildrenCore) Visit(child); }
         Visit(Root);
         var changes = nodes.Select(n => (Node: n, Visible: n.CommittedVisible, Active: n.IsActive,
             OldVisible: n.PublishedVisible, OldActive: n.PublishedActive)).ToArray();
@@ -103,7 +103,7 @@ public sealed class UIContext : IAsyncDisposable
         LifecycleContext Describe(UINode node)
         {
             for (var n = node; n != null; n = n.Parent)
-                if (source != null && n == source.Node) return source.For(node);
+                if (source != null && ReferenceEquals(n.Owner, source.Node)) return source.For(node);
             return operation.For(node);
         }
         foreach (var c in Enumerable.Reverse(changes))
@@ -123,13 +123,13 @@ public sealed class UIContext : IAsyncDisposable
 
     internal bool AllowsInput(UINode node)
     {
-        if (InputOwner == null) return true;
-        for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n, InputOwner)) return true;
-        for (var n = InputOwner; n != null; n = n.Parent) if (ReferenceEquals(n, node)) return true;
+        if (InputOwnerNode == null) return true;
+        for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n, InputOwnerNode)) return true;
+        for (var n = InputOwnerNode; n != null; n = n.Parent) if (ReferenceEquals(n, node)) return true;
         return false;
     }
 
-    internal void SetInputOwner(UINode? node) { InputOwner = node; Root.ApplyState(); }
+    internal void SetInputOwner(UINode? node) { InputOwnerNode = node; Root.ApplyState(); }
     private int _modalInputBlocks;
     internal bool IsModalInputBlocked => _modalInputBlocks != 0;
     internal void BeginModalInputBlock() { _modalInputBlocks++; Root.SetInputLocked(true); }
@@ -140,30 +140,35 @@ public sealed class UIContext : IAsyncDisposable
         Root.SetInputLocked(_modalInputBlocks != 0);
     }
 
-    public void Register<T>(string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode, new() =>
-        Register(() => new T(), resource, windowMode);
+    public void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : class, IUINode =>
+        RegisterCore<T>(null, resource, windowMode, configure);
 
-    public void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : UINode
+    public void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null) where T : class, IUINode
+    {
+        if (factory == null) throw new ArgumentNullException(nameof(factory));
+        RegisterCore(factory, resource, windowMode, configure);
+    }
+
+    private void RegisterCore<T>(Func<T>? factory, string? resource, WindowInstanceMode windowMode, Action<T>? configure) where T : class, IUINode
     {
         try
         {
-            Host.VerifyAccess();
-            VerifyMutation();
+            Host.VerifyAccess(); VerifyMutation();
             if (Root.State != NodeState.Ready) throw new ObjectDisposedException(nameof(UIContext));
             if (_registrations.ContainsKey(typeof(T))) throw new InvalidOperationException($"Node {typeof(T).FullName} is already registered.");
-            if (factory == null) throw new ArgumentNullException(nameof(factory));
-            if (windowMode != WindowInstanceMode.Single && windowMode != WindowInstanceMode.Multiple)
-                throw new ArgumentOutOfRangeException(nameof(windowMode));
-            _registrations.Add(typeof(T), new Registration(() => factory(), resource, windowMode));
+            if (factory == null && string.IsNullOrWhiteSpace(resource)) throw new ArgumentException("A native node requires a resource.", nameof(resource));
+            if (windowMode != WindowInstanceMode.Single && windowMode != WindowInstanceMode.Multiple) throw new ArgumentOutOfRangeException(nameof(windowMode));
+            _registrations.Add(typeof(T), new Registration(factory == null ? null : () => factory(), resource, windowMode,
+                configure == null ? null : owner => configure((T)owner)));
         }
         catch (Exception ex) { Report(ex, $"Register {typeof(T).FullName}"); throw; }
     }
 
-    internal WindowInstanceMode GetWindowMode<T>() where T : UINode =>
+    internal WindowInstanceMode GetWindowMode<T>() where T : class, IUINode =>
         _registrations.TryGetValue(typeof(T), out var registration) ? registration.WindowMode :
             throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
 
-    public async Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : UINode
+    public async Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
     {
         try
         {
@@ -177,29 +182,43 @@ public sealed class UIContext : IAsyncDisposable
         catch (Exception ex) { Report(ex, $"Preload {typeof(T).FullName}"); throw; }
     }
 
-    internal async Task<T> CreateAsync<T>(UINode parent, object? args, CancellationToken token) where T : UINode
+    internal async Task<UINode> CreateAsync<T>(UINode parent, object? args, CancellationToken token) where T : class, IUINode
     {
         Host.VerifyAccess();
         token.ThrowIfCancellationRequested();
         if (!_registrations.TryGetValue(typeof(T), out var registration))
             throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
-        var node = (T)registration.Factory();
-        if (node.State != NodeState.Detached) throw new InvalidOperationException("A factory must return a fresh detached node.");
+        UINode? node = null;
         IUIElement? element = null;
         UIResourceLease? lease = null;
         try
         {
-            node.SetParameters(args);
+            IUINode? owner = registration.Factory == null ? null : registration.Factory()
+                ?? throw new InvalidOperationException("A node factory returned null.");
+            if (owner != null)
+            {
+                node = owner.Node;
+                if (!ReferenceEquals(node.Owner, owner) || node.State != NodeState.Detached)
+                    throw new InvalidOperationException("A factory must provide a fresh, detached node.");
+                node.SetParameters(args);
+            }
             if (registration.Resource != null)
             {
                 lease = await _resources.AcquireAsync(registration.Resource, token);
                 token.ThrowIfCancellationRequested();
                 element = lease.Resource.Instantiate(parent.Element)
                     ?? throw new InvalidOperationException($"Resource '{registration.Resource}' returned no instance.");
-                node.ResourceLease = lease;
             }
+            owner ??= element is IUIResourceNodeProvider provider ? provider.GetNode(typeof(T)) :
+                throw new InvalidOperationException($"Resource '{registration.Resource}' does not provide native business nodes.");
+            if (owner is not T) throw new InvalidOperationException($"Resource must provide {typeof(T).FullName}.");
+            node = owner.Node;
+            if (!ReferenceEquals(node.Owner, owner) || node.State != NodeState.Detached)
+                throw new InvalidOperationException("Creation must provide a fresh, detached node with the same business identity.");
+            if (registration.Factory == null) node.SetParameters(args);
+            node.ResourceLease = lease;
             token.ThrowIfCancellationRequested();
-            await node.AttachAsync(parent, typeof(T).Name, element, token);
+            await node.AttachAsync(parent, typeof(T).Name, element, token, () => registration.Configure?.Invoke(owner));
             return node;
         }
         catch (Exception ex)
@@ -207,7 +226,7 @@ public sealed class UIContext : IAsyncDisposable
             Report(ex, $"Create {typeof(T).FullName}");
             await CleanupAsync(ex, async () =>
             {
-                if (node.State != NodeState.Detached) await node.DisposeAsync();
+                if (node != null && node.State != NodeState.Detached) await node.DisposeAsync();
                 else if (element != null) await element.DisposeAsync();
             });
             await CleanupAsync(ex, () => { lease?.Dispose(); return Task.CompletedTask; });

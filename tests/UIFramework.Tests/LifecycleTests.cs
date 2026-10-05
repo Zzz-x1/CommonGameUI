@@ -68,7 +68,7 @@ public class LifecycleTests
     {
         await using var ui = Create(); var host = (TestHost)ui.Host;
         var panels = await Attach<PanelContainerNode>(ui); var modals = await Attach<ModalContainerNode>(ui);
-        var b = new RecordingLifecycle(); var page = new CounterView(); page.AddLifecycle(b); ui.Register(() => page); ui.Register<BoolDialog>();
+        var b = new RecordingLifecycle(); var page = new CounterView(); page.AddLifecycle(b); ui.Register(() => page); ui.Register<BoolDialog>(() => new BoolDialog());
         await panels.OpenAsync<CounterView>(); b.Events.Clear(); var focus = new object(); host.Focus = focus;
         var modal = await modals.OpenAsync<BoolDialog>(); Assert.Equal(new[] { "inactive" }, b.Events); Assert.True(page.IsVisible);
         b.OnActive = _ => { Assert.Null(ui.InputOwner); Assert.Same(focus, host.Focus); };
@@ -76,7 +76,7 @@ public class LifecycleTests
     }
     [Fact] public async Task AncestorHidingReachesSelectedChildWithoutEnteringItAgain()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui); ui.Register<CounterView>(); ui.Register<ArgumentView>();
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui); ui.Register<CounterView>(() => new CounterView()); ui.Register<ArgumentView>(() => new ArgumentView());
         var parent = await stack.PushAsync<CounterView>(); var tabs = new TabContainerNode(); await tabs.AttachAsync(parent, "Tabs");
         var b = new RecordingLifecycle(); var selected = new UINode(); selected.AddLifecycle(b);
         await tabs.BindAsync("Selected", selected); await tabs.BindAsync("Other", new UINode()); await tabs.SwitchAsync("Selected"); b.Events.Clear();
@@ -127,7 +127,7 @@ public class LifecycleTests
     [Fact] public async Task ForcedModalDisposalRestoresActivationAndFocusWithoutNormalExit()
     {
         await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui); var modals = await Attach<ModalContainerNode>(ui);
-        ui.Register<CounterView>(); var page = await panels.OpenAsync<CounterView>(); var b = new RecordingLifecycle();
+        ui.Register<CounterView>(() => new CounterView()); var page = await panels.OpenAsync<CounterView>(); var b = new RecordingLifecycle();
         var modal = new BoolDialog(); modal.AddLifecycle(b); ui.Register(() => modal);
         var host = (TestHost)ui.Host; var focus = new object(); host.Focus = focus;
         await modals.OpenAsync<BoolDialog>(); await modal.DisposeAsync();
@@ -147,7 +147,7 @@ public class LifecycleTests
     [Fact] public async Task StatePropagationLosesChildrenFirstAndGainsParentsFirst()
     {
         await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui); var order = new List<string>();
-        var parent = new CounterView(); var pb = new RecordingLifecycle(); parent.AddLifecycle(pb); ui.Register(() => parent); ui.Register<ArgumentView>();
+        var parent = new CounterView(); var pb = new RecordingLifecycle(); parent.AddLifecycle(pb); ui.Register(() => parent); ui.Register<ArgumentView>(() => new ArgumentView());
         await stack.PushAsync<CounterView>(); var tabs = new TabContainerNode(); await tabs.AttachAsync(parent, "Tabs");
         var child = new UINode(); var cb = new RecordingLifecycle(); child.AddLifecycle(cb); await tabs.BindAsync("Child", child); await tabs.SwitchAsync("Child");
         pb.OnInactive = _ => order.Add("parent-"); cb.OnInactive = _ => order.Add("child-");
@@ -173,7 +173,7 @@ public class LifecycleTests
     {
         await using var ui = Create(); var first = await Attach<PanelContainerNode>(ui); var second = new PanelContainerNode(); await second.AttachAsync(ui.Root, "Other");
         var gate = new GateTransition(); var behavior = new RecordingLifecycle(); var n = new CounterView { Transition = gate }; n.AddLifecycle(behavior);
-        ui.Register(() => n); ui.Register<ArgumentView>();
+        ui.Register(() => n); ui.Register<ArgumentView>(() => new ArgumentView());
         var pending = first.OpenAsync<CounterView>(); Assert.False(n.IsActive); Assert.True(n.IsVisible);
         await second.OpenAsync<ArgumentView>("other"); Assert.Equal(new[] { "initialize", "entering:Open" }, behavior.Events);
         gate.Gate.SetResult(true); await pending; Assert.True(n.IsActive); Assert.Equal("entered:Open", behavior.Events.Last());

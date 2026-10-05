@@ -5,15 +5,15 @@ public enum LifecycleReason { Initialization, Open, Show, Hide, Push, Covered, S
 /// <summary>Immutable description of a lifecycle operation. Source/Target may be absent.</summary>
 public sealed class LifecycleContext
 {
-    public LifecycleContext(UINode node, ContainerNode? container, LifecycleReason reason, UINode? source = null, UINode? target = null)
-    { Node = node; Container = container; Reason = reason; Source = source; Target = target; IsFirstEnter = !node.HasEntered; }
-    public UINode Node { get; }
+    public LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source = null, IUINode? target = null)
+    { Node = node.Node.Owner; Container = container; Reason = reason; Source = source?.Node.Owner; Target = target?.Node.Owner; IsFirstEnter = !node.HasEntered; }
+    public IUINode Node { get; }
     public ContainerNode? Container { get; }
     public LifecycleReason Reason { get; }
-    public UINode? Source { get; }
-    public UINode? Target { get; }
+    public IUINode? Source { get; }
+    public IUINode? Target { get; }
     public bool IsFirstEnter { get; }
-    internal LifecycleContext For(UINode node) => node == Node ? this : new(node, Container, node == Node ? Reason : Container is ModalContainerNode ? LifecycleReason.Modal : LifecycleReason.Ancestor, Source, Target);
+    internal LifecycleContext For(UINode node) => ReferenceEquals(node.Owner, Node) ? this : new(node, Container, ReferenceEquals(node.Owner, Node) ? Reason : Container is ModalContainerNode ? LifecycleReason.Modal : LifecycleReason.Ancestor, Source, Target);
 }
 
 public sealed class StateChangeContext
@@ -21,7 +21,7 @@ public sealed class StateChangeContext
     public StateChangeContext(LifecycleContext operation, bool previous, bool current)
     { Operation = operation; Previous = previous; Current = current; }
     public LifecycleContext Operation { get; }
-    public UINode Node => Operation.Node;
+    public IUINode Node => Operation.Node;
     public bool Previous { get; }
     public bool Current { get; }
 }
