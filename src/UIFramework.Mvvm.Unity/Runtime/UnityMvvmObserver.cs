@@ -12,6 +12,6 @@ namespace UIFramework.Mvvm.Unity
             { var go = new GameObject("[UIFramework] MVVM") { hideFlags = HideFlags.HideInHierarchy }; DontDestroyOnLoad(go); _instance = go.AddComponent<UnityMvvmObserver>(); }
             _instance._runtimes.Add(runtime);
         }
-        private void Update() { foreach (var runtime in _runtimes.ToArray()) { if (runtime.IsDisposed) _runtimes.Remove(runtime); else runtime.ObserveTasks(); } }
+        private void Update() { foreach (var runtime in _runtimes.ToArray()) { runtime.ObserveTasks(); if (runtime.IsDisposed) _runtimes.Remove(runtime); } }
     }
 }

@@ -17,11 +17,13 @@ namespace StarCourt.UnityDemo
     public class ClientPurchaseVm
     {
         private UnityClient _app;
+        private Func<System.Threading.Tasks.Task> _close;
         private int _id;
         [FieldNotify] public int Quantity { get; set; } = 1;
         [FieldNotify] public int Gold { get; set; }
         [FieldNotify(nameof(Quantity), nameof(Gold))] public bool CanBuy => Gold >= ClientStore.Prices[_id] * Quantity;
-        public void Initialize(UnityClient app, int id) { _app = app; _id = id; }
+        public void Initialize(UnityClient app, int id, Func<System.Threading.Tasks.Task> close) { _app = app; _id = id; _close = close; }
+        [Command] public System.Threading.Tasks.Task Close() => _close();
         [Command(CanExecute = nameof(CanBuy))] public async System.Threading.Tasks.Task Buy()
         {
             int quantity = Quantity;

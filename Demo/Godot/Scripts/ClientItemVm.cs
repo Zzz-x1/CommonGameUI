@@ -20,7 +20,12 @@ public class ClientPurchaseVm
 {
     private ClientStore _store = null!;
     private ModalArgs _purchase = null!;
+    private Func<Task> _complete = null!;
     [FieldNotify] public bool CanBuy { get; set; }
-    public void Initialize(ClientStore store, ModalArgs purchase) { _store = store; _purchase = purchase; CanBuy = store.State.Gold >= Catalog.Items[purchase.Id].Price * purchase.Quantity; }
-    [Command(CanExecute = nameof(CanBuy))] public void Buy() => _store.Buy(Catalog.Items[_purchase.Id].Id, _purchase.Quantity, _purchase.Text != "");
+    public void Initialize(ClientStore store, ModalArgs purchase, Func<Task> complete) { _complete = complete; _store = store; _purchase = purchase; CanBuy = store.State.Gold >= Catalog.Items[purchase.Id].Price * purchase.Quantity; }
+    [Command(CanExecute = nameof(CanBuy))] public async Task Buy()
+    {
+        _store.Buy(Catalog.Items[_purchase.Id].Id, _purchase.Quantity, _purchase.Text != "");
+        await _complete();
+    }
 }

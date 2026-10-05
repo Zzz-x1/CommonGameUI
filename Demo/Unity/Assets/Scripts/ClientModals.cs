@@ -74,8 +74,8 @@ namespace StarCourt.UnityDemo
         {
             _bindings = new ViewBindings(this); _bindings.Listen(Refresh);
             _bindings.Text("Panel/Title", ClientStore.Items[Parameters]);
-            _bindings.Button("Panel/Close", App.BackAsync);
-            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App, Parameters);
+            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App, Parameters, () => App.Modals.CloseAsync(this));
+            this.BindCommand("Purchase.Close", this.GetComponent<Button>("Panel/Close").ClickTarget());
             this.BindCommand("Purchase.Buy", this.GetComponent<Button>("Panel/Buy").ClickTarget());
             _bindings.Dropdown("Panel/Quantity", _ => Refresh());
             DismissRequested = _ => App.Modals.CloseAsync(this);

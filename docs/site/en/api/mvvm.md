@@ -17,7 +17,9 @@ ValueTask DisposeAsync();
 
 Factories create fresh instances with project-provided constructor dependencies. Shared assets are cached by original asset identity across Contexts. Runtime disposal cancels and awaits tasks, then releases owned VMs. `Manual` VMs are never automatically destroyed.
 
-Engine frame observers call `ObserveTasks`, which rethrows completed failures unchanged. `WhenIdleAsync` waits for tasks present when called. Projects must also await their UI operations and finish cleanup before exiting.
+Engine frame observers call `ObserveTasks`, which rethrows completed failures unchanged. `WhenIdleAsync` waits for observed tasks and deferred release created while they run. Projects must also await their UI operations and finish cleanup before exiting.
+
+When a command awaits Runtime disposal, bindings end first and its VM remains alive until the command returns. External `DisposeAsync` awaits complete release; `IsDisposed` indicates that complete phase has ended.
 
 ## Context and Node
 

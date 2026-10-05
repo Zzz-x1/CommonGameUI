@@ -11,15 +11,15 @@ internal sealed class BindingScope : IAsyncDisposable
     private readonly Dictionary<string, object> _sources = new(StringComparer.Ordinal);
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
     private readonly List<IDisposable> _bindings = new();
-    private readonly List<Task> _commands = new();
+    private readonly List<Task> _tasks = new();
+    private readonly List<CommandExecution> _commands = new();
     private IViewBindingConfiguration? _configuration;
     private Task? _dispose;
-    private readonly CancellationTokenSource _lifetime;
-    internal CancellationToken Lifetime => _lifetime.Token;
+    private Task? _release;
     internal event Action? SourcesChanged;
     internal UINode Node { get; }
     public BindingScope(UINode node, MvvmRuntime runtime, IViewModelAssets? assets = null)
-    { Node = node; _runtime = runtime; _assets = assets; _lifetime = CancellationTokenSource.CreateLinkedTokenSource(node.Lifetime); runtime.Add(this); }
+    { Node = node; _runtime = runtime; _assets = assets; runtime.Add(this); }
     internal void Configure(IViewBindingConfiguration configuration)
     {
         _configuration = configuration;
@@ -62,29 +62,44 @@ internal sealed class BindingScope : IAsyncDisposable
     public IDisposable Command(string path, ICommandTarget target, object? parameter) => Own(new CommandBinding(this, path, target, parameter));
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
     private T Own<T>(T binding) where T : IDisposable { _bindings.Add(binding); return binding; }
-    internal void Observe(Task task) { _commands.Add(task); _runtime.Observe(task); }
-    internal Task Run(IMvvmObject vm, string command, object? parameter)
-    { var task = _runtime.Execute(this, vm, command, parameter); _commands.Add(task); return task; }
+    internal void Observe(Task task) { _tasks.Add(task); _runtime.Observe(task); }
+    internal void Add(CommandExecution command) => _commands.Add(command);
+    internal bool HasCaller => _commands.Any(command => command.IsCaller);
+    internal Task Run(IMvvmObject vm, string command, object? parameter) => _runtime.Execute(this, vm, command, parameter);
     public ValueTask DisposeAsync()
     {
         if (_dispose == null)
         {
-            var completion = new TaskCompletionSource<Task>();
-            _dispose = completion.Task.Unwrap(); completion.SetResult(DisposeCoreAsync());
+            var closed = new TaskCompletionSource<Task>();
+            var released = new TaskCompletionSource<Task>();
+            _dispose = closed.Task.Unwrap(); _release = released.Task.Unwrap();
+            if (HasCaller) _runtime.ObserveRelease(_release);
+            closed.SetResult(CloseAsync()); released.SetResult(ReleaseAsync());
         }
-        return new ValueTask(_dispose);
+        return new ValueTask(HasCaller ? _dispose : _release!);
     }
-    private async Task DisposeCoreAsync()
+    private async Task CloseAsync()
     {
         Exception? first = null;
         foreach (var binding in _bindings.AsEnumerable().Reverse())
             try { binding.Dispose(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { _lifetime.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { await Task.WhenAll(_commands.ToArray()); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        var others = _commands.Where(command => !command.IsCaller).ToArray();
+        foreach (var command in others)
+            try { command.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        try { await Task.WhenAll(others.Select(command => command.Completion).Concat(_tasks)); }
+        catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        _sources.Clear(); _bindings.Clear();
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
+    private async Task ReleaseAsync()
+    {
+        Exception? first = null;
+        try { await _dispose!; } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        try { await Task.WhenAll(_commands.Select(command => command.Completion)); }
+        catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         foreach (var value in _owned.AsEnumerable().Reverse())
-            try { await _runtime.Release(value.Value, value.Assets); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        _runtime.Remove(this); _sources.Clear(); _bindings.Clear(); _owned.Clear();
-        _lifetime.Dispose();
+            try { await _runtime.Release(value.Value, value.Assets); } catch (Exception error) { _runtime.Report(error, "MVVM VM release"); MvvmRuntime.Failure(ref first, error); }
+        _runtime.Remove(this); _owned.Clear(); _commands.Clear(); _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal sealed class Path : IDisposable

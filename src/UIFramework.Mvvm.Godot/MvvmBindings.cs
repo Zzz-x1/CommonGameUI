@@ -42,7 +42,7 @@ internal static class GodotMvvmObserver
         if (!Runtimes.TryGetValue(tree, out var runtimes))
         {
             runtimes = new HashSet<MvvmRuntime>(); Runtimes.Add(tree, runtimes);
-            tree.ProcessFrame += () => { foreach (var value in runtimes.ToArray()) { if (value.IsDisposed) runtimes.Remove(value); else value.ObserveTasks(); } };
+            tree.ProcessFrame += () => { foreach (var value in runtimes.ToArray()) { value.ObserveTasks(); if (value.IsDisposed) runtimes.Remove(value); } };
         }
         runtimes.Add(runtime);
     }

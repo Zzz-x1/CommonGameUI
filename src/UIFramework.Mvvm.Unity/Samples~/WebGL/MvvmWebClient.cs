@@ -13,13 +13,17 @@ using UIFramework.Mvvm.Unity;
 
 namespace MvvmWebSample
 {
-    [ViewModel] public class PlayerVm
+    [ViewModel] public class PlayerVm : IDisposable
     {
         [FieldNotify] public int Gold { get; set; }
         [FieldNotify(nameof(Gold))] public bool CanBuy => Gold >= 10;
         [FieldNotify] public PlayerVm Selected { get; set; }
         [FieldNotify] public ObservableCollection<PlayerVm> Items { get; set; } = new ObservableCollection<PlayerVm>();
         [Command(CanExecute = nameof(CanBuy))] public void Buy() => Gold -= 10;
+        public Func<Task> CloseView { get; set; }
+        public int Disposals { get; private set; }
+        public void Dispose() => Disposals++;
+        [Command] public Task Close() => CloseView();
         [Command] public async Task Wait(CancellationToken token) { await Task.Yield(); token.ThrowIfCancellationRequested(); }
     }
     [ViewModel] public sealed class PlayerAsset : ScriptableObject
@@ -67,6 +71,17 @@ namespace MvvmWebSample
             var dialogs = await ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", (RectTransform)mount.transform);
             var answer = dialogs.ShowDialogAsync<Confirm, bool>(playAnimation: false); ((Confirm)dialogs.Current).Complete(true);
             Check(await answer && dialogs.Current == null, "Deferred dialog result and cleanup");
+            var window = new UINode(); await window.AttachAsync(ui.Root, "ClosingWindow");
+            var closing = window.CreateViewModel<PlayerVm>("Dialog");
+            closing.CloseView = async () =>
+            {
+                await window.DisposeAsync();
+                Check(window.State == NodeState.Disposed && closing.Disposals == 0, "Command awaited its own window close");
+                await Task.Yield(); Check(closing.Disposals == 0, "VM retained through command continuation");
+            };
+            var closeButton = new GameObject("Close", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
+            window.BindCommand("Dialog.Close", closeButton.ClickTarget()); closeButton.onClick.Invoke();
+            await runtime.WhenIdleAsync(); Check(closing.Disposals == 1, "Deferred VM release observed");
             await ui.DisposeAsync(); await runtime.DisposeAsync(); UnityEngine.Object.Destroy(asset); Check(runtime.IsDisposed, "Cleanup");
         }
     }

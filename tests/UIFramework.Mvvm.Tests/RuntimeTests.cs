@@ -20,6 +20,20 @@ public class OwnedVm : IDisposable
     public void Dispose() => Disposals++;
 }
 
+[ViewModel]
+public class ClosingVm : IDisposable, IAsyncDisposable
+{
+    public Func<CancellationToken, Task> Action { get; set; } = null!;
+    public int Disposals { get; private set; }
+    public Exception? ReleaseError { get; set; }
+    public Func<Task> Release { get; set; } = () => Task.CompletedTask;
+    public async ValueTask DisposeAsync() { await Release(); Dispose(); }
+    [Command] public Task Close(CancellationToken token) => Action(token);
+    [Command] public Task Other(CancellationToken token) => OtherAction(token);
+    public Func<CancellationToken, Task> OtherAction { get; set; } = null!;
+    public void Dispose() { Disposals++; if (ReleaseError != null) throw ReleaseError; }
+}
+
 public class RuntimeTests
 {
     private sealed class Host : IUIHost
@@ -39,7 +53,8 @@ public class RuntimeTests
         public object Clone(object template) => new OwnedVm { Gold = ((OwnedVm)template).Gold };
         public void Remap(object template, object instance, Func<object, object> resolve)
         { var source = (OwnedVm)template; var clone = (OwnedVm)instance; clone.Other = source.Other == null ? null : (OwnedVm)resolve(source.Other); clone.Items = new(source.Items.Select(item => (OwnedVm)resolve(item))); }
-        public void Release(object value) => Released.Add(value);
+        public Exception? ReleaseError;
+        public void Release(object value) { Released.Add(value); if (ReleaseError != null) throw ReleaseError; }
     }
     private sealed class Click : ICommandTarget
     { public bool Enabled; public event Action? Invoked; public void SetEnabled(bool value) => Enabled = value; public void Press() => Invoked!(); public void Dispose() { } }
@@ -103,4 +118,110 @@ public class RuntimeTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => node.DisposeAsync().AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()); await ui.DisposeAsync();
     }
+    [Theory]
+    [InlineData("node", false)] [InlineData("node", true)]
+    [InlineData("ancestor", false)] [InlineData("context", true)]
+    [InlineData("runtime", false)] [InlineData("runtime", true)]
+    public async Task CommandCanAwaitClosureAndVmLivesUntilCommandFinishes(string owner, bool yieldFirst)
+    {
+        var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime);
+        var parent = await Node(ui, "Parent"); var node = new UINode(); await node.AttachAsync(parent, "Window");
+        var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        var closed = new TaskCompletionSource(); var finish = new TaskCompletionSource();
+        vm.Action = async token =>
+        {
+            if (yieldFirst) await Task.Yield();
+            if (owner == "node") await node.DisposeAsync();
+            else if (owner == "ancestor") await parent.DisposeAsync();
+            else if (owner == "context") await ui.DisposeAsync();
+            else await runtime.DisposeAsync();
+            Assert.Equal(0, vm.Disposals); Assert.False(token.IsCancellationRequested);
+            closed.SetResult(); await finish.Task;
+        };
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(0, vm.Disposals);
+        var idle = runtime.WhenIdleAsync(); Assert.False(idle.IsCompleted);
+        var disposal = runtime.DisposeAsync().AsTask(); Assert.False(disposal.IsCompleted);
+        finish.SetResult(); await disposal.WaitAsync(TimeSpan.FromSeconds(3)); await idle;
+        Assert.Equal(1, vm.Disposals); Assert.True(runtime.IsDisposed);
+        await ui.DisposeAsync();
+    }
+    [Fact] public async Task ExternalCloseCancelsCommandAndWaitsBeforeReleasingVm()
+    {
+        var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime); var node = await Node(ui, "Window");
+        var vm = node.CreateViewModel<ClosingVm>("Dialog"); var cancelled = new TaskCompletionSource(); var finish = new TaskCompletionSource();
+        vm.Action = async token =>
+        {
+            using var registration = token.Register(() => cancelled.SetResult());
+            await cancelled.Task; Assert.Equal(0, vm.Disposals); await finish.Task;
+        };
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        var close = node.DisposeAsync().AsTask(); await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(close.IsCompleted); Assert.Equal(0, vm.Disposals);
+        finish.SetResult(); await close.WaitAsync(TimeSpan.FromSeconds(3)); Assert.Equal(1, vm.Disposals);
+        await runtime.DisposeAsync(); await ui.DisposeAsync();
+    }
+    [Fact] public async Task SelfCloseStillCancelsOtherCommandsAndWaitsForThem()
+    {
+        await using var runtime = new MvvmRuntime(new Log()); await using var ui = Context(runtime); var node = await Node(ui, "Window");
+        var vm = node.CreateViewModel<ClosingVm>("Dialog"); var cancelled = new TaskCompletionSource(); var finish = new TaskCompletionSource(); var closed = false;
+        vm.OtherAction = async token => { using var registration = token.Register(() => cancelled.SetResult()); await finish.Task; };
+        vm.Action = async token => { await node.DisposeAsync(); Assert.False(token.IsCancellationRequested); closed = true; };
+        var other = new Click(); var close = new Click(); node.BindCommand("Dialog.Other", other); node.BindCommand("Dialog.Close", close);
+        other.Press(); close.Press(); await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(3)); Assert.False(closed); Assert.Equal(0, vm.Disposals);
+        finish.SetResult(); await runtime.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(3)); Assert.True(closed); Assert.Equal(1, vm.Disposals);
+    }
+    [Fact] public async Task FailureAfterSelfCloseAndDeferredReleaseKeepsOriginalException()
+    {
+        var log = new Log(); var runtime = new MvvmRuntime(log); var ui = Context(runtime); var node = await Node(ui, "Window");
+        var vm = node.CreateViewModel<ClosingVm>("Dialog"); var original = new IOException("after close"); var cleanup = new InvalidOperationException("VM release"); vm.ReleaseError = cleanup;
+        vm.Action = async _ => { await node.DisposeAsync(); throw original; };
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.WhenIdleAsync()));
+        Assert.Equal(1, vm.Disposals); Assert.Contains(original, log.Errors);
+        Assert.Contains(cleanup, Assert.IsType<List<Exception>>(original.Data[UIFailure.SecondaryExceptionsKey]));
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); await ui.DisposeAsync();
+    }
+
+    [Fact] public async Task IdleWaitsForDeferredAsyncReleaseEvenAfterCommandFailure()
+    {
+        var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime); var node = await Node(ui, "Window");
+        var vm = node.CreateViewModel<ClosingVm>("Dialog"); var releaseStarted = new TaskCompletionSource(); var releaseFinish = new TaskCompletionSource();
+        var original = new IOException("command failed after closing");
+        vm.Release = async () => { releaseStarted.SetResult(); await releaseFinish.Task; };
+        vm.Action = async _ => { await node.DisposeAsync(); throw original; };
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        await releaseStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var idle = runtime.WhenIdleAsync(); Assert.False(idle.IsCompleted); Assert.Equal(0, vm.Disposals);
+        releaseFinish.SetResult(); Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => idle)); Assert.Equal(1, vm.Disposals);
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); await ui.DisposeAsync();
+    }
+
+    [Fact] public async Task SelfShutdownDeferredSharedReleaseFailureIsObserved()
+    {
+        var log = new Log(); var runtime = new MvvmRuntime(log); var ui = Context(runtime); var node = await Node(ui, "Window");
+        var original = new IOException("shared asset release"); var assets = new Assets { ReleaseError = original };
+        var shared = runtime.GetSharedViewModel(new OwnedVm(), assets); var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        vm.Action = _ => runtime.DisposeAsync().AsTask();
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.WhenIdleAsync()));
+        Assert.Equal(1, shared.Disposals); Assert.Equal(1, vm.Disposals); Assert.Contains(original, log.Errors);
+        Assert.Same(original, Assert.Throws<IOException>(() => runtime.ObserveTasks()));
+        runtime.ObserveTasks(); await ui.DisposeAsync();
+    }
+
+    [Fact] public async Task AncestorCancellationReachesItsCommandBeforeWaitingForChildren()
+    {
+        await using var runtime = new MvvmRuntime(new Log()); await using var ui = Context(runtime);
+        var parent = await Node(ui, "Parent"); var child = new UINode(); await child.AttachAsync(parent, "Child");
+        var parentVm = parent.CreateViewModel<ClosingVm>("Dialog"); var childVm = child.CreateViewModel<ClosingVm>("Dialog");
+        var parentCancelled = new TaskCompletionSource();
+        parentVm.Action = async token => { using var registration = token.Register(() => parentCancelled.SetResult()); await parentCancelled.Task; };
+        childVm.Action = _ => parentCancelled.Task;
+        var parentButton = new Click(); var childButton = new Click(); parent.BindCommand("Dialog.Close", parentButton); child.BindCommand("Dialog.Close", childButton);
+        parentButton.Press(); childButton.Press(); await parent.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, parentVm.Disposals); Assert.Equal(1, childVm.Disposals);
+    }
+
 }

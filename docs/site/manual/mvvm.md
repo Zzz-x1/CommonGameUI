@@ -87,7 +87,7 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 
 命令支持 `void`、`Task`，最多一个业务参数，异步命令可接收 `CancellationToken`。不支持 `async void`。`CanExecute` 和执行状态控制按钮，Runtime 持续观察同一个任务。业务先保存，再展示奖励；取消确认时不提交。
 
-命令不要等待关闭自己的绑定节点、祖先或 Runtime；清理会等待命令结束。先完成命令，再由 View 执行关闭。
+命令可以等待关闭自己的窗口或祖先节点。关闭时解除绑定，VM 保留到命令结束再释放；外部关闭仍取消并等待命令。`runtime.WhenIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。
 
 退出前等待清理：
 

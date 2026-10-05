@@ -87,7 +87,7 @@ Moving retains item instances; removal detaches bindings and releases the item. 
 
 Commands support `void` and `Task`, at most one business parameter, and an optional `CancellationToken` for asynchronous work. `async void` is rejected. `CanExecute` and execution state control buttons; the Runtime continuously observes the same task. Save business changes before presenting rewards. Cancelled confirmations do not commit.
 
-A command must not await closure of its own binding node, an ancestor, or its Runtime: cleanup waits for that command. Finish the command first, then close from the View.
+A command can await closure of its own window or an ancestor. Bindings detach during closure; its VM stays alive until the command finishes. External closure cancels and awaits commands. `runtime.WhenIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.
 
 Await cleanup before exiting:
 

@@ -17,7 +17,9 @@ ValueTask DisposeAsync();
 
 工厂创建新实例，构造依赖由项目传入。共享资产按原始资产身份缓存，跨 Context 共用；Runtime 关闭取消、等待任务并释放拥有的 VM。`Manual` VM 不自动销毁。
 
-`ObserveTasks` 由引擎帧观察器调用，完成的失败原样抛出。`WhenIdleAsync` 等待调用时已有任务。项目也应等待自己启动的 UI 操作，退出前完成清理。
+`ObserveTasks` 由引擎帧观察器调用，完成的失败原样抛出。`WhenIdleAsync` 等待已观察任务及执行期间产生的延迟释放。项目也应等待自己启动的 UI 操作，退出前完成清理。
+
+命令内等待 Runtime 关闭时，先结束绑定，VM 保留到命令返回后释放。外部 `DisposeAsync` 等待完整释放；`IsDisposed` 表示完整清理已经结束。
 
 ## Context 与 Node
 

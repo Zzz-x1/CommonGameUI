@@ -37,10 +37,10 @@ public class ClientModalView : UINode<ModalArgs>
         Wire("Center/Cancel", CancelAsync);
         if (Parameters.Kind == "Purchase")
         {
-            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App.Store, Parameters);
+            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App.Store, Parameters, ConfirmAsync);
             this.BindCommand("Purchase.Buy", Get<Button>("Center/Confirm").ClickTarget());
         }
-        Wire("Center/Confirm", ConfirmAsync);
+        else Wire("Center/Confirm", ConfirmAsync);
         _pages = await this.CreateContainerAsync<TabContainerNode>("Content", Get<Control>("Center/Pages"), token);
         foreach (var c in Get<Control>("Center/Pages").GetChildren().Cast<Control>())
             await _pages.BindAsync(c.Name.ToString(), c, token);
