@@ -1840,3 +1840,16 @@ Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源�
 `docs/examples` 的两个引擎教程源码随页面同步。Godot 场景和 smoke 检查同步缩小到首次加载、实际按钮关闭／重开、单实例复用与 Context 清理。文档检查逐文件对比 `HelloWindow.cs`、`TutorialHost.cs` 与两种语言的代码块；站点首页和下一步链接由首个窗口场景引导到正式 Manual。
 
 验证：文档链接、标题锚点、32 组双语代码与两个窗口源码同步检查通过；VitePress 站点构建通过，Chromium 检查 65 页、搜索、语言切换、复制、窄屏导航与六步目录。Godot 教程工程构建无警告，通过 8 项 headless 检查；Unity 示例脚本由 Unity 6000.3.24f1 batchmode 编译，未执行原生 UI。检查了桌面教程截图。未修改核心 API 或游戏 Demo 业务。
+
+
+## 21. 原生业务节点与引擎 MVVM 适配重构（已确认，待实现）
+
+用户要求业务 UI 直接继承对应引擎的节点基类，挂载在 Prefab／场景上，使用原生序列化字段、编辑器配置和引擎能力。已确认完整迁移 Unity、Godot 的适配、生成器、MVVM、Demo、测试和全部用户文档。Core 保持渲染无关，结构 Root 和逻辑容器仍由 Core 管理；业务节点由资源实例化取得，不通过普通 C# 构造函数建立原生对象。
+
+两端适配类型和方法采用统一名称，通过 UIFramework.Unity／UIFramework.Godot 隔离；MVVM 适配通过 UIFramework.Mvvm.Unity／UIFramework.Mvvm.Godot 隔离。原生业务基类均命名 UINode、UINode<TArgs> 和 DialogNode<TResult>，不使用 Unity／Godot 前缀。共同能力的 API 名称与共同参数保持一致，真实引擎类型及专有能力允许差异。混合引用 Core 和适配时用命名空间别名解决同名歧义，不保留旧名称转发。
+
+用户同时要求 MVVM 针对原生 UI 工作流优化：配置与 UI 资源一起编辑保存，支持原生控件选择和引用，完善项目 VM 类型／资产发现及引用，并覆盖 Global VM 的发现／查找。Unity 编辑器继续使用 UXML／USS 与 UI Toolkit，Godot 使用原生编辑器插件；Undo、Prefab Override、场景保存重开和独立预览恢复属于验收范围。GUI 与代码绑定继续使用同一执行逻辑，Runtime 初始化和释放继续由框架托管。
+
+三种 VM 创建方式 Create Instance、Manual、Shared Asset 继续保留，不因 Global VM 增加未经确认的第四种创建方式。当前 Shared Asset 仅在所属 Runtime 中缓存共享实例；Global VM 是否还包括运行时具名共享实例查找，及其共享范围、所有权和生命周期，仍需确认。现有 Unity 配置已经保存 Component 引用，Godot 保存相对 NodePath；重构需处理原生引用在资源克隆、重命名及编辑器操作中的行为，不以每帧扫描代替绑定。
+
+本节记录后续重构要求，不代表原生节点或新的 Global VM API 已实现。第 20 节教程与现有用户文档反映当前实现，实施重构时一并替换资源、代码和说明。
