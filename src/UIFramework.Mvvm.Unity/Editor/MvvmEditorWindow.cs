@@ -1,3 +1,4 @@
+using EngineMvvm = global::UIFramework.Mvvm.Unity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +18,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private ScrollView _details, _members;
         private TextField _search;
         private Label _status;
-        private UnityBindingPreview _preview;
+        private BindingPreview _preview;
         private readonly List<ViewBindingData> _visible = new List<ViewBindingData>();
         private readonly List<ViewModelSourceData> _sourceRows = new List<ViewModelSourceData>();
         [MenuItem("Window/UIFramework/View Bindings")]
@@ -53,7 +54,7 @@ namespace UIFramework.Mvvm.EditorUnity
             rootVisualElement.Q<Button>("delete-source").clicked += () => { if (_sources.selectedIndex >= 0) Change(() => _view.ViewModels.RemoveAt(_sources.selectedIndex)); Refresh(); };
             rootVisualElement.Q<Button>("add-binding").clicked += () => { Change(() => _view.Bindings.Add(new ViewBindingData())); Refresh(); _bindings.selectedIndex = _visible.Count - 1; };
             rootVisualElement.Q<Button>("delete-binding").clicked += () => { if (_bindings.selectedIndex >= 0) Change(() => _view.Bindings.Remove(_visible[_bindings.selectedIndex])); Refresh(); };
-            rootVisualElement.Q<Button>("preview").clicked += () => { StopPreview(); _preview = new UnityBindingPreview(_view); _status.text = "预览中：仅刷新显示，不执行命令或写回资产"; };
+            rootVisualElement.Q<Button>("preview").clicked += () => { StopPreview(); _preview = new BindingPreview(_view); _status.text = "预览中：仅刷新显示，不执行命令或写回资产"; };
             rootVisualElement.Q<Button>("stop-preview").clicked += StopPreview;
             _bindings.RegisterCallback<DragUpdatedEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string) { DragAndDrop.visualMode = DragAndDropVisualMode.Copy; e.StopPropagation(); } });
             _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); Change(() => _view.Bindings.Add(new ViewBindingData { Source = path })); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
@@ -103,12 +104,22 @@ namespace UIFramework.Mvvm.EditorUnity
             _details.Clear(); if (!_view || _bindings.selectedIndex < 0) return; var b = _visible[_bindings.selectedIndex];
             Object("目标控件", typeof(Component), b.Target, true, v => { b.Target = (Component)v; b.Member = TargetMembers(b.Target)[0]; });
             var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Change(() => b.Member = e.newValue)); _details.Add(member);
-            Text("来源路径", b.Source, v => b.Source = v);
+            if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
+                Text("来源路径", b.Source, v => b.Source = v);
             Choice("绑定类型", b.Kind, v => { b.Kind = v; BindingDetails(); });
             if (b.Kind == ViewBindingKind.Property)
             {
-                Choice("方向", b.Mode, v => b.Mode = v);
+                Choice("方向", b.Mode, v => { b.Mode = v; BindingDetails(); });
+                if (b.Mode is BindingMode.OneWay or BindingMode.OneTime)
+                    Choice("转换器输入", b.ConverterInput, v => { b.ConverterInput = v; BindingDetails(); });
                 Converter("正向转换", b.Converter, b, false, v => b.Converter = v);
+                if (b.Converter.Length != 0)
+                {
+                    var info = Converters.Discover().Single(c => c.Name == b.Converter);
+                    _details.Add(new Label("输入：" + info.Input.Name + " → 输出：" + info.Output.Name));
+                    if (b.ConverterInput == ConverterInput.Constant) Text("输入常量", b.ConverterConstant, v => b.ConverterConstant = v);
+                    else _details.Add(new Label("输入参数绑定到上述来源路径；成员变化时重新转换。"));
+                }
                 if (b.Mode == BindingMode.TwoWay) Converter("反向转换", b.ConvertBack, b, true, v => b.ConvertBack = v);
                 Toggle("显式空值显示", b.HasNullValue, v => b.HasNullValue = v); Text("空值内容", b.NullValue, v => b.NullValue = v);
             }
@@ -121,10 +132,10 @@ namespace UIFramework.Mvvm.EditorUnity
             Type sourceType = null, targetType = null;
             var parts = binding.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(s => s.Name == parts[0]);
             if (source != null) { sourceType = source.Template ? source.Template.GetType() : Type.GetType(source.TypeName); foreach (var part in parts.Skip(1)) sourceType = sourceType?.GetProperty(part)?.PropertyType; }
-            if (binding.Target && binding.Kind == ViewBindingKind.Property && TargetMembers(binding.Target).Contains(binding.Member)) { using (var target = UnityBindingTargets.Property(binding.Target, binding.Member)) targetType = target.ValueType; }
+            if (binding.Target && binding.Kind == ViewBindingKind.Property && TargetMembers(binding.Target).Contains(binding.Member)) { using (var target = EngineMvvm.BindingTargets.Property(binding.Target, binding.Member)) targetType = target.ValueType; }
             var input = reverse ? targetType : sourceType; var output = reverse ? sourceType : targetType;
-            var choices = new List<string> { "" }; choices.AddRange(Converters.Discover().Where(c => input != null && output != null && c.Input.IsAssignableFrom(input) && output.IsAssignableFrom(c.Output)).Select(c => c.Name));
-            var field = new DropdownField(label, choices, -1); field.SetValueWithoutNotify(current); field.RegisterValueChangedCallback(e => Change(() => set(e.newValue))); _details.Add(field);
+            var choices = new List<string> { "" }; choices.AddRange(Converters.Discover().Where(c => (input != null || (!reverse && binding.ConverterInput == ConverterInput.Constant)) && output != null && (!reverse && binding.ConverterInput == ConverterInput.Constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name));
+            var field = new DropdownField(label, choices, -1); field.SetValueWithoutNotify(current); field.RegisterValueChangedCallback(e => { Change(() => set(e.newValue)); BindingDetails(); }); _details.Add(field);
         }
         private static List<string> TargetMembers(Component target)
         {

@@ -207,13 +207,13 @@ public static class MvvmExtensions
     public static void ShareMvvm(this UIContext ui, UIContext owner) => ui.ConfigureMvvm(owner.GetMvvm());
     public static void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class => ui.GetMvvm().RegisterFactory(factory);
     public static Task WhenMvvmIdleAsync(this UIContext ui) => ui.GetMvvm().WhenIdleAsync();
-    public static void ObserveMvvmTask(this UINode node, Task task) => Scope(node).Observe(task);
-    public static void SetViewModel(this UINode node, string name, object vm) => Scope(node).Set(name, vm);
-    public static T GetViewModel<T>(this UINode node, string name) where T : class => (T)Scope(node).Get(name);
-    public static T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class => Scope(node).Create<T>(name, template);
-    public static IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
-        Scope(node).Bind(path, target, new BindingOptions { Mode = mode });
-    public static IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingOptions options) => Scope(node).Bind(path, target, options);
-    public static IDisposable BindCommand(this UINode node, string path, ICommandTarget target, object? parameter = null) => Scope(node).Command(path, target, parameter);
-    public static IDisposable BindCollection(this UINode node, string path, ICollectionTarget target, bool oneTime = false) => Scope(node).Collection(path, target, oneTime);
+    public static void ObserveMvvmTask(this IUINode node, Task task) => Scope(node.Node).Observe(task);
+    public static void SetViewModel(this IUINode node, string name, object vm) => Scope(node.Node).Set(name, vm);
+    public static T GetViewModel<T>(this IUINode node, string name) where T : class => (T)Scope(node.Node).Get(name);
+    public static T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class => Scope(node.Node).Create<T>(name, template);
+    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
+        Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode });
+    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options) => Scope(node.Node).Bind(path, target, options);
+    public static IDisposable BindCommand(this IUINode node, string path, ICommandTarget target, object? parameter = null) => Scope(node.Node).Command(path, target, parameter);
+    public static IDisposable BindCollection(this IUINode node, string path, ICollectionTarget target, bool oneTime = false) => Scope(node.Node).Collection(path, target, oneTime);
 }

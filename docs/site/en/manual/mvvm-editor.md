@@ -27,6 +27,19 @@ Converters are filtered by input and output types. Item sources are named `Item`
 
 The table supports search, deletion and reordering. Unity disables reordering while searching; clear search to change the full order. Unity controls provide an Inspector entry. Godot provides binding buttons beneath common control properties.
 
+## Configure converters
+
+To display the integer `Player.Gold` as currency text, select **OneWay → Forward converter → FormatNumber**. The input is bound to `Player.Gold`; currency changes update the text.
+
+Selecting a function shows its input and output types. **Converter input** supports two choices:
+
+- **ViewModel**: enter a source member path. Nested members and object replacement are supported.
+- **Constant**: enter a literal such as `125`. It is parsed as the function's input type; no VM is required. Text, booleans, numbers and enums are supported. Numbers use a decimal point without thousands separators.
+
+Constants support OneWay / OneTime. For TwoWay, the forward input comes from the VM and the reverse input comes from the control. Select each function separately; the framework does not infer an inverse. Invalid literals, missing functions and conversion failures raise errors directly.
+
+Custom functions are static methods marked `[Converter]`, with one argument and one return value. Cecil generates direct calls. The picker filters compatible types. Preview and runtime execute the same converter configuration.
+
 ## 3. Preview initial values
 
 Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.

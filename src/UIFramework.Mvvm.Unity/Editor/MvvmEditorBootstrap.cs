@@ -1,3 +1,4 @@
+using EngineMvvm = global::UIFramework.Mvvm.Unity;
 using UnityEditor;
 using UIFramework.Mvvm.Unity;
 namespace UIFramework.Mvvm.EditorUnity
@@ -6,13 +7,13 @@ namespace UIFramework.Mvvm.EditorUnity
     {
         [InitializeOnLoadMethod] private static void Initialize()
         {
-            UnityMvvmBootstrap.EditModeObserver = runtime =>
+            EngineMvvm.MvvmBootstrap.EditModeObserver = runtime =>
             {
                 EditorApplication.CallbackFunction observe = null;
                 observe = () => { runtime.ObserveTasks(); if (runtime.IsDisposed) EditorApplication.update -= observe; };
                 EditorApplication.update += observe;
             };
-            UnityMvvmBootstrap.Register();
+            EngineMvvm.MvvmBootstrap.Register();
         }
     }
 }

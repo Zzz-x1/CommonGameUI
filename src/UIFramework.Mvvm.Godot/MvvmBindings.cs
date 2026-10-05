@@ -16,19 +16,18 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
             var control = GetParent().GetNode<Control>(binding.Target);
             if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget());
             else if (binding.Kind == ViewBindingKind.Collection)
-                node.BindCollection(binding.Source, new GodotCollectionTarget(node, control, binding.ItemScene ?? throw new InvalidOperationException("Item scene is required.")), binding.OneTimeCollection);
-            else node.Bind(binding.Source, GodotBindingTargets.Property(control, binding.Member), new BindingOptions
-            { Mode = binding.Mode, Convert = binding.Converter.Length == 0 ? null : Converters.Find(binding.Converter), ConvertBack = binding.ConvertBack.Length == 0 ? null : Converters.Find(binding.ConvertBack), HasNullValue = binding.HasNullValue, NullValue = binding.NullValue });
+                node.BindCollection(binding.Source, new CollectionTarget(node, control, binding.ItemScene ?? throw new InvalidOperationException("Item scene is required.")), binding.OneTimeCollection);
+            else node.Bind(binding.Source, BindingTargets.Property(control, binding.Member), Converters.Configure(binding.Converter, binding.ConvertBack, binding.Mode, binding.ConverterInput, binding.ConverterConstant, binding.HasNullValue, binding.NullValue));
         }
     }
 }
-public static class GodotMvvmExtensions
+public static class MvvmExtensions
 {
-    public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : Resource => ui.GetMvvm().GetSharedViewModel(template, new GodotViewModelAssets());
-    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : Resource => runtime.GetSharedViewModel(template, new GodotViewModelAssets());
+    public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : Resource => ui.GetMvvm().GetSharedViewModel(template, new ViewModelAssets());
+    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : Resource => runtime.GetSharedViewModel(template, new ViewModelAssets());
 
 }
-internal static class GodotMvvmObserver
+internal static class MvvmObserver
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SceneTree, HashSet<MvvmRuntime>> Runtimes = new();
     internal static void Attach(SceneTree tree, MvvmRuntime runtime)

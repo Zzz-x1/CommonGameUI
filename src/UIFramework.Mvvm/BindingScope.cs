@@ -153,14 +153,17 @@ internal sealed class BindingScope : IAsyncDisposable
     }
     private sealed class PropertyBinding : IDisposable
     {
-        private readonly BindingScope _scope; private readonly Path _path; private readonly IBindingTarget _target; private readonly BindingOptions _options;
+        private readonly BindingScope _scope; private readonly Path? _path; private readonly IBindingTarget _target; private readonly BindingOptions _options;
         private bool _updating; private bool _disposed;
         internal PropertyBinding(BindingScope scope, string path, IBindingTarget target, BindingOptions options)
         {
-            _scope = scope; _target = target; _options = options; _path = new Path(scope, path, options.Mode != BindingMode.OneTime);
+            _scope = scope; _target = target; _options = options;
             try
             {
-                if (options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
+                if (options.HasConstantValue && options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
+                    throw new InvalidOperationException("Constant input cannot be written back to a ViewModel.");
+                _path = options.HasConstantValue ? null : new Path(scope, path, options.Mode != BindingMode.OneTime);
+                if (_path != null && options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
                 {
                     var (owner, member) = _path.Resolve();
                     if (owner != null && !owner.Describe().Single(m => m.Name == member).Observable) throw new InvalidOperationException("Reactive binding requires FieldNotify: " + path);
@@ -177,7 +180,13 @@ internal sealed class BindingScope : IAsyncDisposable
             if (_updating) return; _scope.Node.Context.Host.VerifyAccess(); _updating = true;
             try
             {
-                var (owner, member) = _path.Resolve();
+                if (_options.HasConstantValue)
+                {
+                    var constant = _options.ConstantValue;
+                    _target.Write(_options.Convert == null ? constant : _options.Convert(constant));
+                    return;
+                }
+                var (owner, member) = _path!.Resolve();
                 object? value;
                 if (owner == null)
                 { if (!_options.HasNullValue) throw new InvalidOperationException("Null binding path."); value = _options.NullValue; }
@@ -192,7 +201,7 @@ internal sealed class BindingScope : IAsyncDisposable
             if (_updating) return; _scope.Node.Context.Host.VerifyAccess(); _updating = true;
             try
             {
-                var (owner, member) = _path.Resolve();
+                var (owner, member) = _path!.Resolve();
                 if (owner == null) throw new InvalidOperationException("Cannot write through a null VM path.");
                 var value = _target.Read(); if (_options.ConvertBack != null) value = _options.ConvertBack(value); owner.Write(member, value);
             }
@@ -200,7 +209,7 @@ internal sealed class BindingScope : IAsyncDisposable
             finally { _updating = false; }
             if (_options.Mode == BindingMode.TwoWay) Pull();
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Dispose(); _target.Changed -= Push; _target.Dispose(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; _path?.Dispose(); _target.Changed -= Push; _target.Dispose(); }
     }
     private sealed class CommandBinding : IDisposable
     {

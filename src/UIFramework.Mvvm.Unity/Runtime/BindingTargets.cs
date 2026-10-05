@@ -5,7 +5,7 @@ using TMPro;
 
 namespace UIFramework.Mvvm.Unity
 {
-    public static class UnityBindingTargets
+    public static class BindingTargets
     {
         public static IBindingTarget TextTarget(this Text text) => new Target<string>(text, () => text.text, v => text.text = v);
         public static IBindingTarget TextTarget(this TMP_Text text) => new Target<string>(text, () => text.text, v => text.text = v);

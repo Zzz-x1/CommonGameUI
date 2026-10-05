@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace UIFramework.Mvvm.Unity
 {
-    public sealed class UnityViewModelAssets : IViewModelAssets
+    public sealed class ViewModelAssets : IViewModelAssets
     {
         public bool CanCreate(Type type) => typeof(ScriptableObject).IsAssignableFrom(type);
         public object CreateInstance(Type type) { var value = ScriptableObject.CreateInstance(type); value.hideFlags = HideFlags.HideAndDontSave; return value; }

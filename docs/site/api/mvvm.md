@@ -32,17 +32,17 @@ Task WhenMvvmIdleAsync(this UIContext ui);
 MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
     Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
-void SetViewModel(this UINode node, string name, object vm);
-T GetViewModel<T>(this UINode node, string name) where T : class;
-T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class;
-IDisposable Bind(this UINode node, string path, IBindingTarget target,
+void SetViewModel(this IUINode node, string name, object vm);
+T GetViewModel<T>(this IUINode node, string name) where T : class;
+T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
+IDisposable Bind(this IUINode node, string path, IBindingTarget target,
     BindingMode mode = BindingMode.OneWay);
-IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingOptions options);
-IDisposable BindCommand(this UINode node, string path, ICommandTarget target,
+IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
+IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
     object? parameter = null);
-IDisposable BindCollection(this UINode node, string path, ICollectionTarget target,
+IDisposable BindCollection(this IUINode node, string path, ICollectionTarget target,
     bool oneTime = false);
-void ObserveMvvmTask(this UINode node, Task task);
+void ObserveMvvmTask(this IUINode node, Task task);
 ```
 
 在创建业务节点前启用。`SetViewModel` 接受借用对象；`CreateViewModel` 的实例归节点所有。返回的绑定可提前解除，也会随节点清理。隐藏保留，关闭清理。
@@ -62,10 +62,15 @@ void ObserveMvvmTask(this UINode node, Task task);
 ```csharp
 IEnumerable<ConverterInfo> Converters.Discover();
 Func<object?, object?> Converters.Find(string name);
+BindingOptions Converters.Configure(string converter, string convertBack, BindingMode mode,
+    ConverterInput input, string constant, bool hasNullValue, object? nullValue);
+bool Converters.SupportsConstant(Type type);
 void PreviewSources.Register<T>(Func<T> factory) where T : class;
 ```
 
 内置转换名称：`FormatNumber`、`PercentText`、`InvertBoolean`、`IntToFloat`、`FloatToInt`。项目转换名称为完整类型名加方法名。反向转换必须显式提供。
+
+`Converters.Configure` 是 GUI／预览共用的配置入口：ViewModel 输入使用绑定来源路径，Constant 输入按函数类型解析常量。常量只允许 OneWay／OneTime。`BindingOptions.HasConstantValue`／`ConstantValue` 也可显式配置常量，不要求 VM 来源。
 
 Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Describe` 和 `PropertyChanged`。`Describe` 返回 `MvvmMember[]`，包含名称、类型、成员种类、通知及可写标记；业务代码通常不直接使用这些入口。
 
@@ -79,7 +84,7 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 | 滑杆 | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | 开关 | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
 | 命令 | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
-| 列表 | `GodotCollectionTarget(owner, mount, scene)` | `UnityCollectionTarget(owner, mount, prefab)` |
+| 列表 | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
 
 `MvvmBindings` 保存具名来源和绑定配置。Godot 使用 `ViewModelSourceResource`／`ViewBindingResource`；Unity 使用 `ViewModelSourceData`／`ViewBindingData`。配置种类为 Property、Command、Collection。
 

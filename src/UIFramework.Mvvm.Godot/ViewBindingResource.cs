@@ -11,6 +11,8 @@ public partial class ViewBindingResource : Resource
     [Export] public BindingMode Mode { get; set; } = BindingMode.OneWay;
     [Export] public ViewBindingKind Kind { get; set; }
     [Export] public string Converter { get; set; } = "";
+    [Export] public ConverterInput ConverterInput { get; set; }
+    [Export] public string ConverterConstant { get; set; } = "";
     [Export] public string ConvertBack { get; set; } = "";
     [Export] public bool HasNullValue { get; set; }
     [Export] public string NullValue { get; set; } = "";

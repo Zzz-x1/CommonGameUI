@@ -39,6 +39,7 @@ public sealed class MvvmMember
 }
 
 public enum ViewModelCreation { CreateInstance, Manual, SharedAsset }
+public enum ConverterInput { ViewModel, Constant }
 public enum BindingMode { OneTime, OneWay, OneWayToViewModel, TwoWay }
 public sealed class ViewModelSource
 {
@@ -80,6 +81,8 @@ public sealed class BindingOptions
     public BindingMode Mode { get; set; } = BindingMode.OneWay;
     public Func<object?, object?>? Convert { get; set; }
     public Func<object?, object?>? ConvertBack { get; set; }
+    public bool HasConstantValue { get; set; }
+    public object? ConstantValue { get; set; }
     public bool HasNullValue { get; set; }
     public object? NullValue { get; set; }
 }

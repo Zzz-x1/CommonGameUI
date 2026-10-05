@@ -1,3 +1,4 @@
+using EngineMvvm = global::UIFramework.Mvvm.Godot;
 using Godot;
 using System.Reflection;
 
@@ -16,7 +17,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private EditorDock _editorDock = null!;
     private readonly Dictionary<int, (Action Perform, Action Reverse)> _edits = new();
     private int _editId;
-    private GodotBindingPreview? _preview;
+    private EngineMvvm.BindingPreview? _preview;
     private readonly List<Task> _tasks = new();
     public override void _EnterTree()
     {
@@ -48,7 +49,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
         StopPreview(); RequireView();
         var missing = _view!.Sources.FirstOrDefault(s => s.Creation == ViewModelCreation.Manual && !PreviewSources.Has(s.Type));
         if (missing != null) { _status.Text = "缺少预览来源：" + missing.Name; return; }
-        _preview = new GodotBindingPreview(_view);
+        _preview = new EngineMvvm.BindingPreview(_view);
         _status.Text = "预览中：不执行命令或修改原始资产";
     }
     private void StopPreview() { if (_preview == null) return; _tasks.Add(_preview.DisposeAsync().AsTask()); _preview = null; ObserveTasks(); }
@@ -88,12 +89,16 @@ public partial class MvvmEditorPlugin : EditorPlugin
     public void ApplyEdit(int id, bool forward) { var edit = _edits[id]; if (forward) edit.Perform(); else edit.Reverse(); Refresh(); }
     private void Refresh()
     {
+        var selectedSource = _sources.GetSelected()?.GetMetadata(0).AsGodotObject();
+        var selectedBinding = _bindings.GetSelected()?.GetMetadata(0).AsGodotObject();
         _sources.Clear(); _bindings.Clear(); ClearDetails();
         if (_view == null) return;
-        var sourceRoot = _sources.CreateItem(); foreach (var source in _view.ViewModels) { var row = _sources.CreateItem(sourceRoot); row.SetText(0, source.Name + " · " + source.Creation); row.SetMetadata(0, source); }
+        var sourceRoot = _sources.CreateItem(); foreach (var source in _view.ViewModels) { var row = _sources.CreateItem(sourceRoot); row.SetText(0, source.Name + " · " + source.Creation); row.SetMetadata(0, source); if (source == selectedSource) row.Select(0); }
         var root = _bindings.CreateItem(); foreach (var b in _view.Bindings.Where(b => (b.Target + " " + b.Source + " " + b.Member).Contains(_search.Text, StringComparison.OrdinalIgnoreCase)))
-        { var row = _bindings.CreateItem(root); row.SetText(0, b.Target + " · " + b.Member); row.SetText(1, b.Source); row.SetText(2, b.Kind == ViewBindingKind.Property ? b.Mode.ToString() : b.Kind.ToString()); row.SetMetadata(0, b); }
+        { var row = _bindings.CreateItem(root); row.SetText(0, b.Target + " · " + b.Member); row.SetText(1, b.Source); row.SetText(2, b.Kind == ViewBindingKind.Property ? b.Mode.ToString() : b.Kind.ToString()); row.SetMetadata(0, b); if (b == selectedBinding) row.Select(0); }
         _status.Text = _view.Bindings.Count + " 条绑定 · 双向绑定初始以 VM 为准";
+        if (_bindings.GetSelected() != null) BindingDetails();
+        else if (_sources.GetSelected() != null) SourceDetails();
     }
     private void Delete()
     {
@@ -126,19 +131,33 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private void BindingDetails()
     {
         ClearDetails(); if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is not ViewBindingResource b) return;
-        Text("控件路径", b.Target, v => Edit(b.Target, new NodePath(v), value => b.Target = value)); Text("目标属性", b.Member, v => Edit(b.Member, v, value => b.Member = value)); Text("来源路径", b.Source, v => Edit(b.Source, v, value => b.Source = value));
+        Text("控件路径", b.Target, v => Edit(b.Target, new NodePath(v), value => b.Target = value)); Text("目标属性", b.Member, v => Edit(b.Member, v, value => b.Member = value));
+        if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel) Text("来源路径", b.Source, v => Edit(b.Source, v, value => b.Source = value));
         Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value)); Choice("方向", b.Mode, v => Edit(b.Mode, v, value => b.Mode = value));
         var sourceType = SourceType(b.Source); var target = _view!.GetParent().GetNodeOrNull<Control>(b.Target); Type? targetType = null;
-        if (target != null && b.Kind == ViewBindingKind.Property) { using var property = GodotBindingTargets.Property(target, b.Member); targetType = property.ValueType; }
-        Converter("正向转换", b.Converter, sourceType, targetType, v => Edit(b.Converter, v, value => b.Converter = value));
-        Converter("反向转换", b.ConvertBack, targetType, sourceType, v => Edit(b.ConvertBack, v, value => b.ConvertBack = value));
+        if (target != null && b.Kind == ViewBindingKind.Property) { using var property = EngineMvvm.BindingTargets.Property(target, b.Member); targetType = property.ValueType; }
+        if (b.Kind != ViewBindingKind.Property)
+        {
+            if (b.Kind == ViewBindingKind.Collection) Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
+            return;
+        }
+        if (b.Mode is BindingMode.OneWay or BindingMode.OneTime) Choice("转换器输入", b.ConverterInput, v => Edit(b.ConverterInput, v, value => b.ConverterInput = value));
+        Converter("正向转换", b.Converter, sourceType, targetType, b.ConverterInput == ConverterInput.Constant, v => Edit(b.Converter, v, value => b.Converter = value));
+        if (b.Converter.Length != 0)
+        {
+            var info = Converters.Discover().Single(c => c.Name == b.Converter);
+            _details.AddChild(new Label { Text = "输入：" + info.Input.Name + " → 输出：" + info.Output.Name });
+            if (b.ConverterInput == ConverterInput.Constant) Text("输入常量", b.ConverterConstant, v => Edit(b.ConverterConstant, v, value => b.ConverterConstant = value));
+            else _details.AddChild(new Label { Text = "输入参数绑定到来源路径，成员变化时重新转换。" });
+        }
+        if (b.Mode == BindingMode.TwoWay) Converter("反向转换", b.ConvertBack, targetType, sourceType, false, v => Edit(b.ConvertBack, v, value => b.ConvertBack = value));
         var nullable = new CheckButton { Text = "显式空值显示", ButtonPressed = b.HasNullValue }; nullable.Toggled += v => Edit(b.HasNullValue, v, value => b.HasNullValue = value); _details.AddChild(nullable);
         Text("空值内容", b.NullValue, v => Edit(b.NullValue, v, value => b.NullValue = value)); Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
     }
     private Type? SourceType(string path)
     { var parts = path.Split('.'); var source = _view!.ViewModels.FirstOrDefault(s => s.Name == parts[0]); var type = source?.Template?.GetType() ?? Type.GetType(source?.TypeName ?? ""); foreach (var part in parts.Skip(1)) type = type?.GetProperty(part)?.PropertyType; return type; }
-    private void Converter(string label, string current, Type? input, Type? output, Action<string> set)
-    { var choices = new[] { "" }.Concat(Converters.Discover().Where(c => input != null && output != null && c.Input.IsAssignableFrom(input) && output.IsAssignableFrom(c.Output)).Select(c => c.Name)).ToArray(); var field = new OptionButton(); foreach (var name in choices) field.AddItem(name.Length == 0 ? "无" : name); field.Selected = Array.IndexOf(choices, current); field.ItemSelected += index => set(choices[index]); _details.AddChild(new Label { Text = label }); _details.AddChild(field); }
+    private void Converter(string label, string current, Type? input, Type? output, bool constant, Action<string> set)
+    { var choices = new[] { "" }.Concat(Converters.Discover().Where(c => (input != null || constant) && output != null && (constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name)).ToArray(); var field = new OptionButton(); foreach (var name in choices) field.AddItem(name.Length == 0 ? "无" : name); field.Selected = Array.IndexOf(choices, current); field.ItemSelected += index => set(choices[index]); _details.AddChild(new Label { Text = label }); _details.AddChild(field); }
     private void Edit<T>(T old, T value, Action<T> set) => Change("Edit View Binding", () => set(value), () => set(old));
     private void Text(string label, string value, Action<string> set)
     {

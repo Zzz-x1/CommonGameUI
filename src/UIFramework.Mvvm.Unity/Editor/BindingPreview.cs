@@ -1,3 +1,5 @@
+using EngineMvvm = global::UIFramework.Mvvm.Unity;
+using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +12,7 @@ using UIFramework.Mvvm.Unity;
 
 namespace UIFramework.Mvvm.EditorUnity
 {
-    public sealed class UnityBindingPreview : IDisposable
+    public sealed class BindingPreview : IDisposable
     {
         private readonly MvvmRuntime _runtime = new MvvmRuntime();
         private readonly List<(IBindingTarget Target, object Value)> _values = new List<(IBindingTarget, object)>();
@@ -31,21 +33,21 @@ namespace UIFramework.Mvvm.EditorUnity
             public void Apply(UINode node)
             {
                 foreach (var binding in View.Bindings.Where(b => b.Enabled && b.Kind == ViewBindingKind.Property))
-                    node.Bind(binding.Source, UnityBindingTargets.Property(binding.Target, binding.Member), new BindingOptions { Mode = BindingMode.OneWay, Convert = string.IsNullOrEmpty(binding.Converter) ? null : Converters.Find(binding.Converter), HasNullValue = binding.HasNullValue, NullValue = binding.NullValue });
+                    node.Bind(binding.Source, EngineMvvm.BindingTargets.Property(binding.Target, binding.Member), Converters.Configure(binding.Converter, "", BindingMode.OneWay, binding.ConverterInput, binding.ConverterConstant, binding.HasNullValue, binding.NullValue));
             }
         }
-        public UnityBindingPreview(MvvmBindings view)
+        public BindingPreview(MvvmBindings view)
         {
             var sources = view.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.CreateInstance }).ToArray();
             foreach (var manual in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
                 if (!PreviewSources.Has(manual.Type)) throw new InvalidOperationException("缺少预览来源：" + manual.Name);
             foreach (var manual in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
                 _runtime.RegisterFactory(manual.Type, () => PreviewSources.Create(manual.Type));
-            _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(UnityFramePump)) { hideFlags = HideFlags.HideAndDontSave };
-            var host = new UnityUIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<UnityFramePump>());
-            _ui = new UIContext(host, new UnityPrefabLoader(host));
+            _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(EngineUI.FramePump)) { hideFlags = HideFlags.HideAndDontSave };
+            var host = new EngineUI.UIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<EngineUI.FramePump>());
+            _ui = new UIContext(host, new EngineUI.UIResourceLoader(host));
             _ui.ConfigureMvvm(_runtime, node => node.Name == "Preview" ? (IViewBindingConfiguration)new SourceConfiguration { SourcesList = sources }
-                : node.Element is UnityUIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new UnityViewModelAssets());
+                : node.Element is EngineUI.UIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new EngineMvvm.ViewModelAssets());
             try
             {
                 var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview");
@@ -55,12 +57,12 @@ namespace UIFramework.Mvvm.EditorUnity
                     if (b.Kind == ViewBindingKind.Collection)
                     {
                         foreach (Transform child in b.Target.transform) { _children.Add((child.gameObject, child.gameObject.activeSelf)); child.gameObject.SetActive(false); }
-                        node.BindCollection(b.Source, new UnityCollectionTarget(node, (RectTransform)b.Target.transform, b.ItemPrefab, true), b.OneTimeCollection);
+                        node.BindCollection(b.Source, new EngineMvvm.CollectionTarget(node, (RectTransform)b.Target.transform, b.ItemPrefab, true), b.OneTimeCollection);
                     }
                     else
                     {
-                        var target = UnityBindingTargets.Property(b.Target, b.Member); _values.Add((target, target.Read()));
-                        node.Bind(b.Source, target, new BindingOptions { Mode = b.Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay, Convert = string.IsNullOrEmpty(b.Converter) ? null : Converters.Find(b.Converter), HasNullValue = b.HasNullValue, NullValue = b.NullValue });
+                        var target = EngineMvvm.BindingTargets.Property(b.Target, b.Member); _values.Add((target, target.Read()));
+                        node.Bind(b.Source, target, Converters.Configure(b.Converter, "", b.Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay, b.ConverterInput, b.ConverterConstant, b.HasNullValue, b.NullValue));
                     }
                 }
             }

@@ -1,7 +1,7 @@
 using Godot;
 using UIFramework.Godot;
 namespace UIFramework.Mvvm.Godot;
-public static class GodotBindingTargets
+public static class BindingTargets
 {
     public static IBindingTarget TextTarget(this Label label) => new Target<string>(label, () => label.Text, v => label.Text = v);
     public static IBindingTarget TextTarget(this LineEdit edit) => new Target<string>(edit, () => edit.Text, v => edit.Text = v, a => { void Changed(string _) => a(); edit.TextChanged += Changed; return () => edit.TextChanged -= Changed; });

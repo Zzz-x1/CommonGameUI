@@ -32,17 +32,17 @@ Task WhenMvvmIdleAsync(this UIContext ui);
 MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
     Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
-void SetViewModel(this UINode node, string name, object vm);
-T GetViewModel<T>(this UINode node, string name) where T : class;
-T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class;
-IDisposable Bind(this UINode node, string path, IBindingTarget target,
+void SetViewModel(this IUINode node, string name, object vm);
+T GetViewModel<T>(this IUINode node, string name) where T : class;
+T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
+IDisposable Bind(this IUINode node, string path, IBindingTarget target,
     BindingMode mode = BindingMode.OneWay);
-IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingOptions options);
-IDisposable BindCommand(this UINode node, string path, ICommandTarget target,
+IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
+IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
     object? parameter = null);
-IDisposable BindCollection(this UINode node, string path, ICollectionTarget target,
+IDisposable BindCollection(this IUINode node, string path, ICollectionTarget target,
     bool oneTime = false);
-void ObserveMvvmTask(this UINode node, Task task);
+void ObserveMvvmTask(this IUINode node, Task task);
 ```
 
 Enable MVVM before creating business nodes. `SetViewModel` borrows an object; `CreateViewModel` gives ownership to the node. Returned bindings can be detached early and are also cleaned up with the node. Hiding retains them; closing cleans them up.
@@ -62,10 +62,15 @@ Paths use `Source.Member` and may traverse woven intermediate VMs. Modes are `On
 ```csharp
 IEnumerable<ConverterInfo> Converters.Discover();
 Func<object?, object?> Converters.Find(string name);
+BindingOptions Converters.Configure(string converter, string convertBack, BindingMode mode,
+    ConverterInput input, string constant, bool hasNullValue, object? nullValue);
+bool Converters.SupportsConstant(Type type);
 void PreviewSources.Register<T>(Func<T> factory) where T : class;
 ```
 
 Built-in names: `FormatNumber`, `PercentText`, `InvertBoolean`, `IntToFloat`, `FloatToInt`. Project converters use the fully qualified type name plus method name. Reverse conversions must be supplied explicitly.
+
+`Converters.Configure` is shared by GUI and preview. ViewModel input uses the binding source path; Constant input parses the literal as the function's input type. Constants support OneWay / OneTime only. `BindingOptions.HasConstantValue` / `ConstantValue` can also explicitly configure a constant without a VM source.
 
 The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `Describe` and `PropertyChanged`. `Describe` returns `MvvmMember[]` containing names, types, member kinds, notification and writable flags. Business code usually does not call these generated entry points.
 
@@ -79,7 +84,7 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 | Slider | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | Toggle | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
 | Command | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
-| Collection | `GodotCollectionTarget(owner, mount, scene)` | `UnityCollectionTarget(owner, mount, prefab)` |
+| Collection | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
 
 `MvvmBindings` stores named sources and bindings. Godot uses `ViewModelSourceResource` / `ViewBindingResource`; Unity uses `ViewModelSourceData` / `ViewBindingData`. Binding kinds are Property, Command and Collection.
 

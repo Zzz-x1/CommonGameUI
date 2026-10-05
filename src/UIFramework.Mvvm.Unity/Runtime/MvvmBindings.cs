@@ -14,7 +14,7 @@ namespace UIFramework.Mvvm.Unity
     {
         public bool Enabled = true; public Component Target; public string Member = "text"; public string Source = "";
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
-        public string Converter = "", ConvertBack = ""; public bool HasNullValue; public string NullValue = "";
+        public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
         public GameObject ItemPrefab; public bool OneTimeCollection;
     }
     public sealed class MvvmBindings : MonoBehaviour, IViewBindingConfiguration
@@ -29,16 +29,15 @@ namespace UIFramework.Mvvm.Unity
             {
                 if (!binding.Target) throw new InvalidOperationException("Missing binding target: " + binding.Source);
                 if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget());
-                else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, new UnityCollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab), binding.OneTimeCollection);
-                else node.Bind(binding.Source, UnityBindingTargets.Property(binding.Target, binding.Member), new BindingOptions
-                { Mode = binding.Mode, Convert = string.IsNullOrEmpty(binding.Converter) ? null : Converters.Find(binding.Converter), ConvertBack = string.IsNullOrEmpty(binding.ConvertBack) ? null : Converters.Find(binding.ConvertBack), HasNullValue = binding.HasNullValue, NullValue = binding.NullValue });
+                else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, new CollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab), binding.OneTimeCollection);
+                else node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member), Converters.Configure(binding.Converter, binding.ConvertBack, binding.Mode, binding.ConverterInput, binding.ConverterConstant, binding.HasNullValue, binding.NullValue));
             }
         }
     }
-    public static class UnityMvvmExtensions
+    public static class MvvmExtensions
     {
-        public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : ScriptableObject => ui.GetMvvm().GetSharedViewModel(template, new UnityViewModelAssets());
-    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : ScriptableObject => runtime.GetSharedViewModel(template, new UnityViewModelAssets());
+        public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : ScriptableObject => ui.GetMvvm().GetSharedViewModel(template, new ViewModelAssets());
+    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : ScriptableObject => runtime.GetSharedViewModel(template, new ViewModelAssets());
 
     }
 }

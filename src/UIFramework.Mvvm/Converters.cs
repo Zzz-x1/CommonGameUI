@@ -32,5 +32,28 @@ public static class Converters
             foreach (var attribute in assembly.GetCustomAttributes<ConverterProviderAttribute>())
                 foreach (var converter in ((IConverterProvider)Activator.CreateInstance(attribute.Type)!).GetConverters()) yield return converter;
     }
+    public static bool SupportsConstant(Type type) => type == typeof(string) || type.IsEnum ||
+        type == typeof(bool) || type == typeof(byte) || type == typeof(sbyte) ||
+        type == typeof(short) || type == typeof(ushort) || type == typeof(int) || type == typeof(uint) ||
+        type == typeof(long) || type == typeof(ulong) || type == typeof(float) || type == typeof(double) || type == typeof(decimal);
+    public static BindingOptions Configure(string converter, string convertBack, BindingMode mode,
+        ConverterInput input, string constant, bool hasNullValue, object? nullValue)
+    {
+        var options = new BindingOptions { Mode = mode, HasNullValue = hasNullValue, NullValue = nullValue };
+        if (converter.Length != 0) options.Convert = Find(converter);
+        if (convertBack.Length != 0) options.ConvertBack = Find(convertBack);
+        if (input == ConverterInput.Constant)
+        {
+            if (converter.Length == 0) throw new InvalidOperationException("Constant input requires a converter.");
+            if (mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
+                throw new InvalidOperationException("Constant input cannot be written back to a ViewModel.");
+            var type = Discover().Single(c => c.Name == converter).Input;
+            if (!SupportsConstant(type)) throw new NotSupportedException("Converter input does not support a literal: " + type.FullName);
+            options.HasConstantValue = true;
+            options.ConstantValue = type.IsEnum ? Enum.Parse(type, constant, false) :
+                System.Convert.ChangeType(constant, type, CultureInfo.InvariantCulture);
+        }
+        return options;
+    }
     public static Func<object?, object?> Find(string name) => Discover().Single(c => c.Name == name).Convert;
 }

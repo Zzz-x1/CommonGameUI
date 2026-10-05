@@ -1,7 +1,7 @@
 using Godot;
 using System.Reflection;
 namespace UIFramework.Mvvm.Godot;
-public sealed class GodotViewModelAssets : IViewModelAssets
+public sealed class ViewModelAssets : IViewModelAssets
 {
     public bool CanCreate(Type type) => typeof(Resource).IsAssignableFrom(type);
     public object CreateInstance(Type type) => Activator.CreateInstance(type)!;

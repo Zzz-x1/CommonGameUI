@@ -6,13 +6,13 @@ using UnityEngine;
 using UIFramework.Unity;
 namespace UIFramework.Mvvm.Unity
 {
-    public sealed class UnityCollectionTarget : ICollectionTarget
+    public sealed class CollectionTarget : ICollectionTarget
     {
         private readonly UINode _owner; private readonly RectTransform _mount; private readonly GameObject _template;
         private readonly List<(GameObject Object, UINode Node)> _items = new List<(GameObject, UINode)>(); private int _id;
         private readonly bool _preview;
         private readonly string _name = "Items_" + Guid.NewGuid().ToString("N");
-        public UnityCollectionTarget(UINode owner, RectTransform mount, GameObject template, bool preview = false)
+        public CollectionTarget(UINode owner, RectTransform mount, GameObject template, bool preview = false)
         { _owner = owner; _mount = mount; _preview = preview; _template = template ? template : throw new ArgumentNullException(nameof(template)); }
         public void Insert(int index, object item)
         {
