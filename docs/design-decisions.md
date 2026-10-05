@@ -1848,8 +1848,10 @@ Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源�
 
 两端适配类型和方法采用统一名称，通过 UIFramework.Unity／UIFramework.Godot 隔离；MVVM 适配通过 UIFramework.Mvvm.Unity／UIFramework.Mvvm.Godot 隔离。原生业务基类均命名 UINode、UINode<TArgs> 和 DialogNode<TResult>，不使用 Unity／Godot 前缀。共同能力的 API 名称与共同参数保持一致，真实引擎类型及专有能力允许差异。混合引用 Core 和适配时用命名空间别名解决同名歧义，不保留旧名称转发。
 
-用户同时要求 MVVM 针对原生 UI 工作流优化：配置与 UI 资源一起编辑保存，支持原生控件选择和引用，完善项目 VM 类型／资产发现及引用，并覆盖 Global VM 的发现／查找。Unity 编辑器继续使用 UXML／USS 与 UI Toolkit，Godot 使用原生编辑器插件；Undo、Prefab Override、场景保存重开和独立预览恢复属于验收范围。GUI 与代码绑定继续使用同一执行逻辑，Runtime 初始化和释放继续由框架托管。
+用户同时要求 MVVM 针对原生 UI 工作流优化：配置与 UI 资源一起编辑保存，支持原生控件选择和引用，完善项目可引用 VM 资产的发现及引用，并覆盖 Global VM 的编辑器发现／查找。Unity 编辑器继续使用 UXML／USS 与 UI Toolkit，Godot 使用原生编辑器插件；Undo、Prefab Override、场景保存重开和独立预览恢复属于验收范围。GUI 与代码绑定继续使用同一执行逻辑，Runtime 初始化和释放继续由框架托管。
 
-用户已明确 Global VM 仅指编辑器发现项目内可用的 VM 类型／资产，供 GUI 选择及配置引用；不增加运行时具名全局 VM 注册或查找。三种 VM 创建方式 Create Instance、Manual、Shared Asset 继续保留；Shared Asset 仍在所属 Runtime 内缓存共享实例，跨 Context 共享沿用现有显式共享配置。编辑器发现需覆盖已标记的普通 C# VM 类型及 Unity ScriptableObject／Godot Resource VM 资产，支持搜索、类型筛选、选择引用和定位来源；预览继续使用克隆，不修改原资产。现有 Unity 配置已经保存 Component 引用，Godot 保存相对 NodePath；重构需处理原生引用在资源克隆、重命名及编辑器操作中的行为，不以每帧扫描代替绑定。
+用户已明确 Global VM 仅指编辑器发现项目内可直接引用的 VM 资产：Unity ScriptableObject 和 Godot Resource；不发现或选择普通 C# 对象类型，不增加运行时具名全局 VM 注册或查找。GUI 保存引擎原生资产引用，由资产取得 VM 类型和成员描述；移除 GUI 来源配置中的类型名称／程序集限定名称，不用字符串类型引用或重命名保底维持旧配置。资产搜索支持搜索、筛选、选择引用和定位来源；预览继续使用资产克隆，不修改原资产。普通 C# VM 仍支持运行时代码创建和绑定，不进入 GUI 资产发现工作流。
+
+三种 VM 创建方式 Create Instance、Manual、Shared Asset 继续保留。GUI 的来源类型由引用资产确定；Manual 的资产引用用于声明来源类型及显式提供预览样本，运行时实例必须由业务提供，不能因为缺失而自动使用资产实例。Shared Asset 仍在所属 Runtime 内缓存共享实例，跨 Context 共享沿用现有显式共享配置。现有 Unity 配置已经保存 Component 引用，Godot 保存相对 NodePath；重构需处理原生引用在资源克隆、重命名及编辑器操作中的行为，不以每帧扫描代替绑定。
 
 本节记录后续重构要求，不代表原生节点或编辑器发现优化已实现。第 20 节教程与现有用户文档反映当前实现，实施重构时一并替换资源、代码和说明。
