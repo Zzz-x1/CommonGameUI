@@ -11,7 +11,7 @@ await modals.CloseAsync(graphics);
 // settings remains the same instance.
 ```
 
-两个资源只放面板内容，Shared 遮罩由 Modal 提供。音量／画面分类仍是 Settings 内的 Tab；画质独立弹窗不混进分类切换。
+关闭 graphics 后，原 settings 实例恢复交互。分类切换仍使用 Settings 内的 Tab。
 
 ## 大厅→背包→详情→回大厅
 
@@ -22,9 +22,9 @@ await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 await pages.PopToAsync(lobby);
 ```
 
-返回目标是保存的实例，不是字符串路由。中间页面销毁，大厅状态保留；普通返回使用 PopAsync。
+PopToAsync 返回保存的大厅实例并清理中间页；普通返回用 PopAsync。
 
-## 确认购买→奖励→恢复商店
+## 确认购买与奖励
 
 ```csharp
 bool accepted = await modals.ShowDialogAsync<ConfirmView, bool>();
@@ -36,7 +36,7 @@ if (accepted)
 }
 ```
 
-奖励窗口的动画来源是开窗时真实顶层节点，例如 PurchaseView；单封邮件保留正文，再打开同一个 RewardView。Transitions.Select 可据 Source 选择完整时间轴或短揭开。不额外保存上一窗口标签；不同动画不改变发奖结果。
+确认后先保存购买结果，再打开奖励。奖励关闭按钮调用 CloseAsync(this)，恢复其下的商品详情。来源动画选择见[转场](../manual/transitions.md)。
 
 ## 两张装备对比卡
 
@@ -45,7 +45,7 @@ if (comparisons.Count < 2)
     comparisons.Add(await windows.OpenAsync<CompareView>(new ItemArgs(selectedId)));
 ```
 
-CompareView 继承 `UINode<ItemArgs>`，注册为 Multiple；第三张入口禁用或明确提示上限。关闭具体卡后从 comparisons 移除，不能用 TryGet 在多个实例中任选。上限属于项目，框架不硬编码两张。
+CompareView 继承 `UINode<ItemArgs>`，注册为 Multiple。第三张入口禁用；关闭后移除对应列表引用。
 
 ## 活动目标收起／恢复
 
@@ -55,6 +55,6 @@ await tabs.HideAsync();
 await tabs.SwitchAsync(selected);
 ```
 
-保留原分类和控件值，项目保存恢复名称。操作时禁用分类挂载外的收起／关闭入口。输入政策、模型保存和动画跳过见对应 Manual，不增加新核心机制。
+项目保存 selected，展开时恢复原页；操作期间禁用挂载外的收起与关闭按钮。
 
 [Modal](../manual/modals-and-dialogs.md) · [Panel](../manual/panels.md) · [转场](../manual/transitions.md)

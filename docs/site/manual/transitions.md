@@ -17,7 +17,7 @@ var inventory = await pages.PushAsync<InventoryView>();
 // The ordering/state properties are available on every node:
 inventory.TransitionOrder = 10;
 inventory.TransitionChanged += state => decoration.Update(state.Progress);
-await pages.PopAsync(playAnimation: false);
+await pages.PopAsync();
 ```
 
 ## 要点

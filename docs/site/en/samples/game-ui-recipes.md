@@ -11,7 +11,7 @@ await modals.CloseAsync(graphics);
 // settings remains the same instance.
 ```
 
-Both resources contain panel content only; Modal supplies the Shared backdrop. Audio/graphics categories remain embedded Tabs in Settings; the separate graphics modal is not a category switch.
+Closing graphics restores the original settings instance. Categories still use the embedded Tab in Settings.
 
 ## Lobby→inventory→details→home
 
@@ -22,9 +22,9 @@ await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 await pages.PopToAsync(lobby);
 ```
 
-The return target is a retained instance, not a string route. Intermediate pages are disposed while lobby state remains. Use PopAsync for ordinary Back.
+PopToAsync restores the retained lobby and cleans intermediate pages. Use PopAsync for ordinary Back.
 
-## Purchase confirmation→rewards→shop
+## Purchase confirmation and rewards
 
 ```csharp
 bool accepted = await modals.ShowDialogAsync<ConfirmView, bool>();
@@ -36,7 +36,7 @@ if (accepted)
 }
 ```
 
-The reward animation source is the actual top node when opened, such as PurchaseView. Keep a single-mail body open before displaying the same RewardView. Transitions.Select chooses a full timeline or short reveal from Source. Do not store extra previous-window labels; animation choices do not change rewards.
+Save the purchase before opening rewards. Its Close button calls CloseAsync(this), restoring the details beneath it. See [Transitions](../manual/transitions.md) for source-based animation.
 
 ## Two equipment comparison cards
 
@@ -45,7 +45,7 @@ if (comparisons.Count < 2)
     comparisons.Add(await windows.OpenAsync<CompareView>(new ItemArgs(selectedId)));
 ```
 
-CompareView inherits `UINode<ItemArgs>` and registers as Multiple. Disable the third-card action or show the limit. Remove references when closing cards; TryGet cannot arbitrarily choose among multiple instances. The two-card limit belongs to the project, not Core.
+CompareView inherits `UINode<ItemArgs>` and registers as Multiple. Disable the third-card action and remove list references after closing.
 
 ## Fold and restore event goals
 
@@ -55,6 +55,6 @@ await tabs.HideAsync();
 await tabs.SwitchAsync(selected);
 ```
 
-Retain page instances and values, storing the restoration name in the project. Disable Fold/Close controls outside the Tab mount during the operation. Input policy, model persistence and skip behavior use the existing Manual contracts without another core mechanism.
+Retain selected for restoration. Disable Fold/Close controls outside the mount during the operation.
 
 [Modal](../manual/modals-and-dialogs.md) · [Panel](../manual/panels.md) · [Transitions](../manual/transitions.md)

@@ -1,30 +1,48 @@
 # 节点、参数与依赖
 
-装备详情用创建参数传入装备 ID；玩家模型等服务通过构造函数注入。
+装备详情接收装备 ID；名称表通过构造函数注入。创建参数与服务依赖分开处理。
 
-## 用法
+## 定义节点
 
-继承 `UINode<TArgs>`，通过 Parameters 读取参数。带服务的 View 使用 Register(factory, resource) 注册。
+Godot 示例资源含 Content/ItemName（Label）。Parameters 在初始化前已赋值：
 
 ```csharp
-public sealed record ItemArgs(string ItemId);
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Godot;
+using UIFramework;
+using UIFramework.Godot;
+
+public sealed class ItemArgs
+{
+    public ItemArgs(string itemId) { ItemId = itemId; }
+    public string ItemId { get; }
+}
 public sealed class ItemDetailsView : UINode<ItemArgs>
 {
+    private readonly IReadOnlyDictionary<string, string> _names;
+    public ItemDetailsView(IReadOnlyDictionary<string, string> names) { _names = names; }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        string id = Parameters.ItemId;
+        this.GetControl<Label>("Content/ItemName").Text = _names[Parameters.ItemId];
         return Task.CompletedTask;
     }
 }
-// Inside an async method, after registration:
-// ui.Register(() => new InventoryView(playerModel), "inventory-resource");
-// await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
+```
+
+## 注册与打开
+
+```csharp
+var itemNames = new Dictionary<string, string> { ["sword-01"] = "Iron Sword" };
+ui.Register(() => new ItemDetailsView(itemNames), "res://ItemDetails.tscn");
+await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 ```
 
 ## 要点
 
-- 参数在初始化前赋值；类型不符或缺少必需参数报错。
-- 参数只用于创建。已有单实例窗口重开不传参数，刷新数据调用业务方法。
-- 模型独立于 View，隐藏或销毁界面不应丢失玩家数据。
+- `UINode<TArgs>` 接收创建参数；工厂注册注入共享服务。
+- 参数类型错误、名称表缺少 ID 时直接报错。
+- 已有单实例窗口重开不传创建参数；刷新数据调用业务方法。
 
 [窗口](panels.md) · [生成器](source-generator.md)

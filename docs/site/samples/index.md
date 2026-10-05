@@ -1,23 +1,40 @@
 # 游戏客户端 Samples
 
-## 星庭远征：Godot
+「星庭远征」是纯 UI 客户端：包含本地业务与存档，不联网或执行战斗。
 
-从仓库根执行 `./scripts/Get-Godot.ps1` 获取固定便携引擎，然后 `./scripts/Run-Demo.ps1`。已有引擎可传 `-GodotPath`。源码位于 Demo/Godot，项目为 HierarchyDemo.csproj 和 project.godot。运行脚本需要 PowerShell 与 .NET 10 SDK。
+## 运行
 
-包含本地登录、大厅、六角色、装备培养、背包、编队、关卡出战确认、任务／成就、商店、邮件、好友、活动、资料和设置。纯 UI，不联网、不执行战斗。玩家数据在 user://client-save.json；自动测试使用隔离档案。
+从仓库根目录执行：
 
-观看大厅入场、角色培养和奖励，场景中的 AnimationPlayer 有可编辑轨道；尝试背包↔商店、邮件附件↔商店奖励，观察同页来源分支。完整／简化演出、跳过、分类收起和连续物品图片动画都属于实际游戏流程。
+```powershell
+# Godot: .NET 10 SDK + Godot 4.7.2 .NET
+./scripts/Get-Godot.ps1
+./scripts/Run-Demo.ps1
 
-`./scripts/Test.ps1` 执行核心、生成器、Godot headless 与独立进程重启验证。单独引擎自测使用 `./scripts/Run-Demo.ps1 -SelfTest -Headless`。素材来源在 Demo/Godot/Assets/SOURCES.md，不推断其他素材的许可证。
+# Unity: prepare DLL, then open Demo/Unity manually.
+./scripts/Run-UnityDemo.ps1 -PrepareOnly
+```
 
-## Unity Demo
+Godot 场景为 Scenes/Client/Main.tscn；Unity 为 Assets/Scenes/Client.unity。Unity 验证状态见[适配说明](../integrations/unity.md)。
 
-先执行 `./scripts/Run-UnityDemo.ps1 -PrepareOnly` 准备核心 DLL，再手动打开 Demo/Unity。场景为 Assets/Scenes/Client.unity。包含大厅、角色、装备、背包、编队、商店、任务与设置，不是 Godot 全模块的移植。
+## 推荐体验
 
-当前时间轴资源有待验证项，最新适配变化仅离线编译；请先阅读 [Unity 适配](../integrations/unity.md)。本次文档不新增原生验证结论，也不自动启动编辑器。
+| 路径 | 展示能力 |
+| --- | --- |
+| 标题→大厅 | 资源准备、生命周期、时间轴入场 |
+| 背包→详情→返回 | 页面历史与实例保持 |
+| 设置→画质→返回 | 嵌套弹窗与输入恢复 |
+| 商店→购买确认→奖励 | 等待答案、业务提交与演出 |
+| 背包装备对比 | 多实例浮窗 |
+| 背包↔商店、邮件领取 | 同页按来源选择动画（Godot） |
+| 活动收起／展开 | 保留内嵌页面（Godot） |
 
-## 独立入门示例
+Godot 包含角色、背包、编队、关卡、商店、任务、邮件、好友、活动、资料和设置。Unity 覆盖角色、背包、编队、商店、任务和设置。
 
-docs/examples/godot 可直接构建运行；docs/examples/unity 提供完整宿主，Prefab 按 [Unity 教程](../getting-started/unity.md) 创建。两者都不接入游戏存档。
+## 示例与测试
+
+- 小型教程：docs/examples/godot；Unity 宿主：docs/examples/unity。
+- 完整检查：`./scripts/Test.ps1`，自动测试使用隔离档案。
+- 操作说明与素材记录位于各 Demo 的 README.md 和 Assets/SOURCES.md。
 
 [场景组合](game-ui-recipes.md) · [时间轴](../manual/timeline-animation.md)

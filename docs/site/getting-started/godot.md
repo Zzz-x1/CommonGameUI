@@ -1,34 +1,80 @@
 # Godot Getting Started
 
-完成菜单→设置→分类切换→退出确认。需要 Godot 4.7.2 .NET 和 .NET 10 SDK。
+制作主菜单、设置分类与退出确认。仓库已提供独立教程工程，可直接运行或用于接入自己的项目。
 
-## 安装
+## 1. 准备环境
 
-从仓库根目录运行 `dotnet build docs/examples/godot/Tutorial.csproj`，再用 Godot 打开该目录的 project.godot。接入自己的项目时引用 Core 和 Godot，按项目位置调整路径：
+安装 Godot 4.7.2 .NET 和 .NET 10 SDK。
+
+## 2. 打开教程工程
+
+从仓库根运行：
+
+```powershell
+dotnet build docs/examples/godot/Tutorial.csproj
+```
+
+用 Godot 打开 docs/examples/godot/project.godot。主场景是 Main.tscn，无玩家存档。
+
+## 3. 接入自己的项目
+
+在项目 .csproj 添加引用，按实际位置调整路径：
 
 ```xml
 <ProjectReference Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
 <ProjectReference Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
 ```
 
-## 资源结构
+复制教程的 TutorialHost.cs、Main.tscn、Menu.tscn、Settings.tscn 和 Confirm.tscn 到项目根目录。下面代码使用这些固定资源路径。
 
-场景文件已提供，可直接在编辑器修改。根节点与空挂载设为 Full Rect、Mouse Filter=Ignore；弹窗 Content 接受鼠标。按钮保留键盘焦点。
+## 4. 检查场景结构
 
 ```text
 Main (Control, TutorialHost.cs)
-├── Pages (Control, Full Rect, Mouse Filter=Ignore)
-└── Dialogs (Control, Full Rect, Mouse Filter=Ignore)
-Menu.tscn: Control → Content → Settings, Quit (Button)
-Settings.tscn: Control → Content (Panel)
-  ├── AudioTab, GraphicsTab, Close (Button)
-  └── Body (Control) → Audio/Volume (HSlider), Graphics/Quality (CheckButton)
-Confirm.tscn: Control → Content (Panel) → Question (Label), Yes, No (Button)
+├── Pages (Control)
+└── Dialogs (Control)
+
+Menu.tscn
+└── Content → Settings, Quit (Button)
+
+Settings.tscn
+└── Content (Panel)
+    ├── AudioTab, GraphicsTab, Close (Button)
+    └── Body (Control)
+        ├── Audio → Volume (HSlider)
+        └── Graphics → Quality (CheckButton)
+
+Confirm.tscn
+└── Content (Panel) → Question (Label), Yes, No (Button)
 ```
 
-## 完整代码
+- 根与空挂载：Full Rect、Mouse Filter=Ignore。
+- 弹窗 Content：实际面板区域，Mouse Filter=Stop；遮罩由框架创建。
+- Tab 两页都保存在 Settings.tscn，运行时只切换显示。
+- 按钮保留键盘焦点，对象名称与代码路径一致。
 
-TutorialHost.cs 挂在 Main 根节点；View 为普通 C# 逻辑类，不挂到场景上。
+## 5. 接入逻辑
+
+TutorialHost.cs 挂在 Main 根节点。MenuView、SettingsView、ConfirmView 是普通 C# 节点，不挂到 Godot 场景。
+
+宿主先创建容器，再注册资源、打开菜单。以下片段已经包含在完整源码中：
+
+```csharp
+UI = GodotUI.Create(this);
+Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Pages", GetNode<Control>("Pages"));
+Dialogs = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("Dialogs"));
+Dialogs.ConfigureBackdrop(GodotBackdrops.Dim(Observe));
+
+UI.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "res://Menu.tscn");
+UI.Register(() => new SettingsView(Dialogs, Observe), "res://Settings.tscn");
+UI.Register<ConfirmView>("res://Confirm.tscn");
+await Pages.PushAsync<MenuView>();
+```
+
+按钮任务交给 Observe，由 _Process 传播异常；分类切换时同时禁用选择与关闭按钮。
+
+<details>
+<summary>展开完整 TutorialHost.cs</summary>
 
 ```csharp
 using Godot;
@@ -172,11 +218,14 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## 操作与关闭
+</details>
 
-- Settings→Graphics→Audio：音量值保留；Back 返回菜单。
-- Quit→Cancel 留在菜单；Confirm 等待清理后退出。Esc 返回，Enter 激活焦点按钮。
-- Observe 在帧入口传播任务异常；OnApplyState 在焦点恢复前更新按钮状态。
-- 正常退出 await ShutdownAsync，再释放场景。音量／画质仅示范控件状态，不修改引擎设置。
+## 6. 运行检查
 
-[内嵌 Tab](../manual/tabs.md) · [生命周期](../manual/lifecycle.md) · [Godot 适配](../integrations/godot.md) · [下一步](next-steps.md)
+1. Settings → Graphics → Audio：音量值保留。
+2. Back 返回菜单，恢复键盘焦点。
+3. Quit → Cancel 留在菜单；Confirm 清理 Context 后退出。
+
+Esc 返回或取消，Enter 激活焦点按钮。正常释放场景前 await ShutdownAsync。音量／画质只演示控件值。
+
+[下一步](next-steps.md) · [Tab](../manual/tabs.md) · [生命周期](../manual/lifecycle.md)

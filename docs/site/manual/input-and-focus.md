@@ -11,7 +11,12 @@ async Task BackAsync()
 {
     if (modals.Current is ConfirmView confirm) confirm.Complete(false);
     else if (modals.Current is UINode modal) await modals.CloseAsync(modal);
-    else if (compareWindows.Count > 0) await windows.CloseAsync(compareWindows[^1]);
+    else if (compareWindows.Count > 0)
+    {
+        var window = compareWindows[^1];
+        await windows.CloseAsync(window);
+        compareWindows.Remove(window);
+    }
     else if (pages.History.Count > 1) await pages.PopAsync();
     else await AskQuitAsync();
 }

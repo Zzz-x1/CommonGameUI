@@ -14,12 +14,19 @@
 ```
 
 ```csharp
+using UIFramework;
+
 namespace Game.UI
 {
+    public sealed class ItemArgs
+    {
+        public string ItemId { get; }
+        public ItemArgs(string itemId) { ItemId = itemId; }
+    }
     [UIResource("res://Inventory.tscn")]
     public sealed class InventoryView : UINode { }
     [UIResource("res://Compare.tscn", WindowMode = WindowInstanceMode.Multiple)]
-    public sealed class CompareView : UINode { }
+    public sealed class CompareView : UINode<ItemArgs> { }
 }
 // In caller code: using UIFramework.Generated; using Game.UI;
 // ui.RegisterGeneratedUI();

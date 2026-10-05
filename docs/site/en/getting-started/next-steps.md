@@ -15,6 +15,6 @@
 
 Put player data into a separate model and inject services through registration factories. Buttons call model operations and refresh after success. Save rewards once; completion or skipping animation must not commit them again.
 
-The project shell owns Esc, shutdown, cross-layer return and controls outside container mounts. Implement concrete game rules before introducing global navigation queues or arbitrary layer presets.
+The project shell handles Esc, shutdown, cross-layer return and controls outside container mounts.
 
 See [Samples](../samples/index.md) for a full client and [Integrations](../integrations/custom-engine.md) for another engine.

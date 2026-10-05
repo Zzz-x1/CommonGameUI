@@ -2,7 +2,7 @@
 
 Namespace UIFramework.Godot; engine types come from that engine. Signatures omit implementation bodies.
 
-## Setup / extensions
+## Setup and control access
 
 ```csharp
 UIContext GodotUI.Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null)
@@ -15,7 +15,7 @@ Control GetControl(this UINode node)
 T GetControl<T>(this UINode node, string path) where T : Control
 ```
 
-## Transitions / backdrop
+## Transitions and backdrops
 
 ```csharp
 IUITransition GodotTransitions.Fade(double duration = 0.15, string? targetPath = null, double delay = 0, Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut)
@@ -31,7 +31,7 @@ Vector2 Scale { get; init; } // default One
 float Alpha { get; init; } // default 1
 ```
 
-## Host / resource / element
+## Low-level adapter types
 
 ```csharp
 GodotUIHost(Viewport viewport)
@@ -53,12 +53,12 @@ void GodotUIElement.RestoreOrder(object order)
 ValueTask GodotUIElement.DisposeAsync()
 ```
 
-## Parameter semantics
+## Parameter notes
 
-Create requires an owner inside the scene tree. Defaults are GodotSceneLoader and Host logging. Attach/bind extensions borrow Controls rather than destroy their original scene. Null targetPath targets the root; other paths are relative to it.
-
-Simple runs explicit from→to frames without automatic enter/exit reversal; choose via Transitions.Select. Offset uses pixels, RelativeOffset uses live Size, and Scale/Alpha multiply authored values. Delay counts toward animation progress; easing does not change time progress. fromScale must be positive; frame alpha finite within 0..1; duration/delay finite and nonnegative.
-
-Animation must be non-looping. restore restores all custom track properties. Dim defaults to color (0.08, 0.14, 0.13, 0.68); observe must inspect failures. GodotUIHost frame waiting is internal, not a public extension API.
+- Create requires owner in the scene tree; defaults are GodotSceneLoader and Host logging.
+- targetPath is relative to the root; null means root. Attach/bind borrow Controls.
+- Simple plays from→to; Select chooses direction branches. Offset uses pixels, RelativeOffset uses Size, and Scale/Alpha multiply authored values.
+- duration/delay are finite and nonnegative; fromScale is positive; Alpha is within 0..1. Delay counts toward progress.
+- Animation is non-looping; restore resets tracks. Dim observe must inspect returned tasks.
 
 [Integration](../integrations/godot.md) · [Transitions](../manual/transitions.md)

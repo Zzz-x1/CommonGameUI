@@ -1,32 +1,65 @@
 # Lifecycle
 
-Bind controls on initialization, refresh on entry, pause decoration on deactivation and release resources on disposal.
+Bind once, refresh on each entry, pause decoration while inactive and resume it on activation.
 
-## Usage
+## Phases
 
-Entering/Exiting are awaited preparation. Entered/Exited are synchronous notifications after commit.
+| Phase | Responsibility |
+| --- | --- |
+| OnInitializeAsync | Initial attach: bind controls and events |
+| OnEnteringAsync/OnExitingAsync | Awaited preparation before entry/exit |
+| OnEntered/OnExited | Synchronous post-commit notifications |
+| OnActivated/OnDeactivated | Start/pause continuous presentation |
+| OnVisibilityChanged | Effective visibility changes |
+| OnDisposeAsync | Release business-owned resources |
+
+## Example: refresh profile and pause decoration
+
+The Godot resource contains Content/PlayerName (Label) and Decoration (AnimationPlayer with looping idle):
 
 ```csharp
-public sealed class LobbyView : UINode
+using System.Threading;
+using System.Threading.Tasks;
+using Godot;
+using UIFramework;
+using UIFramework.Godot;
+
+public sealed class PlayerProfile
 {
-    protected override Task OnInitializeAsync(CancellationToken token) => Task.CompletedTask;
-    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
+    public string Nickname { get; set; } = "Traveller";
+}
+public sealed class ProfileView : UINode
+{
+    private readonly PlayerProfile _profile;
+    private AnimationPlayer _decoration = null!;
+    public ProfileView(PlayerProfile profile) { _profile = profile; }
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        // Refresh from the project model; context.IsFirstEnter identifies first entry.
+        _decoration = this.GetControl().GetNode<AnimationPlayer>("Decoration");
+        _decoration.Play("idle");
+        _decoration.Active = false;
         return Task.CompletedTask;
     }
-    protected override void OnActivated(StateChangeContext context) { /* Resume decoration. */ }
-    protected override void OnDeactivated(StateChangeContext context) { /* Pause decoration. */ }
-    protected override Task OnDisposeAsync() => Task.CompletedTask;
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
+    {
+        this.GetControl<Label>("Content/PlayerName").Text = _profile.Nickname;
+        return Task.CompletedTask;
+    }
+    protected override void OnActivated(StateChangeContext context) => _decoration.Active = true;
+    protected override void OnDeactivated(StateChangeContext context) => _decoration.Active = false;
 }
+```
+
+```csharp
+ui.Register(() => new ProfileView(profile), "res://Profile.tscn");
+await pages.PushAsync<ProfileView>();
 ```
 
 ## Key points
 
-- Initialize runs once; entry/exit may repeat. Hiding retains; Dispose ends the subtree.
-- IsVisible is effective visibility, IsActive stable activity, and IsInteractive also considers input locks.
-- Notifications cannot mutate containers or dispose the current node/ancestors.
-- AddLifecycle registers behavior before attach. RemoveLifecycle is allowed while idle; initialized behavior still receives disposal.
-- See [Async and errors](async-and-errors.md) for failure-state rules.
+- Initialize runs once; enter/exit may repeat. Hide retains; disposal ends the subtree.
+- IsVisible is visibility, IsActive stable activity, and IsInteractive also includes input locks.
+- Synchronous notifications are read-only toward the framework. Lifecycle cannot dispose its node/ancestors.
+- Register AddLifecycle before attach. Idle removal stops notifications; initialized behavior still needs disposal.
 
-[API phase signatures](../api/core.md) · [Failures](async-and-errors.md)
+[Signatures](../api/core.md) · [Errors and commit](async-and-errors.md)

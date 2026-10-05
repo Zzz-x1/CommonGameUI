@@ -1,6 +1,6 @@
 # Concepts and responsibilities
 
-Use a Node for a screen and a Container to define how it opens, switches and returns.
+A Node can represent a screen or simply organize the hierarchy. A Container is a Node with opening, switching or return operations.
 
 ## Usage
 

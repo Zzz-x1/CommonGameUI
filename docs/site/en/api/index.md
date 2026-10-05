@@ -8,7 +8,7 @@
 | [Godot](godot.md) | Control/PackedScene, AnimationPlayer, Tween recipes and backdrop |
 | [Unity](unity.md) | RectTransform/Resources, legacy AnimationClip and backdrop |
 
-API pages list actual signatures and defaults. Read the [Manual](../manual/concepts.md) for workflows. Signature indexes are not complete compilable C# files. Await asynchronous snippets; project-defined business types/services are assumed in short examples.
+Look up signatures/defaults by type; see the [Manual](../manual/concepts.md) for workflows.
 
 ## Choose an operation
 
@@ -21,5 +21,3 @@ API pages list actual signatures and defaults. Read the [Manual](../manual/conce
 | Await a business answer | Modal.ShowDialogAsync + Dialog.Complete |
 | Prepare resources without displaying | Context.PreloadAsync |
 | Choose animation by source | Transitions.Select(context => recipe) |
-
-There is no Replace, global Navigation/Selection object or unified Skip API. Core contracts stay renderer-independent; engine configuration belongs to adapters.

@@ -1,30 +1,48 @@
 # Nodes, parameters and dependencies
 
-Pass an item ID as creation arguments; inject services such as the player model through constructors.
+Details receive an item ID; inject the name table through the constructor. Keep creation arguments separate from services.
 
-## Usage
+## Define the node
 
-Inherit `UINode<TArgs>` and read Parameters. Register service-dependent Views with Register(factory, resource).
+The Godot resource contains Content/ItemName (Label). Parameters are assigned before initialization:
 
 ```csharp
-public sealed record ItemArgs(string ItemId);
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Godot;
+using UIFramework;
+using UIFramework.Godot;
+
+public sealed class ItemArgs
+{
+    public ItemArgs(string itemId) { ItemId = itemId; }
+    public string ItemId { get; }
+}
 public sealed class ItemDetailsView : UINode<ItemArgs>
 {
+    private readonly IReadOnlyDictionary<string, string> _names;
+    public ItemDetailsView(IReadOnlyDictionary<string, string> names) { _names = names; }
     protected override Task OnInitializeAsync(CancellationToken token)
     {
-        string id = Parameters.ItemId;
+        this.GetControl<Label>("Content/ItemName").Text = _names[Parameters.ItemId];
         return Task.CompletedTask;
     }
 }
-// Inside an async method, after registration:
-// ui.Register(() => new InventoryView(playerModel), "inventory-resource");
-// await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
+```
+
+## Register and open
+
+```csharp
+var itemNames = new Dictionary<string, string> { ["sword-01"] = "Iron Sword" };
+ui.Register(() => new ItemDetailsView(itemNames), "res://ItemDetails.tscn");
+await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 ```
 
 ## Key points
 
-- Arguments are assigned before initialization; wrong types or missing required values fail.
-- Arguments are for creation. Reopen an existing single instance without them; refresh through a business method.
-- Keep models separate so hiding or disposing a View does not lose player data.
+- `UINode<TArgs>` receives creation arguments; factory registration injects shared services.
+- Wrong argument types or unknown IDs fail directly.
+- Reopen an existing Single window without creation arguments; refresh through a business method.
 
 [Panels](panels.md) · [Generator](source-generator.md)

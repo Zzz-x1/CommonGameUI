@@ -1,6 +1,6 @@
 # Core API Reference
 
-命名空间 UIFramework。以下为调用签名索引（省略方法体与 async 实现修饰符），不是可直接编译的类文件。所有后端操作在 UI 线程执行；异步返回必须被观察。
+命名空间：UIFramework。以下列出签名与默认值；用法见 [Manual](../manual/concepts.md)。
 
 ## UIContext
 
@@ -69,6 +69,13 @@ protected virtual void OnActivated(StateChangeContext context)
 protected virtual void OnDeactivated(StateChangeContext context)
 protected virtual void OnVisibilityChanged(StateChangeContext context)
 protected virtual Task OnDisposeAsync()
+
+```
+
+<details>
+<summary>节点与自定义容器扩展钩子</summary>
+
+```csharp
 protected virtual void OnChildRemoved(UINode child)
 protected virtual Task OnChildRemovedAsync(UINode child)
 protected virtual void OnApplyState()
@@ -82,26 +89,49 @@ protected Task FinishCloseAsync(UINode node, Action notify)
 protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation, TransitionDirection direction = TransitionDirection.None)
 ```
 
-## Containers / Dialog
+</details>
+
+## 容器与结果弹窗
 
 Panel Single 保留隐藏项，Close 销毁；Stack 保留历史，Pop 销毁；Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收更早实例。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
 
+### `ContainerNode : UINode`
+
+子节点的默认转场。
+
 ```csharp
-// ContainerNode : UINode
 IUITransition? ChildTransition { get; set; }
-// PanelContainerNode
+```
+
+### `PanelContainerNode`
+
+独立窗口；隐藏保留，关闭销毁。
+
+```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 bool TryGet<T>(out T? node) where T : UINode
 Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
-// StackContainerNode
+```
+
+### `StackContainerNode`
+
+页面历史；返回恢复原实例。
+
+```csharp
 IReadOnlyList<UINode> History { get; }
 UINode? Current { get; }
 Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
 Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
-// TabContainerNode
+```
+
+### `TabContainerNode`
+
+绑定内嵌页面并选择显示项。
+
+```csharp
 IReadOnlyDictionary<string, UINode> Items { get; }
 string? CurrentName { get; }
 UINode? Current { get; }
@@ -109,7 +139,13 @@ Task BindAsync(string name, UINode node, IUIElement? embeddedElement = null, Can
 Task SwitchAsync(string name, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
-// ModalContainerNode
+```
+
+### `ModalContainerNode`
+
+嵌套弹窗；只有顶层接受输入。
+
+```csharp
 UINode? Current { get; }
 ModalBackdropMode BackdropMode { get; }
 IUIBackdrop? CurrentBackdrop { get; }
@@ -119,7 +155,13 @@ Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, Cancellatio
 Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : DialogNode<TResult>
-// DialogNode<TResult>
+```
+
+### `DialogNode<TResult>`
+
+提交一次答案；等待方在关闭清理后取得结果。
+
+```csharp
 void Complete(TResult result)
 ```
 
@@ -146,7 +188,7 @@ Task DisposeAsync(UINode node)
 
 ## Transitions / resources / failures
 
-Select 同步只读；每次 Create 产生执行对象，Restore 总会执行。进度单调 0..1。UIResourceLease.Dispose 同步归还持有；附加失败不包装主异常。ConsoleUILog.Error(Exception exception, string context) 可用作基础控制台日志。
+Select 同步只读；每次 Create 产生执行对象，成功创建执行对象后，Restore 总会执行。进度单调 0..1。UIResourceLease.Dispose 同步归还持有；附加失败不包装主异常。ConsoleUILog.Error(Exception exception, string context) 可用作基础控制台日志。
 
 ```csharp
 IUITransition Transitions.Select(Func<TransitionContext, IUITransition> select)
@@ -204,7 +246,7 @@ public interface IUILog
 
 ## Enums / attributes
 
-这些枚举不定义 HUD／Overlay 等项目层级。UIResource 是生成器与默认注册资源声明。
+这些枚举不定义 HUD／Overlay 等项目层级。UIResource 声明生成器使用的资源路径；手写 Register 需明确传入路径。
 
 ```csharp
 enum NodeState { Detached, Initializing, Ready, Disposing, Disposed }

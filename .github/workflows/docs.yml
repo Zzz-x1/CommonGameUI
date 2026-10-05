@@ -1,7 +1,7 @@
 name: Documentation
 on:
   pull_request:
-    paths: ['README.md', 'docs/site/**', 'docs/examples/**', 'scripts/Check-Docs.mjs', 'scripts/Test-Docs-Browser.mjs', '.github/workflows/docs.yml']
+    paths: ['AGENTS.md', 'README.md', 'docs/**', 'Demo/**/README.md', 'Demo/**/SOURCES.md', 'scripts/Check-Docs.mjs', 'scripts/Test-Docs-Browser.mjs', '.github/workflows/docs.yml']
   workflow_dispatch:
 permissions:
   contents: read

@@ -2,7 +2,7 @@
 
 命名空间 UIFramework.Godot；引擎类型来自对应引擎。以下为调用签名，省略方法体。
 
-## Setup / extensions
+## 初始化与控件访问
 
 ```csharp
 UIContext GodotUI.Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null)
@@ -15,7 +15,7 @@ Control GetControl(this UINode node)
 T GetControl<T>(this UINode node, string path) where T : Control
 ```
 
-## Transitions / backdrop
+## 转场与遮罩
 
 ```csharp
 IUITransition GodotTransitions.Fade(double duration = 0.15, string? targetPath = null, double delay = 0, Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut)
@@ -31,7 +31,7 @@ Vector2 Scale { get; init; } // default One
 float Alpha { get; init; } // default 1
 ```
 
-## Host / resource / element
+## 底层适配类型
 
 ```csharp
 GodotUIHost(Viewport viewport)
@@ -53,12 +53,12 @@ void GodotUIElement.RestoreOrder(object order)
 ValueTask GodotUIElement.DisposeAsync()
 ```
 
-## 参数语义
+## 参数要点
 
-Create 在 owner 进入树后调用，默认使用 GodotSceneLoader 和 Host 日志。扩展挂载／绑定借用 Control，不销毁原场景。targetPath=null 使用根，其他路径相对根解析。
-
-Simple 明确 from→to，不自动根据进入／退出反转；用 Transitions.Select 选择。Offset 是像素偏移，RelativeOffset 按实际 Size，Scale／Alpha 乘资源原值。delay 计入动画进度，缓动不改变进度时间。ScaleFade 的 fromScale 必须正数，帧 alpha 为有限 0..1；duration／delay 有限非负。
-
-Animation 必須非循环，restore 恢复所有自定义轨道属性。Dim 默认颜色 (0.08, 0.14, 0.13, 0.68)，observe 必须观察失败。GodotUIHost 的帧等待是内部方法，不属于公开扩展 API。
+- Create 要求 owner 已进入场景树；默认使用 GodotSceneLoader 和 Host 日志。
+- targetPath 相对资源根；null 表示根。挂载／绑定借用 Control。
+- Simple 按 from→to 播放；方向分支由 Select 选择。Offset 为像素，RelativeOffset 按 Size；Scale／Alpha 乘原值。
+- duration／delay 有限非负；fromScale 为正，Alpha 在 0..1。delay 计入进度。
+- Animation 非循环，restore 恢复轨道属性。Dim 的 observe 必须观察返回任务。
 
 [适配说明](../integrations/godot.md) · [转场](../manual/transitions.md)

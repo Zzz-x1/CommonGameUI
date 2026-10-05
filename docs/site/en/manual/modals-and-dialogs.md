@@ -11,6 +11,11 @@ modals.ConfigureBackdrop(GodotBackdrops.Dim(Observe), ModalBackdropMode.Shared);
 var settings = await modals.OpenAsync<SettingsView>();
 var graphics = await modals.OpenAsync<GraphicsView>();
 await modals.CloseAsync(graphics);
+```
+
+## Confirm purchase and return to shop
+
+```csharp
 var shop = await modals.OpenAsync<ShopView>();
 await modals.OpenAsync<PurchaseView>();
 bool confirmed = await modals.ShowDialogAsync<ConfirmView, bool>();

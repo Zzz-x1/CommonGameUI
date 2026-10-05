@@ -1,14 +1,20 @@
-# 星庭远征 · Godot 游戏客户端
+# 星庭远征 · Godot Demo
 
-原创中文奇幻二次元客户端，展示 UIFramework 在真实游戏 UI 流程中的使用。Godot 4.7.2 .NET / .NET 10；核心仍为 netstandard2.1。只包含客户端 UI、本地业务模拟与存档，没有联网或 Gameplay。
+Godot 4.7.2 .NET / .NET 10 的纯 UI 客户端，包含本地业务与存档。
 
 ## 运行
 
-在仓库根运行 `./scripts/Run-Demo.ps1`，或在 Godot 导入本目录 `project.godot`，构建 C# 后运行 `Scenes/Client/Main.tscn`。
+从仓库根目录执行：
 
-设计基准 1600×900，横屏布局。鼠标操作，Tab 移动焦点；确认弹窗的 Enter 确认，Esc 按弹窗、对比窗、页面、大厅的顺序返回。右上设置可切换窗口／全屏。左上「星庭远征」打开素材署名。
+```powershell
+./scripts/Run-Demo.ps1
+```
 
-## 客户端流程
+也可导入本目录 project.godot，构建 C#，运行 Scenes/Client/Main.tscn。布局基准 1600×900。
+
+鼠标操作，Tab 移动焦点，Enter 确认；Esc 依次返回弹窗、对比窗、页面、大厅。左上游戏名打开素材署名。
+
+## 功能
 
 | 入口 | 可以做什么 |
 | --- | --- |
@@ -27,54 +33,39 @@
 | 设置 | 声音／画面／演出内嵌页面；音量作用于音频总线，窗口模式实际切换，画质只是 UI 偏好模拟；恢复默认需确认 |
 | 返回／退出 | 左上返回或 Esc；大厅确认后回标题，窗口关闭请求需确认退出 |
 
-金币、星石、徽章、背包、角色、装备、编队、目标、邮件、好友和设置均保存于 `user://client-save.json`。更改先写完整临时文件，再替换正式存档，成功后刷新 UI。损坏／缺失字段／非法存档和写入失败直接报错，不自动重置、恢复备份或吞错。旧 Demo 的会话模型没有迁移兼容层。
+存档：user://client-save.json。写入成功后刷新 UI；损坏或写入失败直接报错。初始资源足够体验购买、装备、培养与领取奖励。
 
-初始金币 12,000、星石 600、徽章 50，每件装备两份、每类材料 24 份，足够直接体验闭环。货币是模拟状态，没有充值或真实支付。徽章仅作为档案资源展示。
+## 推荐动画路径
 
-## 资源与框架组织
+| 路径 | 演出 |
+| --- | --- |
+| 标题→大厅 | 幕帘、背景推镜、立绘与入口错峰入场 |
+| 角色→详情→培养 | 星阵、闪光、光带与成长结果 |
+| 商店→购买→奖励 | 星阵与奖励卡时间轴 |
+| 背包↔商店 | 根据来源选择方向；返回使用短动画 |
+| 邮件→单封领取 | 同一奖励窗口使用短揭开 |
+| 背包→物品详情 | Partner 图片连续展开 |
 
-`Scenes/Client` 是可在 Godot 编辑器调整的独立界面资源，所有常规控件与分类页都已在场景中定义。业务脚本填充内容并绑定事件，不在运行时拼接整套界面。
+设置→演出开启完整模式；长演出可跳过。Lobby、Training、Reward 等场景中的 AnimationPlayer 轨道可在编辑器预览。动画只控制表现，跳过不重复提交业务。
 
-- `DemoApp`：初始化、项目入口、外壳交互、返回与任务观察。
-- `ClientData`：目录与玩家快照；模型独立于 View，统一更新与保存。
-- `ClientViews`：标题、大厅、页面、角色／物品详情和活动。
-- `ClientModals`：业务弹窗、确认结果、奖励／培养表现与项目时间轴适配。
-- `ItemPartnerTransition`：利用 Source／Target 与运行时矩形实现物品图片连续转场。
-- `Tests`：存档、业务闭环、实际容器与动画边界自测；`Tools`：截图，均不混入玩家界面。
+## 代码与资源
 
-外壳使用 Panel，业务页面使用 Stack；返回 Pop，回大厅 PopTo。分类优先绑定已有实例并按名称 Switch，活动目标 Hide 保留实例。商店嵌套确认 CloseTo 原详情；确认结果使用 DialogNode<bool>；对比窗是两个独立实例。注册使用 Source Generator。没有新增核心路由、输入策略、动态 Tab 或动画编排机制。
+- Scenes/Client：界面与内嵌页面；Themes/Client.tres：样式。
+- DemoApp：初始化、返回、输入范围与任务观察。
+- ClientData：独立模型与存档；ClientViews／ClientModals：业务界面。
+- ClientTransitions／ItemPartnerTransition：来源分支与连续转场。
+- Tests／Tools：隔离自测与截图。
 
-生成器的注册入口位于 `UIFramework.Generated`，类型化调用位于各节点所属业务命名空间；跨模块调用时导入对应命名空间，同名节点可使用限定的 `GeneratedUICalls` 静态调用或核心泛型 API。
-
-## 动画制作
-
-在 Godot 编辑器选中场景内 `AnimationPlayer`，预览或编辑 `enter`／`exit`：
-
-- `Lobby.tscn`：双侧幕帘、庭院字幕、背景推镜、立绘滑入、功能卡错峰落位。
-- `Training.tscn`：立绘扫入、旋转星阵蓄光、闪光、光带与属性结果。
-- `Reward.tscn`：星阵扩散、面板弹入、实际奖励卡依次跃出与结果收束。
-- `Characters`／`Friends`：卡片扇形入场；`Inventory`／`Shop`：格子波纹弹入。
-- `Team`：槽位上升；`Tasks`／`Achievements`：目标行交错滑入；`Mail`：信件行展开。
-- `Events`／`Stages`：插画推镜、标题及内容分阶段进入。
-
-先到设置→演出，开启“完整演出与装饰动画”。主要演出持续 2 秒，常规模块约 1.05 秒，均可跳过。观看路径：标题→大厅；角色→详情→培养；商店→礼包→购买→奖励。背包／商店切换分类，邮件打开详情，角色打开详情，还可看到金色斜向擦除、卷帘、菱形展开三种 Shader 效果。对比卡从两侧滑入；背包物品继续使用 Partner 连续展开。没有另设技术展示菜单。
-
-Esc 和窗口退出请求仅在当前层可交互时生效；初始化与弹窗、浮窗或页面开关转场期间等待操作结束。分类切换及活动面板收起期间，分类按钮、筛选、关闭与外壳导航一同禁用，结束后恢复原焦点；登录资源准备和大厅角色切换也暂时禁用其完整界面，避免连续操作重入。按钮悬停使用 SelfModulate，入场时间轴使用 Modulate，避免两个动画覆盖同一透明度。
-
-条件分支可直接操作：大厅→背包是完整时间轴；背包→商店从右滑入，商店→背包从左滑入；返回使用短反向转场。同一个奖励窗口，邮件单封附件领取是金边揭开，商店购买是完整星阵与奖励卡时间轴。`ClientTransitions.Page`／`Presentation` 使用 `Transitions.Select(context => ...)`，直接判断 Source、Target、Phase 和演出设置。
-
-轨道只写表现属性，不执行扣款、发奖或保存。项目 `CinematicTransition` 通过现有 `GodotTransitions.Animation` 等待；捕获并恢复轨道属性，负责跳过与输入门。长演出右上可跳过，键盘焦点位于跳过按钮。跳过会推进时间轴到终点，不重新执行业务。
-
-动画首帧先准备再绘制：时间轴进入时通过根节点 alpha 遮挡布局等待，恢复颜色后立即播放并采样零时刻；Shader 在等待布局前安装起始遮罩。保持节点 Visible 以完成布局，不用额外延时掩盖闪烁。取消或失败仍恢复颜色、轨道属性、材质和输入。更新后需重新构建并重启正在运行的 Demo。
-
-普通退出及弹窗使用 GodotTransitions；项目 ClientTransitions 为不同业务选择转场，自定义 GildedRevealTransition 播放并恢复原材质；按钮悬停和看板切换使用 Tween；物品图像使用自定义动画。简化演出加快时间轴并关闭粒子、持续装饰。大厅装饰仅在有效激活时更新。正常业务不 catch 或手工处理技术错误，异步任务在帧入口观察并原样抛出。
+转场和资源接入见[用户文档](../../docs/site/index.md)，素材见[来源记录](Assets/SOURCES.md)。
 
 ## 验证
 
-`./scripts/Run-Demo.ps1 -SelfTest -Headless` 执行引擎自测；去掉 Headless 执行原生窗口自测。自测使用隔离的 `user://client-test`，不更改正常玩家档案。
+```powershell
+./scripts/Run-Demo.ps1 -SelfTest -Headless
+./scripts/Run-Demo.ps1 -VerifySave -Headless
+./scripts/Run-Demo.ps1 -Capture -Resolution 1280x720
+```
 
-自测完成后 `./scripts/Run-Demo.ps1 -VerifySave -Headless` 在独立进程重新读取同一隔离档案并验证货币、装备、目标和大厅显示；不会重建预设数据。`./scripts/Test.ps1` 包含核心测试、引擎自测与重启验证。
+SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Capture 输出各模块和过场帧，可选 1600x900／1920x1080；截图保存在忽略的 artifacts。完整检查使用 scripts/Test.ps1。
 
-`./scripts/Run-Demo.ps1 -Capture -Resolution 1280x720` 生成所有模块、每个模块五张时间轴采样、大厅／培养／奖励各十张时间轴采样及 Shader／Partner 中间帧截图到仓库忽略的 artifacts；截图使用独立 `user://client-capture` 档案。也可选择 1600x900、1920x1080。
-
-验收结果、适配器修复和验证限制集中记录在 `docs/design-decisions.md` 第 13 节；不把截图、存档、工具和缓存纳入 Git。
+[实现与验收记录](../../docs/design-decisions.md)

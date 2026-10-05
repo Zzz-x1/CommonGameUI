@@ -15,12 +15,14 @@ var same = await windows.OpenAsync<InventoryView>();
 await windows.HideAsync(same);
 await windows.ShowAsync(same);
 bool exists = windows.TryGet<InventoryView>(out var existing);
-var left = await windows.OpenAsync<CompareView>();
-var right = await windows.OpenAsync<CompareView>();
+var left = await windows.OpenAsync<CompareView>(new ItemArgs("sword-01"));
+var right = await windows.OpenAsync<CompareView>(new ItemArgs("shield-01"));
 await windows.CloseAsync(left);
 await windows.CloseAsync(right);
 await windows.CloseAsync(inventory);
 ```
+
+CompareView 继承 `UINode<ItemArgs>`，每张卡接收自己的装备 ID。
 
 ## 要点
 

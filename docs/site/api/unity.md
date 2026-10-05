@@ -2,7 +2,7 @@
 
 命名空间 UIFramework.Unity；引擎类型来自对应引擎。以下为调用签名，省略方法体。
 
-## Setup / extensions
+## 初始化与控件访问
 
 ```csharp
 UIContext UnityUI.Create(Canvas canvas, EventSystem events, IUIResourceLoader loader = null, IUILog logger = null)
@@ -15,7 +15,7 @@ RectTransform GetRect(this UINode node)
 T GetComponent<T>(this UINode node, string path) where T : Component
 ```
 
-## Transitions / backdrop
+## 转场与遮罩
 
 ```csharp
 IUITransition UnityTransitions.Fade(double duration = .18, string targetPath = null)
@@ -28,7 +28,7 @@ UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default,
 // Frame get-only properties: Vector2 Offset, Vector2 RelativeOffset, float Scale, float Alpha.
 ```
 
-## Host / resource / element
+## 底层适配类型
 
 ```csharp
 UnityUIHost(EventSystem events, UnityFramePump frames)
@@ -53,14 +53,13 @@ void UnityUIElement.RestoreOrder(object order)
 ValueTask UnityUIElement.DisposeAsync()
 ```
 
-## 参数语义与状态
+## 参数要点
 
-Create 配置 Canvas 上的帧泵，默认 Resources loader 和 Host 日志；Canvas 与 EventSystem 必须有效。扩展挂载借用 RectTransform；targetPath=null 为根。Unity 签名保留当前源码未启用 Nullable 标注的形式。
-
-Simple 使用显式起止帧和 AnimationCurve，默认 EaseInOut；Scale 是标量，Offset 为像素，RelativeOffset 按矩形尺寸，Alpha／Scale 乘原值。没有 Godot 版 delay／Tween 枚举参数。ScaleFade 固定从 .85 缩放入／出。Dim 默认颜色 (.04, .07, .12, .7)，observe 必须观察任务。
-
-Animation 的 playerPath 对应持有 legacy Animation 的 RectTransform，根可用空字符串；enterClip／exitClip 为组件中的非循环 Clip 名称。restore 恢复所有轨道表现。播放使用未缩放时间，即使 timeScale=0 也可推进。
-
-最新遮罩与首帧修复仅编译验证；原生运行与 Demo 时间轴资产验证待完成。
+- Create 要求有效 Canvas／EventSystem，配置帧泵，默认使用 Resources loader。
+- targetPath 相对根；null 表示根。挂载／绑定借用 RectTransform。
+- Simple 使用 from→to 和 AnimationCurve，默认 EaseInOut。Offset 为像素，RelativeOffset 按矩形尺寸；Scale／Alpha 乘原值。
+- ScaleFade 使用 .85 起始缩放；没有 delay 参数。
+- Animation 使用非循环 legacy Clip 和未缩放时间；playerPath 可为空字符串表示根。restore 恢复全部轨道。
+- Dim 的 observe 必须观察返回任务。验证状态见[Unity 适配](../integrations/unity.md)。
 
 [适配说明](../integrations/unity.md) · [时间轴](../manual/timeline-animation.md)

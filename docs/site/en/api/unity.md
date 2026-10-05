@@ -2,7 +2,7 @@
 
 Namespace UIFramework.Unity; engine types come from that engine. Signatures omit implementation bodies.
 
-## Setup / extensions
+## Setup and control access
 
 ```csharp
 UIContext UnityUI.Create(Canvas canvas, EventSystem events, IUIResourceLoader loader = null, IUILog logger = null)
@@ -15,7 +15,7 @@ RectTransform GetRect(this UINode node)
 T GetComponent<T>(this UINode node, string path) where T : Component
 ```
 
-## Transitions / backdrop
+## Transitions and backdrops
 
 ```csharp
 IUITransition UnityTransitions.Fade(double duration = .18, string targetPath = null)
@@ -28,7 +28,7 @@ UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default,
 // Frame get-only properties: Vector2 Offset, Vector2 RelativeOffset, float Scale, float Alpha.
 ```
 
-## Host / resource / element
+## Low-level adapter types
 
 ```csharp
 UnityUIHost(EventSystem events, UnityFramePump frames)
@@ -53,14 +53,13 @@ void UnityUIElement.RestoreOrder(object order)
 ValueTask UnityUIElement.DisposeAsync()
 ```
 
-## Parameter semantics and status
+## Parameter notes
 
-Create configures the Canvas frame pump and defaults to Resources loading and Host logging; Canvas/EventSystem must be valid. Attach extensions borrow RectTransforms. Null targetPath means root. Unity signatures retain the current source form without nullable annotations.
-
-Simple uses explicit frames and AnimationCurve, default EaseInOut. Scale is scalar; Offset uses pixels, RelativeOffset uses rect size, and Alpha/Scale multiply authored values. There are no Godot-style delay/Tween enum parameters. ScaleFade uses .85 scale. Dim defaults to (.04, .07, .12, .7), and observe must inspect tasks.
-
-Animation playerPath resolves the RectTransform containing legacy Animation; an empty string targets the root. enterClip/exitClip name non-looping Clips registered on that component. restore restores all track presentation. Playback uses unscaled time and works with timeScale=0.
-
-Latest backdrop/first-frame fixes have compilation only; native runtime and Demo timeline asset verification remain pending.
+- Create requires valid Canvas/EventSystem, configures a frame pump and defaults to Resources loading.
+- targetPath is relative to the root; null means root. Attach/bind borrow RectTransforms.
+- Simple uses from→to and AnimationCurve, default EaseInOut. Offset uses pixels, RelativeOffset uses rect size, and Scale/Alpha multiply authored values.
+- ScaleFade starts at .85 scale; there is no delay parameter.
+- Animation uses non-looping legacy Clips and unscaled time. Empty playerPath means root; restore resets all tracks.
+- Dim observe must inspect returned tasks. See [Unity integration](../integrations/unity.md) for status.
 
 [Integration](../integrations/unity.md) · [Timelines](../manual/timeline-animation.md)

@@ -1,6 +1,6 @@
 # Core API Reference
 
-Namespace UIFramework. These are signature indexes, omitting bodies and the implementation-only async modifier; they are not compilable class files. Call backend operations on the UI thread and observe all asynchronous results.
+Namespace: UIFramework. Signatures and defaults are listed below; see the [Manual](../manual/concepts.md) for usage.
 
 ## UIContext
 
@@ -69,6 +69,13 @@ protected virtual void OnActivated(StateChangeContext context)
 protected virtual void OnDeactivated(StateChangeContext context)
 protected virtual void OnVisibilityChanged(StateChangeContext context)
 protected virtual Task OnDisposeAsync()
+
+```
+
+<details>
+<summary>Node and custom-container extension hooks</summary>
+
+```csharp
 protected virtual void OnChildRemoved(UINode child)
 protected virtual Task OnChildRemovedAsync(UINode child)
 protected virtual void OnApplyState()
@@ -82,26 +89,49 @@ protected Task FinishCloseAsync(UINode node, Action notify)
 protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation, TransitionDirection direction = TransitionDirection.None)
 ```
 
-## Containers / Dialog
+</details>
+
+## Containers and result dialogs
 
 Panel Single retains hidden items; Close disposes. Stack retains history; Pop disposes. Tab retains bound controls. Modal allows top-layer input. PopTo/CloseTo take earlier instances. ShowDialog waits for answer and cleanup; unanswered external closure cancels. RequestDismiss returns false when no handler is configured.
 
+### `ContainerNode : UINode`
+
+Default child transition.
+
 ```csharp
-// ContainerNode : UINode
 IUITransition? ChildTransition { get; set; }
-// PanelContainerNode
+```
+
+### `PanelContainerNode`
+
+Independent windows; hide retains, close disposes.
+
+```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 bool TryGet<T>(out T? node) where T : UINode
 Task HideAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task ShowAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
-// StackContainerNode
+```
+
+### `StackContainerNode`
+
+Page history; return restores retained instances.
+
+```csharp
 IReadOnlyList<UINode> History { get; }
 UINode? Current { get; }
 Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 Task PopAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
 Task PopToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
-// TabContainerNode
+```
+
+### `TabContainerNode`
+
+Bind embedded pages and select one.
+
+```csharp
 IReadOnlyDictionary<string, UINode> Items { get; }
 string? CurrentName { get; }
 UINode? Current { get; }
@@ -109,7 +139,13 @@ Task BindAsync(string name, UINode node, IUIElement? embeddedElement = null, Can
 Task SwitchAsync(string name, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : UINode
 Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
-// ModalContainerNode
+```
+
+### `ModalContainerNode`
+
+Nested modals; only the top receives input.
+
+```csharp
 UINode? Current { get; }
 ModalBackdropMode BackdropMode { get; }
 IUIBackdrop? CurrentBackdrop { get; }
@@ -119,7 +155,13 @@ Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, Cancellatio
 Task CloseAsync(UINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseToAsync(UINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : DialogNode<TResult>
-// DialogNode<TResult>
+```
+
+### `DialogNode<TResult>`
+
+Answer once; the caller receives it after closure/cleanup.
+
+```csharp
 void Complete(TResult result)
 ```
 
@@ -146,7 +188,7 @@ Task DisposeAsync(UINode node)
 
 ## Transitions / resources / failures
 
-Select is synchronous/read-only; Create produces a run and Restore always executes. Progress is monotonic 0..1. UIResourceLease.Dispose releases ownership synchronously. Secondary failures do not wrap the primary. ConsoleUILog.Error(Exception exception, string context) provides basic console logging.
+Select is synchronous/read-only; Create produces a run and Restore always executes after a run is successfully created. Progress is monotonic 0..1. UIResourceLease.Dispose releases ownership synchronously. Secondary failures do not wrap the primary. ConsoleUILog.Error(Exception exception, string context) provides basic console logging.
 
 ```csharp
 IUITransition Transitions.Select(Func<TransitionContext, IUITransition> select)
@@ -204,7 +246,7 @@ public interface IUILog
 
 ## Enums / attributes
 
-These enums prescribe no HUD/Overlay layers. UIResource declares resources for generator/default registration.
+These enums prescribe no HUD/Overlay layers. UIResource declares paths for the generator. Handwritten Register must pass the path explicitly.
 
 ```csharp
 enum NodeState { Detached, Initializing, Ready, Disposing, Disposed }

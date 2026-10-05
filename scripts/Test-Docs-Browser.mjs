@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 
 const { chromium } = createRequire(new URL('../docs/site/package.json', import.meta.url))('playwright')
@@ -20,10 +20,11 @@ try {
   assert.ok(await page.locator('.language-csharp .copy').count(), 'Copy button missing')
   await page.screenshot({ path: new URL('desktop.png', shots).pathname.replace(/^\/([A-Z]:)/, '$1'), fullPage: false })
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  const expectedCode = await page.locator('.language-csharp code').first().textContent()
   await page.locator('.language-csharp .copy').first().click()
-  assert.ok((await page.evaluate(() => navigator.clipboard.readText())).startsWith('using Godot;'), 'Copied code differs')
+  await page.waitForFunction(async expected => (await navigator.clipboard.readText()).replaceAll('\r\n', '\n').trim() === expected, expectedCode.trim())
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.locator('.VPNavBarSearch button').click()
+  await page.keyboard.press('Control+k')
   const input = page.locator('.VPLocalSearchBox input')
   await input.fill('生命周期')
   await page.locator('.VPLocalSearchBox .results a').first().waitFor()
@@ -34,7 +35,7 @@ try {
   await page.waitForURL(/\/en\/getting-started\/godot(?:\.html)?$/)
   await page.waitForFunction(() => document.documentElement.lang === 'en')
   assert.equal(await page.locator('html').getAttribute('lang'), 'en')
-  await page.locator('.VPNavBarSearch button').click()
+  await page.keyboard.press('Control+k')
   await input.fill('Lifecycle')
   await page.locator('.VPLocalSearchBox .results a').first().waitFor()
   await page.keyboard.press('Escape')
@@ -55,6 +56,24 @@ try {
   await page.screenshot({ path: new URL('unity-guide.png', shots).pathname.replace(/^\/([A-Z]:)/, '$1'), fullPage: false })
   await page.locator('details summary').click()
   await page.locator('details .language-csharp').waitFor({ state: 'visible' })
+  async function pagePaths(directory, prefix = '') {
+    const paths = []
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+      const path = prefix + entry.name
+      if (entry.isDirectory()) paths.push(...await pagePaths(new URL(entry.name + '/', directory), path + '/'))
+      else if (entry.name.endsWith('.md')) paths.push(path)
+    }
+    return paths
+  }
+  const routes = await pagePaths(new URL('../docs/site/', import.meta.url))
+  for (const route of routes) {
+    await page.goto(base + route.replace(/\.md$/, '.html'))
+    await page.locator('.vp-doc h1').waitFor({ state: 'visible' })
+    assert.equal(await page.locator('html').getAttribute('lang'), route.startsWith('en/') ? 'en' : 'zh-CN', route)
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Horizontal overflow: ${route}`)
+    await page.screenshot({ path: new URL(route.replaceAll('/', '--').replace('.md', '.png'), shots).pathname.replace(/^\/([A-Z]:)/, '$1') })
+  }
   assert.deepEqual(errors, [], 'Browser or asset errors')
-  console.log('Browser checks passed: navigation/search/languages/copy/mobile/base-path assets; Unity six-step guide and expandable source.')
+  console.log(`Browser checks passed: ${routes.length} pages rendered; navigation/search/languages/copy/mobile, six-step onboarding and expandable source.`)
 } finally { await browser.close() }

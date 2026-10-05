@@ -1,34 +1,80 @@
 # Godot Getting Started
 
-Build menu→settings→category switching→quit confirmation. Use Godot 4.7.2 .NET and the .NET 10 SDK.
+Build a menu, settings categories and quit confirmation. The repository provides a standalone tutorial to run or copy into your project.
 
-## Install
+## 1. Prepare the environment
 
-From the repository root, run `dotnet build docs/examples/godot/Tutorial.csproj`, then open its project.godot in Godot. For your project, reference Core and Godot and adjust the paths:
+Install Godot 4.7.2 .NET and the .NET 10 SDK.
+
+## 2. Open the tutorial
+
+Run from the repository root:
+
+```powershell
+dotnet build docs/examples/godot/Tutorial.csproj
+```
+
+Open docs/examples/godot/project.godot in Godot. Its main scene is Main.tscn and it uses no player save.
+
+## 3. Connect your project
+
+Add these references to your .csproj, adjusting relative paths:
 
 ```xml
 <ProjectReference Include="../../../src/UIFramework.Core/UIFramework.Core.csproj" />
 <ProjectReference Include="../../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
 ```
 
-## Resources
+Copy TutorialHost.cs, Main.tscn, Menu.tscn, Settings.tscn and Confirm.tscn to your project root. The code uses these fixed resource paths.
 
-Scene files are provided and editable. Roots/empty mounts use Full Rect and Mouse Filter=Ignore; modal Content receives input. Keep button keyboard focus enabled.
+## 4. Check the scene structure
 
 ```text
 Main (Control, TutorialHost.cs)
-├── Pages (Control, Full Rect, Mouse Filter=Ignore)
-└── Dialogs (Control, Full Rect, Mouse Filter=Ignore)
-Menu.tscn: Control → Content → Settings, Quit (Button)
-Settings.tscn: Control → Content (Panel)
-  ├── AudioTab, GraphicsTab, Close (Button)
-  └── Body (Control) → Audio/Volume (HSlider), Graphics/Quality (CheckButton)
-Confirm.tscn: Control → Content (Panel) → Question (Label), Yes, No (Button)
+├── Pages (Control)
+└── Dialogs (Control)
+
+Menu.tscn
+└── Content → Settings, Quit (Button)
+
+Settings.tscn
+└── Content (Panel)
+    ├── AudioTab, GraphicsTab, Close (Button)
+    └── Body (Control)
+        ├── Audio → Volume (HSlider)
+        └── Graphics → Quality (CheckButton)
+
+Confirm.tscn
+└── Content (Panel) → Question (Label), Yes, No (Button)
 ```
 
-## Complete code
+- Roots/empty mounts: Full Rect and Mouse Filter=Ignore.
+- Modal Content: actual panel area with Mouse Filter=Stop; the framework creates the backdrop.
+- Both Tab pages live in Settings.tscn; runtime only changes selection.
+- Keep keyboard focus enabled and match object names to code paths.
 
-Attach TutorialHost.cs to Main. Views are plain C# logic classes, not scene scripts.
+## 5. Connect the logic
+
+Attach TutorialHost.cs to Main. MenuView, SettingsView and ConfirmView are plain C# nodes, not Godot scene scripts.
+
+The host creates containers, registers resources and opens the menu. This excerpt is already in the complete source:
+
+```csharp
+UI = GodotUI.Create(this);
+Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Pages", GetNode<Control>("Pages"));
+Dialogs = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("Dialogs"));
+Dialogs.ConfigureBackdrop(GodotBackdrops.Dim(Observe));
+
+UI.Register(() => new MenuView(OpenSettingsAsync, AskQuitAsync, Observe), "res://Menu.tscn");
+UI.Register(() => new SettingsView(Dialogs, Observe), "res://Settings.tscn");
+UI.Register<ConfirmView>("res://Confirm.tscn");
+await Pages.PushAsync<MenuView>();
+```
+
+Observe collects button tasks; _Process propagates failures. Category switching disables selectors and Close together.
+
+<details>
+<summary>Expand complete TutorialHost.cs</summary>
 
 ```csharp
 using Godot;
@@ -172,11 +218,14 @@ public sealed class ConfirmView : DialogNode<bool>
 }
 ```
 
-## Operation and shutdown
+</details>
 
-- Settings→Graphics→Audio retains volume; Back returns to the menu.
-- Quit→Cancel keeps the menu; Confirm awaits cleanup before exiting. Esc goes back; Enter activates focus.
-- Observe propagates task errors from the frame entry. OnApplyState updates buttons before restoring focus.
-- Await ShutdownAsync before releasing the scene. Volume/quality demonstrate UI state only.
+## 6. Run the flow
 
-[Embedded tabs](../manual/tabs.md) · [Lifecycle](../manual/lifecycle.md) · [Godot integration](../integrations/godot.md) · [Next steps](next-steps.md)
+1. Settings → Graphics → Audio retains volume.
+2. Back restores the menu and keyboard focus.
+3. Quit → Cancel keeps the menu; Confirm disposes Context before exiting.
+
+Esc returns/cancels; Enter activates focus. Await ShutdownAsync before releasing the scene. Volume/quality demonstrate widget values only.
+
+[Next steps](next-steps.md) · [Tabs](../manual/tabs.md) · [Lifecycle](../manual/lifecycle.md)
