@@ -26,7 +26,7 @@ public partial class MvvmVerification : global::Godot.Node
         config.Bindings.Add(new ViewBindingResource { Target = new("Gold"), Member = "Text", Source = "Player.Gold", Converter = "FormatNumber" });
         config.Bindings.Add(new ViewBindingResource { Target = new("Buy"), Kind = ViewBindingKind.Command, Source = "Player.Buy" });
         config.Bindings.Add(new ViewBindingResource { Target = new("Amount"), Member = "Value", Source = "Player.Gold", Mode = BindingMode.TwoWay, Converter = "IntToFloat", ConvertBack = "FloatToInt" });
-        var runtime = new MvvmRuntime(); var ui = GodotUI.Create(this); ui.UseGodotMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
+        var runtime = new MvvmRuntime(); var ui = GodotUI.Create(this); ui.ConfigureMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
         var vm = node.GetViewModel<NativePlayerVm>("Player"); Check(vm != template, "Original asset was used"); Check(ReferenceEquals(vm, vm.Other), "Asset cycle not preserved"); Check(label.Text == "100", "Initial display missing");
         button.EmitSignal(BaseButton.SignalName.Pressed); Check(vm.Gold == 90 && template.Gold == 100, "Purchase modified template");
         slider.Value = 70; Check(vm.Gold == 70 && label.Text == "70", "Two-way editor"); vm.Items.Add(2); Check(template.Items.Count == 1, "Typed arrays shared storage");

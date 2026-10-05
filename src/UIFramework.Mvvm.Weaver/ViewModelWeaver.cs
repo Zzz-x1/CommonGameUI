@@ -12,11 +12,23 @@ public sealed class ViewModelWeaver
     private MethodReference Runtime(string type, string method) => _module.ImportReference(_runtime.GetType(Prefix + type).Methods.Single(m => m.Name == method));
     private TypeReference RuntimeType(string name) => _module.ImportReference(_runtime.GetType(Prefix + name));
     private static bool Attribute(ICustomAttributeProvider member, string name) => member.CustomAttributes.Any(a => a.AttributeType.FullName == Prefix + name);
+    public bool Changed { get; private set; }
     public int Process()
     {
+        Changed = false;
+        var moduleType = _module.Types.Single(type => type.Name == "<Module>");
+        var startup = moduleType.Methods.SingleOrDefault(method => method.Name == ".cctor");
+        if (startup == null)
+        {
+            startup = new MethodDefinition(".cctor", MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _module.TypeSystem.Void);
+            moduleType.Methods.Add(startup); startup.Body.GetILProcessor().Emit(OpCodes.Ret);
+        }
+        if (!startup.Body.Instructions.Any(i => i.Operand is MethodReference method && method.DeclaringType.FullName == Prefix + "MvvmModule" && method.Name == "Install"))
+        { startup.Body.GetILProcessor().InsertBefore(startup.Body.Instructions[0], Instruction.Create(OpCodes.Call, Runtime("MvvmModule", "Install"))); Changed = true; }
         int count = 0;
         foreach (var type in Types(_module.Types).Where(t => Attribute(t, "ViewModelAttribute")).ToArray()) if (Weave(type)) count++;
         if (WeaveConverters()) count++;
+        Changed |= count != 0;
         return count;
     }
     private bool WeaveConverters()

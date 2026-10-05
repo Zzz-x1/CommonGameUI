@@ -30,9 +30,8 @@ namespace StarCourt.UnityDemo
         public LobbyView Home { get; private set; }
         public bool Busy { get; private set; }
         public Task Ready { get; private set; }
-        public Task WhenIdleAsync() => Task.WhenAll(Task.WhenAll(_tasks.ToArray()), _mvvm.WhenIdleAsync());
+        public Task WhenIdleAsync() => Task.WhenAll(Task.WhenAll(_tasks.ToArray()), UI.WhenMvvmIdleAsync());
         private readonly List<Task> _tasks = new List<Task>();
-        private readonly MvvmRuntime _mvvm = new MvvmRuntime();
         public ClientPlayerVm PlayerVm { get; private set; }
         private string _confirmation;
         private void Awake() { Instance = this; Application.runInBackground = true; }
@@ -52,9 +51,8 @@ namespace StarCourt.UnityDemo
         {
             Store = new ClientStore(Path.Combine(Application.persistentDataPath, SaveFile));
             UI = UnityUI.Create(Canvas, Events);
-            UI.UseUnityMvvm(_mvvm);
-            PlayerVm = _mvvm.GetSharedViewModel(Resources.Load<ClientPlayerVm>("MVVM/Player"));
-            await new MvvmLifetime(this).AttachAsync(UI.Root, "MvvmLifetime");
+            PlayerVm = UI.GetSharedViewModel(Resources.Load<ClientPlayerVm>("MVVM/Player"));
+            await new PlayerSubscriptionLifetime(this).AttachAsync(UI.Root, "PlayerSubscriptionLifetime");
             UI.BindLifetime(gameObject.scene);
             UI.Register<LoginView>("UI/Login"); UI.Register<LobbyView>("UI/Lobby");
             UI.Register<InventoryView>("UI/Inventory"); UI.Register<ItemView>("UI/Item");
@@ -144,10 +142,10 @@ namespace StarCourt.UnityDemo
             { await Pages.PopAsync(); Navigation.SetActive(false); }
         });
         private sealed class WalletNode : UINode { protected override bool InitiallyVisible => true; }
-        private sealed class MvvmLifetime : UINode
+        private sealed class PlayerSubscriptionLifetime : UINode
         {
-            private readonly UnityClient _app; public MvvmLifetime(UnityClient app) { _app = app; }
-            protected override Task OnDisposeAsync() { _app.Store.Changed -= _app.Refresh; return _app._mvvm.DisposeAsync().AsTask(); }
+            private readonly UnityClient _app; public PlayerSubscriptionLifetime(UnityClient app) { _app = app; }
+            protected override Task OnDisposeAsync() { _app.Store.Changed -= _app.Refresh; return Task.CompletedTask; }
         }
         public async Task ShutdownAsync()
         {

@@ -25,8 +25,8 @@ public sealed class GodotBindingPreview : IAsyncDisposable
         foreach (var source in view.Sources.Where(s => s.Creation == ViewModelCreation.Manual))
         { if (!PreviewSources.Has(source.Type)) throw new InvalidOperationException("缺少预览来源：" + source.Name); var type = source.Type; _runtime.RegisterFactory(type, () => PreviewSources.Create(type)); }
         _ui = GodotUI.Create(view);
-        _ui.AddNodeExtension(new MvvmNodeExtension(_runtime, node => node.Name == "Preview" ? new Configuration { Sources = CloneSources(view.Sources, true) }
-            : node.Element is GodotUIElement display && display.Control.GetChildren().OfType<MvvmBindings>().SingleOrDefault() is { } binding ? new Configuration { Sources = CloneSources(binding.Sources, false), View = binding } : null, new GodotViewModelAssets()));
+        _ui.ConfigureMvvm(_runtime, node => node.Name == "Preview" ? new Configuration { Sources = CloneSources(view.Sources, true) }
+            : node.Element is GodotUIElement display && display.Control.GetChildren().OfType<MvvmBindings>().SingleOrDefault() is { } binding ? new Configuration { Sources = CloneSources(binding.Sources, false), View = binding } : null, new GodotViewModelAssets());
         try
         {
             var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview"); if (!attached.IsCompleted) throw new InvalidOperationException("Preview initialization must be immediate."); attached.GetAwaiter().GetResult();
@@ -49,7 +49,6 @@ public sealed class GodotBindingPreview : IAsyncDisposable
         try { await _ui.DisposeAsync(); } catch (Exception e) { first = e; }
         foreach (var value in _values) try { value.Target.Write(value.Value); } catch (Exception e) { Failure(ref first, e); }
         foreach (var child in _children) if (GodotObject.IsInstanceValid(child.Control)) child.Control.Visible = child.Visible;
-        try { await _runtime.DisposeAsync(); } catch (Exception e) { Failure(ref first, e); }
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     private static void Failure(ref Exception? first, Exception error)

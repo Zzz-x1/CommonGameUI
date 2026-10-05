@@ -27,11 +27,10 @@ public class PlayerVm
 }
 ```
 
-Create the Runtime before business nodes:
+Create your UIContext as usual. MVVM initializes and releases automatically:
 
 ```csharp
-var runtime = new MvvmRuntime();
-ui.UseGodotMvvm(runtime); // Unity: ui.UseUnityMvvm(runtime)
+var ui = GodotUI.Create(this); // Unity: UnityUI.Create(canvas, events)
 ```
 
 Provide sources and bindings during node initialization:
@@ -45,7 +44,7 @@ this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
 this.BindCommand("Player.Buy", buyButton.ClickTarget());
 ```
 
-Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. Plain C# integrations use `ui.UseMvvm(runtime)` and provide target interfaces. GUI configuration and code use the same binding logic.
+Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
 
 ## Choose ownership
 
@@ -53,16 +52,18 @@ Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity
 |---|---|---|
 | Create Instance | Equipment details and purchase flows | Node closure |
 | Manual | Player state already created by gameplay services | Project |
-| Shared Asset | Currency or settings shared across windows | Runtime disposal |
+| Shared Asset | Currency or settings shared across windows | Last sharing Context closes |
 
 ```csharp
-runtime.RegisterFactory(() => new InventoryVm(inventoryService));
+ui.RegisterViewModelFactory(() => new InventoryVm(inventoryService));
 var inventory = this.CreateViewModel<InventoryVm>("Inventory");
-var player = runtime.GetSharedViewModel(playerAsset);
+var player = ui.GetSharedViewModel(playerAsset);
 this.SetViewModel("Player", player);
 ```
 
 The last line borrows the reference; the Runtime still owns the shared clone. Original assets provide initial values and remain unchanged. Hiding keeps bindings and state; closing detaches bindings and releases private VMs.
+
+To share asset clones across contexts, call `second.ShareMvvm(first)` before creating nodes. The last Context automatically releases their Runtime. No Runtime construction, initialization or disposal is required.
 
 ## Two-way and nested paths
 
@@ -87,13 +88,12 @@ Moving retains item instances; removal detaches bindings and releases the item. 
 
 Commands support `void` and `Task`, at most one business parameter, and an optional `CancellationToken` for asynchronous work. `async void` is rejected. `CanExecute` and execution state control buttons; the Runtime continuously observes the same task. Save business changes before presenting rewards. Cancelled confirmations do not commit.
 
-A command can await closure of its own window or an ancestor. Bindings detach during closure; its VM stays alive until the command finishes. External closure cancels and awaits commands. `runtime.WhenIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.
+A command can await closure of its own window or an ancestor. Bindings detach during closure; its VM stays alive until the command finishes. External closure cancels and awaits commands. `ui.WhenMvvmIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.
 
 Await cleanup before exiting:
 
 ```csharp
 await ui.DisposeAsync();
-await runtime.DisposeAsync();
 ```
 
 Original exceptions are logged and propagated. UI bindings and notifications run on the engine thread. Direct field writes do not notify.

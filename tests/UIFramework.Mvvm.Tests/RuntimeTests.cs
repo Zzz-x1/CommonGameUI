@@ -67,7 +67,7 @@ public class RuntimeTests
         public void Clear() => Items.Clear(); public void Dispose() => Disposals++;
     }
     private static UIContext Context(MvvmRuntime runtime, Config? config = null, Assets? assets = null)
-    { var ui = new UIContext(new Host(), new Loader()); ui.AddNodeExtension(new MvvmNodeExtension(runtime, _ => config, assets)); return ui; }
+    { var ui = new UIContext(new Host(), new Loader(), new Log()); ui.ConfigureMvvm(runtime, _ => config, assets); return ui; }
     private static ViewModelSource Source(string name, ViewModelCreation mode, object? template = null) => new() { Name = name, Type = typeof(OwnedVm), Creation = mode, Template = template };
     private static async Task<UINode> Node(UIContext ui, string name) { var node = new UINode(); await node.AttachAsync(ui.Root, name); return node; }
 
@@ -116,7 +116,7 @@ public class RuntimeTests
     {
         var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); node.SetViewModel("Player", vm); var button = new Click(); node.BindCommand("Player.Wait", button); button.Press(); await vm.Started.Task;
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => node.DisposeAsync().AsTask());
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()); await ui.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ui.DisposeAsync().AsTask());
     }
     [Theory]
     [InlineData("node", false)] [InlineData("node", true)]
@@ -181,7 +181,7 @@ public class RuntimeTests
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.WhenIdleAsync()));
         Assert.Equal(1, vm.Disposals); Assert.Contains(original, log.Errors);
         Assert.Contains(cleanup, Assert.IsType<List<Exception>>(original.Data[UIFailure.SecondaryExceptionsKey]));
-        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); await ui.DisposeAsync();
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
     }
 
     [Fact] public async Task IdleWaitsForDeferredAsyncReleaseEvenAfterCommandFailure()
@@ -195,7 +195,7 @@ public class RuntimeTests
         await releaseStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
         var idle = runtime.WhenIdleAsync(); Assert.False(idle.IsCompleted); Assert.Equal(0, vm.Disposals);
         releaseFinish.SetResult(); Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => idle)); Assert.Equal(1, vm.Disposals);
-        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); await ui.DisposeAsync();
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.DisposeAsync().AsTask())); Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
     }
 
     [Fact] public async Task SelfShutdownDeferredSharedReleaseFailureIsObserved()
@@ -208,7 +208,7 @@ public class RuntimeTests
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => runtime.WhenIdleAsync()));
         Assert.Equal(1, shared.Disposals); Assert.Equal(1, vm.Disposals); Assert.Contains(original, log.Errors);
         Assert.Same(original, Assert.Throws<IOException>(() => runtime.ObserveTasks()));
-        runtime.ObserveTasks(); await ui.DisposeAsync();
+        runtime.ObserveTasks(); Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
     }
 
     [Fact] public async Task AncestorCancellationReachesItsCommandBeforeWaitingForChildren()
@@ -222,6 +222,22 @@ public class RuntimeTests
         var parentButton = new Click(); var childButton = new Click(); parent.BindCommand("Dialog.Close", parentButton); child.BindCommand("Dialog.Close", childButton);
         parentButton.Press(); childButton.Press(); await parent.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(1, parentVm.Disposals); Assert.Equal(1, childVm.Disposals);
+    }
+
+    [Fact] public async Task ContextAutomaticallyInitializesAndReleasesMvvm()
+    {
+        var ui = new UIContext(new Host(), new Loader());
+        var vm = new OwnedVm(); ui.RegisterViewModelFactory(() => vm);
+        var node = await Node(ui, "Window"); Assert.Same(vm, node.CreateViewModel<OwnedVm>("Player"));
+        var runtime = ui.GetMvvm(); await ui.DisposeAsync(); Assert.Equal(1, vm.Disposals); Assert.True(runtime.IsDisposed);
+    }
+    [Fact] public async Task SharedRuntimeIsReleasedByLastContextWithoutManualDisposal()
+    {
+        var one = new UIContext(new Host(), new Loader()); var two = new UIContext(new Host(), new Loader());
+        var retired = two.GetMvvm(); two.ShareMvvm(one); var runtime = one.GetMvvm();
+        Assert.Same(runtime, two.GetMvvm()); Assert.True(retired.IsDisposed);
+        await one.DisposeAsync(); Assert.False(runtime.IsDisposed);
+        await two.DisposeAsync(); Assert.True(runtime.IsDisposed);
     }
 
 }

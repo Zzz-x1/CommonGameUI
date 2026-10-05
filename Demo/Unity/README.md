@@ -59,6 +59,8 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 
 ## MVVM 示例
 
+创建 UIContext 即自动启用 MVVM，关闭 Context 时自动清理；Demo 不创建或释放 Runtime。
+
 金币使用共享 ScriptableObject 克隆；详情和设置为节点独立 VM。背包条目使用 ObservableCollection 与 Resources/MVVM/InventoryRow.prefab，购买使用可等待确认的命令，购买窗口的关闭按钮直接绑定 VM 命令并等待关闭自身。Window → UIFramework → View Bindings 打开 GUI；玩家初始模板位于 Resources/MVVM/Player.asset。
 
 [模块入门与 GUI](../../docs/site/manual/mvvm.md)。

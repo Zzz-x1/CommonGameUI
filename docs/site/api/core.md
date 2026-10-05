@@ -20,6 +20,19 @@ Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = defa
 ValueTask DisposeAsync()
 ```
 
+## Context 模块扩展
+
+可选模块注册一次工厂。Context 自动初始化模块，并在 Root 与资源清理后按反序释放；普通 UI 业务无需调用这些接口。
+
+```csharp
+interface IUIContextExtension
+{
+    void Initialize(UIContext context);
+    ValueTask DisposeAsync();
+}
+void UIContextExtensions.Register(Func<IUIContextExtension> factory);
+```
+
 ## UINode / `UINode<TArgs>`
 
 普通节点初始隐藏；Context 在未挂载时不可取。状态属性由框架维护；Transition=null 表示继承。AddLifecycle 仅挂载前，RemoveLifecycle 可在静止的 Ready 状态取消后续通知，但已初始化行为仍在销毁时清理。Attach 不支持重挂载。

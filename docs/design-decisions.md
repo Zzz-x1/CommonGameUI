@@ -1762,7 +1762,7 @@ GitHub Actions 的 Documentation 工作流仅在 PR 构建检查和手动 workfl
 
 采用独立运行时、Mono.Cecil Weaver、Unity／Godot 适配和编辑器模块。普通 VM 无需框架基类；类型使用 ViewModel 标记，逐属性 FieldNotify，计算属性声明依赖，Command 标记业务方法。运行时属性和命令访问由织入代码直接调用，不使用动态代码或反射调用业务方法。
 
-项目显式创建 MvvmRuntime，可跨多个 UIContext。Create Instance 每个界面独立创建；Manual 接受借用实例；Shared Asset 对每个原生 VM 资产克隆一次，同一 Runtime 共享，原始资产不参与运行时写入。Unity 资产为 ScriptableObject，Godot 为 Resource。UseMvvm 一次启用，核心仅提供初始化前／后和异步清理的渲染无关节点扩展接口。
+Runtime 的创建与释放现由框架内部自动管理，可跨多个 UIContext（见 18.4）。Create Instance 每个界面独立创建；Manual 接受借用实例；Shared Asset 对每个原生 VM 资产克隆一次，同一 Runtime 共享，原始资产不参与运行时写入。Unity 资产为 ScriptableObject，Godot 为 Resource。安装模块后自动启用；Core 提供渲染无关的 Context 和节点扩展生命周期。
 
 支持四种绑定方向、嵌套路径重新订阅、显式空值表现、静态转换函数、同步／Task 命令与 CanExecute，以及 ObservableCollection／INotifyCollectionChanged 增量列表。默认错误必须抛出，缺失成员、类型错误不得变为空值表现。首版无虚拟化或额外对象池。
 
@@ -1805,3 +1805,13 @@ Runtime 同样区分结束绑定和完整释放：命令内等待 Runtime 关闭
 Godot 购买确认改为单个命令执行购买、CloseToAsync、奖励展示，移除按钮的第二个表现回调；Unity 购买窗口关闭按钮直接绑定 VM 命令并等待关闭自身，不改变其购买确认与奖励窗口组合。
 
 验证：核心 157、MVVM 31（新增 12 项）、Godot 客户端 139、存档重启 4、Unity 原生 Play Mode 26、WebGL IL2CPP 高裁剪 17 项通过；新增 WebGL 检查实际等待自身窗口关闭、命令继续执行时 VM 存活及最终释放。中英文文档链接／代码检查、站点构建通过。首轮 Godot 139 项业务检查通过但进程退出时出现一次原生 finalizer 访问异常；随后重建并两次完整重跑均以 0 退出，未复现；保留原始日志，不在业务代码添加捕获或降级。
+
+### 18.4 MVVM 初始化与释放由框架托管（已确认）
+
+用户要求 MVVM 生命周期作为内部黑盒执行，不由业务创建、启用或释放。Core 增加 Context 扩展生命周期：Context 构造时初始化，Root 和资源结束后清理扩展，失败保留原始异常并继续必要清理。Core 不引用 MVVM、Cecil 或引擎程序集，未安装模块时不增加服务。
+
+安装模块后自动为 Context 创建 Runtime、配置节点扩展并接入引擎任务观察。普通 .NET 的项目启动入口由 Weaver 注入注册调用；Godot 源码插件通过模块入口注册宿主适配，Unity 通过原生运行时／编辑器加载入口注册。重复注册幂等，重复织入不重复添加启动调用。
+
+项目只使用节点绑定和 Context.RegisterViewModelFactory／GetSharedViewModel／WhenMvvmIdleAsync。跨 Context 共享使用 second.ShareMvvm(first)，需在创建节点前配置；引用计数由内部维护，最后一个 Context 自动释放 Runtime。ConfigureMvvm 保留给模块适配、隔离预览及低层测试，不作为入门初始化步骤。
+
+两端 Demo 移除 Runtime 构造、启用和释放；项目订阅节点仅负责自身模型事件，不再承担 MVVM 生命周期。验证：核心 157、MVVM 34（包括无 VM 声明时的启动织入、自动初始化／释放、共享 Context 最后释放）、Godot 客户端 139、原生 MVVM 14、Unity Play Mode 26、WebGL IL2CPP 高裁剪 17 项通过。Godot 编辑器来源／Undo／配置恢复，Unity 编辑器 Undo／Prefab Override／预览恢复通过。源码构建无警告无错误，中英文文档链接／代码一致性及站点构建通过。

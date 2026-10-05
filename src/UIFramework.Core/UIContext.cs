@@ -30,6 +30,7 @@ public sealed class UIContext : IAsyncDisposable
         _extensions.Add(extension);
     }
     private Task? _disposeTask;
+    private readonly IUIContextExtension[] _contextExtensions;
 
     public UIContext(IUIHost host, IUIResourceLoader loader, IUILog? log = null)
     {
@@ -40,6 +41,8 @@ public sealed class UIContext : IAsyncDisposable
         Root = new UINode();
         Root.InitializeRoot(this);
         _resources = new UIResources(this);
+        _contextExtensions = UIContextExtensions.Create();
+        foreach (var extension in _contextExtensions) extension.Initialize(this);
     }
 
     public UINode Root { get; }
@@ -242,12 +245,13 @@ public sealed class UIContext : IAsyncDisposable
     }
     private async Task DisposeCoreAsync(ValueTask root)
     {
-        try { await root; }
-        catch (Exception ex)
-        {
-            await CleanupAsync(ex, _resources.DisposeAsync);
-            throw;
-        }
-        await _resources.DisposeAsync();
+        Exception? first = null;
+        try { await root; } catch (Exception error) { first = error; }
+        try { await _resources.DisposeAsync(); }
+        catch (Exception error) { Report(error, "Dispose resources"); if (first == null) first = error; else UIFailure.AddSecondary(first, error); }
+        foreach (var extension in Enumerable.Reverse(_contextExtensions))
+            try { await extension.DisposeAsync(); }
+            catch (Exception error) { Report(error, "Dispose context extension"); if (first == null) first = error; else UIFailure.AddSecondary(first, error); }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 }

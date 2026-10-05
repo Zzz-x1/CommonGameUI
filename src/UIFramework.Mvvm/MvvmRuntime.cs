@@ -4,6 +4,7 @@ namespace UIFramework.Mvvm;
 
 public sealed class MvvmRuntime : IAsyncDisposable
 {
+    static MvvmRuntime() => MvvmModule.Install();
     private readonly Dictionary<Type, Func<object>> _factories = new();
     private readonly Dictionary<object, object> _shared = new(ReferenceComparer.Instance);
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
@@ -180,10 +181,12 @@ public sealed class MvvmRuntime : IAsyncDisposable
 
 public sealed class MvvmNodeExtension : IUINodeExtension
 {
-    private readonly MvvmRuntime _runtime;
-    private readonly Func<UINode, IViewBindingConfiguration?>? _configuration;
-    private readonly IViewModelAssets? _assets;
+    private MvvmRuntime _runtime;
+    private Func<UINode, IViewBindingConfiguration?>? _configuration;
+    private IViewModelAssets? _assets;
     public MvvmNodeExtension(MvvmRuntime runtime, Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null)
+    { _runtime = runtime; _configuration = configuration; _assets = assets; }
+    internal void Configure(MvvmRuntime runtime, Func<UINode, IViewBindingConfiguration?>? configuration, IViewModelAssets? assets)
     { _runtime = runtime; _configuration = configuration; _assets = assets; }
     public void BeforeInitialize(UINode node)
     {
@@ -197,8 +200,13 @@ public sealed class MvvmNodeExtension : IUINodeExtension
 public static class MvvmExtensions
 {
     internal static readonly ConditionalWeakTable<UINode, BindingScope> Scopes = new();
-    internal static BindingScope Scope(UINode node) => Scopes.TryGetValue(node, out var scope) ? scope : throw new InvalidOperationException("Call UseMvvm before creating this node.");
-    public static void UseMvvm(this UIContext ui, MvvmRuntime runtime) => ui.AddNodeExtension(new MvvmNodeExtension(runtime));
+    internal static BindingScope Scope(UINode node) => Scopes.TryGetValue(node, out var scope) ? scope : throw new InvalidOperationException("MVVM was not installed when this node was created.");
+    public static MvvmRuntime GetMvvm(this UIContext ui) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module must be installed before creating the context.")).Runtime;
+    public static void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
+        Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module is not installed.")).Configure(runtime, configuration, assets);
+    public static void ShareMvvm(this UIContext ui, UIContext owner) => ui.ConfigureMvvm(owner.GetMvvm());
+    public static void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class => ui.GetMvvm().RegisterFactory(factory);
+    public static Task WhenMvvmIdleAsync(this UIContext ui) => ui.GetMvvm().WhenIdleAsync();
     public static void ObserveMvvmTask(this UINode node, Task task) => Scope(node).Observe(task);
     public static void SetViewModel(this UINode node, string name, object vm) => Scope(node).Set(name, vm);
     public static T GetViewModel<T>(this UINode node, string name) where T : class => (T)Scope(node).Get(name);

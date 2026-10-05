@@ -1,5 +1,6 @@
 using Godot;
 using UIFramework;
+using UIFramework.Mvvm;
 using UIFramework.Godot;
 
 namespace HierarchyDemo;
@@ -175,6 +176,6 @@ public partial class DemoApp
     {
         int before = _tasks.Count;
         button.EmitSignal(BaseButton.SignalName.Pressed);
-        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _mvvm.WhenIdleAsync());
+        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _ui.WhenMvvmIdleAsync());
     }
 }

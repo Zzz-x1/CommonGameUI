@@ -11,7 +11,6 @@ public partial class DemoApp : Control
     public static DemoApp Instance { get; private set; } = null!;
 
     private readonly List<Task> _tasks = new();
-    private readonly MvvmRuntime _mvvm = new();
     public ClientPlayerVm PlayerVm { get; private set; } = null!;
     private void RefreshPlayerVm() => PlayerVm.Refresh(Store.State);
     private UIContext _ui = null!;
@@ -47,11 +46,10 @@ public partial class DemoApp : Control
     private async Task StartAsync()
     {
         _ui = GodotUI.Create(this);
-        _ui.UseGodotMvvm(_mvvm);
-        PlayerVm = _mvvm.GetSharedViewModel(GD.Load<ClientPlayerVm>("res://Assets/Mvvm/Player.tres"));
+        PlayerVm = _ui.GetSharedViewModel(GD.Load<ClientPlayerVm>("res://Assets/Mvvm/Player.tres"));
         RefreshPlayerVm();
         Store.Changed += RefreshPlayerVm;
-        await new MvvmLifetime(this).AttachAsync(_ui.Root, "MvvmLifetime");
+        await new PlayerSubscriptionLifetime(this).AttachAsync(_ui.Root, "PlayerSubscriptionLifetime");
         _ui.BindLifetime(this);
         _ui.RegisterGeneratedUI();
         _ui.Register(() => new ConfirmView(Confirmation), "res://Scenes/Client/Modal.tscn");
@@ -210,12 +208,11 @@ public partial class DemoApp : Control
         _exiting = true;
         await _ui.DisposeAsync();
         Store.Changed -= RefreshPlayerVm;
-        await _mvvm.DisposeAsync();
         GetTree().Quit();
     }
 
-    private sealed class MvvmLifetime(DemoApp app) : UINode
-    { protected override Task OnDisposeAsync() { app.Store.Changed -= app.RefreshPlayerVm; return app._mvvm.DisposeAsync().AsTask(); } }
+    private sealed class PlayerSubscriptionLifetime(DemoApp app) : UINode
+    { protected override Task OnDisposeAsync() { app.Store.Changed -= app.RefreshPlayerVm; return Task.CompletedTask; } }
 
     private bool CanHandleGlobalInput
     {

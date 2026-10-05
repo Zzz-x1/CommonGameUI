@@ -44,8 +44,8 @@ namespace UIFramework.Mvvm.EditorUnity
             _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(UnityFramePump)) { hideFlags = HideFlags.HideAndDontSave };
             var host = new UnityUIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<UnityFramePump>());
             _ui = new UIContext(host, new UnityPrefabLoader(host));
-            _ui.AddNodeExtension(new MvvmNodeExtension(_runtime, node => node.Name == "Preview" ? (IViewBindingConfiguration)new SourceConfiguration { SourcesList = sources }
-                : node.Element is UnityUIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new UnityViewModelAssets()));
+            _ui.ConfigureMvvm(_runtime, node => node.Name == "Preview" ? (IViewBindingConfiguration)new SourceConfiguration { SourcesList = sources }
+                : node.Element is UnityUIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new UnityViewModelAssets());
             try
             {
                 var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview");
@@ -77,7 +77,6 @@ namespace UIFramework.Mvvm.EditorUnity
             foreach (var value in _values)
                 try { value.Target.Write(value.Value); } catch (Exception e) { if (first == null) first = e; else first.Data["MVVM.Preview.RestoreError"] = e; }
             foreach (var child in _children) if (child.Object) child.Object.SetActive(child.Active);
-            try { await _runtime.DisposeAsync(); } catch (Exception e) { if (first == null) first = e; else first.Data["MVVM.Preview.DisposeError"] = e; }
             UnityEngine.Object.DestroyImmediate(_host);
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }

@@ -55,7 +55,7 @@ namespace MvvmWebSample
         {
             var canvas = new GameObject("Canvas", typeof(Canvas)); canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var events = new GameObject("Events", typeof(EventSystem)); var views = new Views(); var ui = UnityUI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>(), views); views.Host = (UnityUIHost)ui.Host;
-            var runtime = new MvvmRuntime(); ui.UseUnityMvvm(runtime); var node = new UINode(); await node.AttachAsync(ui.Root, "Bindings");
+            var runtime = ui.GetMvvm(); var node = new UINode(); await node.AttachAsync(ui.Root, "Bindings");
             var vm = node.CreateViewModel<PlayerVm>("Player"); vm.Gold = 100; var label = new GameObject("Gold", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); label.transform.SetParent(canvas.transform);
             node.Bind("Player.Gold", UnityBindingTargets.Property(label, "text"), new BindingOptions { Convert = Converters.Find("MvvmWebSample.TextConversions.Gold") });
             Check(label.text == "Gold 100", "Woven getter/converter"); vm.Gold = 80; Check(label.text == "Gold 80", "Notification");
@@ -82,7 +82,7 @@ namespace MvvmWebSample
             var closeButton = new GameObject("Close", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
             window.BindCommand("Dialog.Close", closeButton.ClickTarget()); closeButton.onClick.Invoke();
             await runtime.WhenIdleAsync(); Check(closing.Disposals == 1, "Deferred VM release observed");
-            await ui.DisposeAsync(); await runtime.DisposeAsync(); UnityEngine.Object.Destroy(asset); Check(runtime.IsDisposed, "Cleanup");
+            await ui.DisposeAsync(); UnityEngine.Object.Destroy(asset); Check(runtime.IsDisposed, "Cleanup");
         }
     }
 }

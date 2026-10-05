@@ -20,6 +20,19 @@ Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = defa
 ValueTask DisposeAsync()
 ```
 
+## Context module extensions
+
+Optional modules register a factory once. Context initializes them and disposes them in reverse order after Root and resource cleanup. Ordinary UI code does not call these interfaces.
+
+```csharp
+interface IUIContextExtension
+{
+    void Initialize(UIContext context);
+    ValueTask DisposeAsync();
+}
+void UIContextExtensions.Register(Func<IUIContextExtension> factory);
+```
+
 ## UINode / `UINode<TArgs>`
 
 Ordinary nodes start hidden. Context is unavailable before attach. Framework controls state properties; null Transition inherits. AddLifecycle is pre-attach only. RemoveLifecycle can unsubscribe while idle and Ready, but initialized behaviors still receive disposal. Attach does not reparent.

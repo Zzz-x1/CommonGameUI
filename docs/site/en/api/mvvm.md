@@ -2,6 +2,8 @@
 
 The runtime namespace is `UIFramework.Mvvm`. Engine targets, configuration and asset adapters belong to the `.Godot` / `.Unity` namespaces.
 
+Projects do not construct, enable or dispose a Runtime. Core invokes the module during Context creation and cleanup; use `ShareMvvm` for sharing. Runtime and `ConfigureMvvm` signatures below serve adapters, preview and advanced configuration. Ordinary code uses Context and Node APIs.
+
 ## Runtime
 
 ```csharp
@@ -24,7 +26,12 @@ When a command awaits Runtime disposal, bindings end first and its VM remains al
 ## Context and Node
 
 ```csharp
-void UseMvvm(this UIContext ui, MvvmRuntime runtime);
+void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class;
+void ShareMvvm(this UIContext ui, UIContext owner);
+Task WhenMvvmIdleAsync(this UIContext ui);
+MvvmRuntime GetMvvm(this UIContext ui);
+void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
+    Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
 void SetViewModel(this UINode node, string name, object vm);
 T GetViewModel<T>(this UINode node, string name) where T : class;
 T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class;
@@ -66,8 +73,8 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 
 | Purpose | Godot | Unity |
 |---|---|---|
-| Enable configuration and observer | `UseGodotMvvm(runtime)` | `UseUnityMvvm(runtime)` |
-| Shared asset | `runtime.GetSharedViewModel(resource)` | `runtime.GetSharedViewModel(asset)` |
+| Enable configuration and observer | Automatic | Automatic |
+| Shared asset | `ui.GetSharedViewModel(resource)` | `ui.GetSharedViewModel(asset)` |
 | Text | Label / LineEdit `.TextTarget()` | Text / TMP / InputField `.TextTarget()` |
 | Slider | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | Toggle | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |

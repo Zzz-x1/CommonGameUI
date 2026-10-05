@@ -2,6 +2,8 @@
 
 命名空间为 `UIFramework.Mvvm`。引擎目标、配置和资产适配位于 `.Godot`／`.Unity` 子命名空间。
 
+普通项目无需创建、启用或释放 Runtime。Core 在 Context 创建和清理时调用模块；需要共享时使用 `ShareMvvm`。下列 Runtime 与 `ConfigureMvvm` 签名用于适配、预览及高级配置，常规业务直接使用 Context／Node API。
+
 ## Runtime
 
 ```csharp
@@ -24,7 +26,12 @@ ValueTask DisposeAsync();
 ## Context 与 Node
 
 ```csharp
-void UseMvvm(this UIContext ui, MvvmRuntime runtime);
+void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class;
+void ShareMvvm(this UIContext ui, UIContext owner);
+Task WhenMvvmIdleAsync(this UIContext ui);
+MvvmRuntime GetMvvm(this UIContext ui);
+void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
+    Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
 void SetViewModel(this UINode node, string name, object vm);
 T GetViewModel<T>(this UINode node, string name) where T : class;
 T CreateViewModel<T>(this UINode node, string name, object? template = null) where T : class;
@@ -66,8 +73,8 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 
 | 用途 | Godot | Unity |
 |---|---|---|
-| 启用配置和观察器 | `UseGodotMvvm(runtime)` | `UseUnityMvvm(runtime)` |
-| 共享资产 | `runtime.GetSharedViewModel(resource)` | `runtime.GetSharedViewModel(asset)` |
+| 启用配置和观察器 | 自动 | 自动 |
+| 共享资产 | `ui.GetSharedViewModel(resource)` | `ui.GetSharedViewModel(asset)` |
 | 文本 | Label／LineEdit `.TextTarget()` | Text／TMP／InputField `.TextTarget()` |
 | 滑杆 | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | 开关 | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |

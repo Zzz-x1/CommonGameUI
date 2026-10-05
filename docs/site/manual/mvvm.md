@@ -27,11 +27,10 @@ public class PlayerVm
 }
 ```
 
-先创建 Runtime，再创建业务节点：
+正常创建 UIContext 即可，MVVM 自动初始化和释放：
 
 ```csharp
-var runtime = new MvvmRuntime();
-ui.UseGodotMvvm(runtime); // Unity: ui.UseUnityMvvm(runtime)
+var ui = GodotUI.Create(this); // Unity: UnityUI.Create(canvas, events)
 ```
 
 在节点初始化中提供数据源并绑定：
@@ -45,7 +44,7 @@ this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
 this.BindCommand("Player.Buy", buyButton.ClickTarget());
 ```
 
-控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 接入使用 `ui.UseMvvm(runtime)`，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
+控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
 
 ## 选择实例方式
 
@@ -53,16 +52,18 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 |---|---|---|
 | Create Instance | 每张装备详情、每个购买流程 | 节点关闭 |
 | Manual | 业务服务已经创建的玩家状态 | 项目负责 |
-| Shared Asset | 多个窗口共享金币或设置 | Runtime 关闭 |
+| Shared Asset | 多个窗口共享金币或设置 | 最后一个共享 Context 关闭 |
 
 ```csharp
-runtime.RegisterFactory(() => new InventoryVm(inventoryService));
+ui.RegisterViewModelFactory(() => new InventoryVm(inventoryService));
 var inventory = this.CreateViewModel<InventoryVm>("Inventory");
-var player = runtime.GetSharedViewModel(playerAsset);
+var player = ui.GetSharedViewModel(playerAsset);
 this.SetViewModel("Player", player);
 ```
 
 最后一行提供的是借用引用；共享克隆仍由 Runtime 持有。原始资产用于初始值，运行时不修改它。隐藏节点保留绑定及 VM，关闭解除绑定并释放独立 VM。
+
+多个 Context 需要共享资产克隆时，在创建节点前调用 `second.ShareMvvm(first)`。最后一个 Context 关闭时自动释放共享 Runtime；无需创建、初始化或释放 Runtime。
 
 ## 双向与嵌套绑定
 
@@ -87,13 +88,12 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 
 命令支持 `void`、`Task`，最多一个业务参数，异步命令可接收 `CancellationToken`。不支持 `async void`。`CanExecute` 和执行状态控制按钮，Runtime 持续观察同一个任务。业务先保存，再展示奖励；取消确认时不提交。
 
-命令可以等待关闭自己的窗口或祖先节点。关闭时解除绑定，VM 保留到命令结束再释放；外部关闭仍取消并等待命令。`runtime.WhenIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。
+命令可以等待关闭自己的窗口或祖先节点。关闭时解除绑定，VM 保留到命令结束再释放；外部关闭仍取消并等待命令。`ui.WhenMvvmIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。
 
 退出前等待清理：
 
 ```csharp
 await ui.DisposeAsync();
-await runtime.DisposeAsync();
 ```
 
 原始错误会记录并传播。UI 绑定和通知在引擎线程执行；直接改字段不会产生通知。

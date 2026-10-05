@@ -24,15 +24,9 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
 }
 public static class GodotMvvmExtensions
 {
+    public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : Resource => ui.GetMvvm().GetSharedViewModel(template, new GodotViewModelAssets());
     public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : Resource => runtime.GetSharedViewModel(template, new GodotViewModelAssets());
-    public static void UseGodotMvvm(this UIContext ui, MvvmRuntime runtime)
-    {
-        ui.AddNodeExtension(new MvvmNodeExtension(runtime, node => node.Element is GodotUIElement display
-            ? display.Control.GetChildren().OfType<MvvmBindings>().SingleOrDefault() : null, new GodotViewModelAssets()));
-        if (ui.Host is not GodotUIHost) throw new InvalidOperationException("Expected a Godot host.");
-        var tree = (SceneTree)Engine.GetMainLoop();
-        GodotMvvmObserver.Attach(tree, runtime);
-    }
+
 }
 internal static class GodotMvvmObserver
 {

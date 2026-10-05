@@ -45,4 +45,16 @@ public class WeaverTests
             Assert.NotEmpty(reread.Types.Single(t => t.Name == "Base").Methods.Single(m => m.Name == "__mvvmOriginal_set_Gold").DebugInformation.SequencePoints);
         }
     }
+    [Fact] public void StartupIsInstalledEvenWithoutVmDeclarationsAndDoesNotDuplicate()
+    {
+        using var module = Compile("public class App { }"); var weaver = Weaver(module, out var runtime);
+        using (runtime)
+        {
+            Assert.Equal(0, weaver.Process()); Assert.True(weaver.Changed);
+            Assert.Equal(0, weaver.Process()); Assert.False(weaver.Changed);
+            var startup = module.Types.Single(t => t.Name == "<Module>").Methods.Single(m => m.Name == ".cctor");
+            Assert.Single(startup.Body.Instructions, i => i.Operand is MethodReference m && m.DeclaringType.FullName == "UIFramework.Mvvm.MvvmModule" && m.Name == "Install");
+        }
+    }
+
 }

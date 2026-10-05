@@ -76,6 +76,8 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 
 ## MVVM 示例
 
+创建 UIContext 即自动启用 MVVM，关闭 Context 时自动清理；Demo 不创建或释放 Runtime。
+
 大厅金币使用 Shared Asset 克隆；设置和装备详情使用节点独立实例；背包使用 ObservableCollection 与条目场景，筛选／排序由项目 VM 维护。购买确认由单个命令提交业务、等待关闭自身确认窗口，再展示奖励；VM 在命令完成后释放。编辑器底部 View Bindings 可编辑条目绑定，原始玩家模板位于 Assets/Mvvm。
 
 [模块入门与 GUI](../../docs/site/manual/mvvm.md)。

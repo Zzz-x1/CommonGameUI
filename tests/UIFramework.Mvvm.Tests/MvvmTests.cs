@@ -51,7 +51,7 @@ public sealed class MvvmTests
     { var vm = new ExtendedVm(); var names = new List<string>(); ((INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => names.Add(e.PropertyName!); vm.Gold = 20; vm.Name = "A"; Assert.Equal(new[] { "Gold", "Rich", "CanBuy", "Name" }, names); Assert.Equal(20, Object(vm).Read("Gold")); }
     [Fact] public async Task TwoWayNormalizesAndUnsubscribes()
     {
-        await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.UseMvvm(runtime);
+        await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var vm = new PlayerVm { Amount = 25 }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Amount", target, BindingMode.TwoWay); Assert.Equal(25, target.Value);
         target.Edit(150); Assert.Equal(100, target.Value); Assert.Equal(100, vm.Amount);
@@ -59,7 +59,7 @@ public sealed class MvvmTests
     }
     [Fact] public async Task NestedReplacementAndNullPresentation()
     {
-        await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.UseMvvm(runtime);
+        await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var old = new PlayerVm { Gold = 10 }; var vm = new PlayerVm { Selected = old }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Selected.Gold", target, new BindingOptions { HasNullValue = true, NullValue = -1 });
         vm.Selected = new PlayerVm { Gold = 30 }; old.Gold = 99; Assert.Equal(30, target.Value); vm.Selected = null; Assert.Equal(-1, target.Value); await ui.DisposeAsync();

@@ -1,5 +1,6 @@
 using Godot;
 using UIFramework;
+using UIFramework.Mvvm;
 using UIFramework.Godot;
 
 namespace HierarchyDemo;
@@ -305,7 +306,7 @@ public partial class DemoApp
                 Pressed = pressed
             }, true);
         Check(_tasks.Count > before, $"鼠标点击未到达 {button.GetPath()}");
-        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _mvvm.WhenIdleAsync());
+        await Task.WhenAll(Task.WhenAll(_tasks.Skip(before).ToArray()), _ui.WhenMvvmIdleAsync());
     }
 
     private sealed class TestLog : IUILog

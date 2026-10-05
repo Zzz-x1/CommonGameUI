@@ -16,7 +16,8 @@ namespace UIFramework.Mvvm.Unity.CodeGen
             using var pe = new MemoryStream(assembly.InMemoryAssembly.PeData); using var pdb = new MemoryStream(assembly.InMemoryAssembly.PdbData);
             using var module = ModuleDefinition.ReadModule(pe, new ReaderParameters { AssemblyResolver = resolver, ReadSymbols = pdb.Length != 0, SymbolStream = pdb, SymbolReaderProvider = new Mono.Cecil.Cil.PortablePdbReaderProvider() });
             using var runtime = ModuleDefinition.ReadModule(assembly.References.Single(r => Path.GetFileName(r) == "UIFramework.Mvvm.dll"));
-            if (new ViewModelWeaver(module, runtime).Process() == 0) return null;
+            var weaver = new ViewModelWeaver(module, runtime); weaver.Process();
+            if (!weaver.Changed) return null;
             var engine = resolver.Resolve(new AssemblyNameReference("UnityEngine.CoreModule", new System.Version(0, 0, 0, 0)));
             var preserve = module.ImportReference(engine.MainModule.GetType("UnityEngine.Scripting.PreserveAttribute").Methods.Single(m => m.IsConstructor && !m.HasParameters));
             Preserve(module.Types);
