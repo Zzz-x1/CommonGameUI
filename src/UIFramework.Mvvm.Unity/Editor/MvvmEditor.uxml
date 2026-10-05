@@ -1,0 +1,32 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements">
+  <ui:VisualElement class="workspace">
+    <ui:VisualElement class="toolbar">
+      <ui:Label text="UIFramework · MVVM" class="title" />
+      <editor:ObjectField name="view" label="View" />
+      <ui:Button name="preview" text="预览初始值" />
+      <ui:Button name="stop-preview" text="恢复界面" />
+    </ui:VisualElement>
+    <ui:VisualElement class="columns">
+      <ui:VisualElement class="sources pane">
+        <ui:Label text="Viewmodels" class="section-title" />
+        <ui:Label text="为当前界面提供具名数据源" class="hint" />
+        <ui:VisualElement class="actions"><ui:Button name="add-source" text="+ 数据源" /><ui:Button name="delete-source" text="删除" /></ui:VisualElement>
+        <ui:ListView name="sources" selection-type="Single" reorderable="true" />
+        <ui:Label text="拖动成员到绑定表建立绑定" class="hint" />
+        <ui:ScrollView name="members" />
+      </ui:VisualElement>
+      <ui:VisualElement class="bindings pane">
+        <ui:Label text="View Bindings" class="section-title" />
+        <ui:VisualElement class="actions"><ui:Button name="add-binding" text="+ 绑定" /><ui:Button name="delete-binding" text="删除" /></ui:VisualElement>
+        <ui:TextField name="search" label="搜索控件 / 来源" />
+        <ui:VisualElement class="table-header"><ui:Label text="控件 · 属性" /><ui:Label text="数据源 · 成员" /><ui:Label text="方向" /></ui:VisualElement>
+        <ui:ListView name="bindings" selection-type="Single" reorderable="true" />
+        <ui:Label name="status" class="hint" />
+      </ui:VisualElement>
+      <ui:VisualElement class="details pane">
+        <ui:Label text="Details" class="section-title" />
+        <ui:ScrollView name="details" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

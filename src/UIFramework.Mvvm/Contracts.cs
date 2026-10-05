@@ -25,6 +25,18 @@ public interface IMvvmObject : INotifyPropertyChanged
     void Write(string member, object? value);
     bool CanExecute(string command);
     Task Execute(string command, object? parameter, CancellationToken token);
+    MvvmMember[] Describe();
+}
+public enum MvvmMemberKind { Property, Command }
+public sealed class MvvmMember
+{
+    public string Name { get; }
+    public Type Type { get; }
+    public MvvmMemberKind Kind { get; }
+    public bool Observable { get; }
+    public bool Writable { get; }
+    public MvvmMember(string name, Type type, MvvmMemberKind kind, bool observable, bool writable)
+    { Name = name; Type = type; Kind = kind; Observable = observable; Writable = writable; }
 }
 
 public enum ViewModelCreation { CreateInstance, Manual, SharedAsset }
@@ -38,8 +50,11 @@ public sealed class ViewModelSource
 }
 public interface IViewModelAssets
 {
+    bool CanCreate(Type type);
+    object CreateInstance(Type type);
     bool IsAsset(object value);
-    object Clone(object template, Func<object, object> resolveViewModel);
+    object Clone(object template);
+    void Remap(object template, object instance, Func<object, object> resolveViewModel);
     void Release(object instance);
 }
 public interface IBindingTarget : IDisposable

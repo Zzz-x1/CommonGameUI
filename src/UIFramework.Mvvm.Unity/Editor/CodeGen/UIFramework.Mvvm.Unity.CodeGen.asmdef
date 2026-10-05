@@ -1,0 +1,16 @@
+{
+  "name": "Unity.UIFramework.Mvvm.CodeGen",
+  "includePlatforms": [
+    "Editor"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "UIFramework.Mvvm.dll",
+    "UIFramework.Mvvm.Weaver.dll",
+    "Mono.Cecil.dll",
+    "Unity.CompilationPipeline.Common.dll"
+  ],
+  "references": [],
+  "autoReferenced": false,
+  "noEngineReferences": true
+}

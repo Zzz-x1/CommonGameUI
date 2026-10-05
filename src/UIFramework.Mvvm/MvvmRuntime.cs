@@ -9,47 +9,75 @@ public sealed class MvvmRuntime : IAsyncDisposable
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
     private readonly List<BindingScope> _scopes = new();
     private readonly List<Task> _tasks = new();
+    private readonly HashSet<(IMvvmObject Vm, string Name)> _running = new();
+    internal event Action? CommandStateChanged;
+    internal bool IsRunning(IMvvmObject vm, string name) => _running.Contains((vm, name));
     private readonly CancellationTokenSource _lifetime = new();
     private Task? _dispose;
     public IUILog Log { get; }
+    public bool IsDisposed => _dispose?.IsCompleted == true;
+    public void Observe(Task task) => _tasks.Add(task);
     public MvvmRuntime(IUILog? log = null) => Log = log ?? new ConsoleUILog();
     public void RegisterFactory<T>(Func<T> factory) where T : class => _factories.Add(typeof(T), () => factory());
-    internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared)
+    public void RegisterFactory(Type type, Func<object> factory) => _factories.Add(type, factory);
+    internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared, Action<object, IViewModelAssets?> own)
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
-        if (template != null && shared && _shared.TryGetValue(template, out var cached)) return cached;
-        object value;
-        if (template != null)
+        var graph = shared ? _shared : new Dictionary<object, object>(ReferenceComparer.Instance);
+        var added = new List<object>();
+        try { return Resolve(type, template); }
+        catch { foreach (var key in added) graph.Remove(key); throw; }
+        object Resolve(Type requestedType, object? source)
         {
-            if (assets == null || !assets.IsAsset(template)) throw new ArgumentException("A native VM asset is required.");
-            value = assets.Clone(template, nested => Create(nested.GetType(), nested, assets, shared));
+            if (source != null && graph.TryGetValue(source, out var cached)) return cached;
+            if (shared && source == null) throw new ArgumentException("Shared Asset requires a template.");
+            object value;
+            if (source != null)
+            {
+                if (assets == null || !assets.IsAsset(source)) throw new ArgumentException("A native VM asset is required.");
+                value = assets.Clone(source);
+            }
+            else value = _factories.TryGetValue(requestedType, out var factory) ? factory() : assets?.CanCreate(requestedType) == true ? assets.CreateInstance(requestedType) : Activator.CreateInstance(requestedType)
+                ?? throw new InvalidOperationException("VM factory returned null.");
+            var adapter = assets?.IsAsset(value) == true ? assets : null;
+            if (shared) _owned.Add((value, adapter)); else own(value, adapter);
+            if (!requestedType.IsInstanceOfType(value)) throw new InvalidCastException("VM factory/template type mismatch: " + requestedType.FullName);
+            if (value is not IMvvmObject) throw new InvalidOperationException("ViewModel has not been woven: " + requestedType.FullName);
+            if (source != null)
+            {
+                graph.Add(source, value); added.Add(source);
+                assets!.Remap(source, value, nested => Resolve(nested.GetType(), nested));
+            }
+            return value;
         }
-        else value = _factories.TryGetValue(type, out var factory) ? factory() : Activator.CreateInstance(type)
-            ?? throw new InvalidOperationException("VM factory returned null.");
-        if (value is not IMvvmObject) throw new InvalidOperationException("ViewModel has not been woven: " + type.FullName);
-        if (shared)
-        {
-            if (template == null) throw new ArgumentException("Shared Asset requires a template.");
-            _shared.Add(template, value); _owned.Add((value, assets));
-        }
-        return value;
     }
     internal void Add(BindingScope scope) => _scopes.Add(scope);
     internal void Remove(BindingScope scope) => _scopes.Remove(scope);
     internal async ValueTask Release(object value, IViewModelAssets? assets)
     {
-        if (value is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
-        else if (value is IDisposable disposable) disposable.Dispose();
-        if (assets != null) assets.Release(value);
+        Exception? first = null;
+        try
+        {
+            if (value is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
+            else if (value is IDisposable disposable) disposable.Dispose();
+        }
+        catch (Exception error) { Failure(ref first, error); }
+        try { assets?.Release(value); } catch (Exception error) { Failure(ref first, error); }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal Task Execute(BindingScope scope, IMvvmObject vm, string command, object? parameter)
     {
+        if (!_running.Add((vm, command))) throw new InvalidOperationException("Command is already running: " + command);
         var task = Run(); _tasks.Add(task); return task;
         async Task Run()
         {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(scope.Node.Lifetime, _lifetime.Token);
-            try { await vm.Execute(command, parameter, linked.Token); }
-            catch (Exception error) { Log.Error(error, "MVVM command " + command); throw; }
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(scope.Lifetime, _lifetime.Token);
+            Exception? first = null;
+            try { CommandStateChanged?.Invoke(); await vm.Execute(command, parameter, linked.Token); }
+            catch (Exception error) { first = error; Report(error, "MVVM command " + command); }
+            _running.Remove((vm, command));
+            try { CommandStateChanged?.Invoke(); } catch (Exception error) { Failure(ref first, error); }
+            if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }
     }
     /// <summary>Engine adapters call this from their persistent frame observer.</summary>
@@ -63,12 +91,17 @@ public sealed class MvvmRuntime : IAsyncDisposable
     }
     public ValueTask DisposeAsync()
     {
-        _dispose ??= DisposeCoreAsync(); return new ValueTask(_dispose);
+        if (_dispose == null)
+        {
+            var completion = new TaskCompletionSource<Task>();
+            _dispose = completion.Task.Unwrap(); completion.SetResult(DisposeCoreAsync());
+        }
+        return new ValueTask(_dispose);
     }
     private async Task DisposeCoreAsync()
     {
-        _lifetime.Cancel();
         Exception? first = null;
+        try { _lifetime.Cancel(); } catch (Exception error) { Failure(ref first, error); }
         foreach (var scope in _scopes.ToArray())
             try { await scope.DisposeAsync(); } catch (Exception error) { Failure(ref first, error); }
         try { await Task.WhenAll(_tasks.ToArray()); } catch (Exception error) { Failure(ref first, error); }
@@ -87,6 +120,8 @@ public sealed class MvvmRuntime : IAsyncDisposable
             secondary.Add(error);
         }
     }
+    internal void Report(Exception error, string context)
+    { try { Log.Error(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
     private sealed class ReferenceComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceComparer Instance = new();
@@ -116,6 +151,7 @@ public static class MvvmExtensions
     internal static readonly ConditionalWeakTable<UINode, BindingScope> Scopes = new();
     internal static BindingScope Scope(UINode node) => Scopes.TryGetValue(node, out var scope) ? scope : throw new InvalidOperationException("Call UseMvvm before creating this node.");
     public static void UseMvvm(this UIContext ui, MvvmRuntime runtime) => ui.AddNodeExtension(new MvvmNodeExtension(runtime));
+    public static void ObserveMvvmTask(this UINode node, Task task) => Scope(node).Observe(task);
     public static void SetViewModel(this UINode node, string name, object vm) => Scope(node).Set(name, vm);
     public static T GetViewModel<T>(this UINode node, string name) where T : class => (T)Scope(node).Get(name);
     public static IDisposable Bind(this UINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>

@@ -1,0 +1,18 @@
+.workspace { flex-grow: 1; background-color: #24262b; }
+.toolbar { flex-direction: row; align-items: center; padding: 8px; background-color: #30343b; }
+.title { font-size: 15px; -unity-font-style: bold; margin-right: 16px; }
+.toolbar #view { flex-grow: 1; }
+.columns { flex-direction: row; flex-grow: 1; }
+.pane { padding: 12px; border-right-width: 1px; border-right-color: #434750; }
+.sources { width: 260px; }
+.bindings { flex-grow: 1; min-width: 360px; }
+.details { width: 300px; }
+.section-title { font-size: 15px; -unity-font-style: bold; color: #d4bc80; margin-bottom: 8px; }
+.hint { white-space: normal; color: #a9adb7; margin-top: 8px; margin-bottom: 8px; }
+.actions { flex-direction: row; margin-bottom: 8px; }
+ListView { flex-grow: 1; min-height: 100px; }
+#members { max-height: 230px; }
+.row, .table-header { flex-direction: row; padding: 6px; }
+.row Label, .table-header Label { flex-grow: 1; width: 33%; }
+.table-header { background-color: #383c44; -unity-font-style: bold; }
+.details TextField, .details ObjectField, .details DropdownField, .details Toggle { margin-bottom: 9px; }

@@ -1,0 +1,106 @@
+using System.Collections.ObjectModel;
+using UIFramework.Mvvm;
+using Xunit;
+
+namespace UIFramework.Mvvm.Tests;
+
+[ViewModel]
+public class OwnedVm : IDisposable
+{
+    [FieldNotify] public int Gold { get; set; }
+    [FieldNotify] public OwnedVm? Other { get; set; }
+    [FieldNotify] public ObservableCollection<OwnedVm> Items { get; set; } = new();
+    public int Disposals { get; private set; }
+    public TaskCompletionSource Started { get; } = new();
+    public TaskCompletionSource Finish { get; } = new();
+    public Exception Error { get; } = new IOException("command identity");
+    [Command] public async Task Wait(CancellationToken token)
+    { Started.SetResult(); await Finish.Task.WaitAsync(token); }
+    [Command] public Task Fail() => Task.FromException(Error);
+    public void Dispose() => Disposals++;
+}
+
+public class RuntimeTests
+{
+    private sealed class Host : IUIHost
+    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? e) { } public void RestoreFocus(object? e) { } }
+    private sealed class Loader : IUIResourceLoader
+    { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
+    private sealed class Log : IUILog
+    { public readonly List<Exception> Errors = new(); public void Error(Exception error, string context) => Errors.Add(error); }
+    private sealed class Config(params ViewModelSource[] sources) : IViewBindingConfiguration
+    { public IReadOnlyList<ViewModelSource> Sources => sources; public void Apply(UINode node) { } }
+    private sealed class Assets : IViewModelAssets
+    {
+        public bool CanCreate(Type type) => false;
+        public object CreateInstance(Type type) => throw new NotSupportedException();
+        public readonly List<object> Released = new();
+        public bool IsAsset(object value) => value is OwnedVm;
+        public object Clone(object template) => new OwnedVm { Gold = ((OwnedVm)template).Gold };
+        public void Remap(object template, object instance, Func<object, object> resolve)
+        { var source = (OwnedVm)template; var clone = (OwnedVm)instance; clone.Other = source.Other == null ? null : (OwnedVm)resolve(source.Other); clone.Items = new(source.Items.Select(item => (OwnedVm)resolve(item))); }
+        public void Release(object value) => Released.Add(value);
+    }
+    private sealed class Click : ICommandTarget
+    { public bool Enabled; public event Action? Invoked; public void SetEnabled(bool value) => Enabled = value; public void Press() => Invoked!(); public void Dispose() { } }
+    private sealed class ListTarget : ICollectionTarget
+    {
+        public readonly List<object> Items = new(); public int Moves; public int Disposals;
+        public void Insert(int index, object value) => Items.Insert(index == int.MaxValue ? Items.Count : index, value);
+        public void Remove(int index) => Items.RemoveAt(index);
+        public void Move(int oldIndex, int newIndex) { var value = Items[oldIndex]; Items.RemoveAt(oldIndex); Items.Insert(newIndex, value); Moves++; }
+        public void Clear() => Items.Clear(); public void Dispose() => Disposals++;
+    }
+    private static UIContext Context(MvvmRuntime runtime, Config? config = null, Assets? assets = null)
+    { var ui = new UIContext(new Host(), new Loader()); ui.AddNodeExtension(new MvvmNodeExtension(runtime, _ => config, assets)); return ui; }
+    private static ViewModelSource Source(string name, ViewModelCreation mode, object? template = null) => new() { Name = name, Type = typeof(OwnedVm), Creation = mode, Template = template };
+    private static async Task<UINode> Node(UIContext ui, string name) { var node = new UINode(); await node.AttachAsync(ui.Root, name); return node; }
+
+    [Fact] public async Task PrivateAssetGraphCopiesAndReleasesCyclesOnce()
+    {
+        await using var runtime = new MvvmRuntime(); var assets = new Assets(); var template = new OwnedVm { Gold = 100 }; template.Other = template; template.Items.Add(template);
+        await using var ui = Context(runtime, new Config(Source("Player", ViewModelCreation.CreateInstance, template)), assets);
+        var a = await Node(ui, "A"); var b = await Node(ui, "B"); var first = a.GetViewModel<OwnedVm>("Player"); var second = b.GetViewModel<OwnedVm>("Player");
+        Assert.NotSame(first, second); Assert.Same(first, first.Other); Assert.Same(first, first.Items[0]); Assert.NotSame(template.Items, first.Items);
+        first.Gold = 30; first.Items.Clear(); Assert.Equal(100, template.Gold); Assert.Single(template.Items);
+        await a.DisposeAsync(); Assert.Equal(1, first.Disposals); Assert.Equal(0, second.Disposals); Assert.Contains(first, assets.Released); Assert.Equal(0, template.Disposals);
+    }
+    [Fact] public async Task SharedAssetCrossesContextsAndLivesUntilRuntimeDisposal()
+    {
+        var runtime = new MvvmRuntime(); var assets = new Assets(); var template = new OwnedVm { Gold = 40 }; var config = new Config(Source("Player", ViewModelCreation.SharedAsset, template));
+        await using var one = Context(runtime, config, assets); await using var two = Context(runtime, config, assets);
+        var a = await Node(one, "A"); var b = await Node(two, "B"); var vm = a.GetViewModel<OwnedVm>("Player"); Assert.Same(vm, b.GetViewModel<OwnedVm>("Player"));
+        await a.DisposeAsync(); Assert.Equal(0, vm.Disposals); await runtime.DisposeAsync(); Assert.Equal(1, vm.Disposals); Assert.Single(assets.Released); Assert.Equal(0, template.Disposals);
+    }
+    [Fact] public async Task FactoryOwnsCreatedVmButManualVmIsBorrowed()
+    {
+        await using var runtime = new MvvmRuntime(); var created = new OwnedVm(); runtime.RegisterFactory(() => created);
+        await using var ui = Context(runtime, new Config(Source("Created", ViewModelCreation.CreateInstance)));
+        var node = await Node(ui, "A"); var manual = new OwnedVm(); node.SetViewModel("Manual", manual); await node.DisposeAsync(); Assert.Equal(1, created.Disposals); Assert.Equal(0, manual.Disposals);
+    }
+    [Fact] public async Task CollectionMovePreservesIdentityAndReplacementUnsubscribes()
+    {
+        await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); var a = new OwnedVm(); var b = new OwnedVm(); vm.Items.Add(a); vm.Items.Add(b); node.SetViewModel("Player", vm);
+        var target = new ListTarget(); var binding = node.BindCollection("Player.Items", target); vm.Items.Move(0, 1); Assert.Equal(new[] { b, a }, target.Items); Assert.Equal(1, target.Moves);
+        var old = vm.Items; vm.Items = new(); old.Add(new()); Assert.Empty(target.Items); vm.Items.Add(b); vm.Items[0] = a; Assert.Same(a, Assert.Single(target.Items)); vm.Items.Clear(); Assert.Empty(target.Items);
+        binding.Dispose(); await node.DisposeAsync(); Assert.Equal(1, target.Disposals);
+    }
+    [Fact] public async Task SharedCommandDisablesAllButtonsUntilCompletion()
+    {
+        await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime); var a = await Node(ui, "A"); var b = await Node(ui, "B"); var vm = new OwnedVm(); a.SetViewModel("Player", vm); b.SetViewModel("Player", vm);
+        var first = new Click(); var second = new Click(); a.BindCommand("Player.Wait", first); b.BindCommand("Player.Wait", second); first.Press(); await vm.Started.Task;
+        Assert.False(first.Enabled); Assert.False(second.Enabled); vm.Finish.SetResult(); await Task.Yield(); runtime.ObserveTasks(); Assert.True(first.Enabled); Assert.True(second.Enabled);
+    }
+    [Fact] public async Task AsyncFailureKeepsIdentityInObserverAndCleanup()
+    {
+        var log = new Log(); var runtime = new MvvmRuntime(log); var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); node.SetViewModel("Player", vm); var button = new Click(); node.BindCommand("Player.Fail", button); button.Press();
+        Assert.Same(vm.Error, Assert.Throws<IOException>(() => runtime.ObserveTasks())); Assert.Same(vm.Error, Assert.Single(log.Errors));
+        Assert.Same(vm.Error, await Assert.ThrowsAsync<IOException>(() => node.DisposeAsync().AsTask())); await runtime.DisposeAsync(); await ui.DisposeAsync();
+    }
+    [Fact] public async Task ScopeDisposalCancelsAndAwaitsItsCommand()
+    {
+        var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); node.SetViewModel("Player", vm); var button = new Click(); node.BindCommand("Player.Wait", button); button.Press(); await vm.Started.Task;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => node.DisposeAsync().AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()); await ui.DisposeAsync();
+    }
+}

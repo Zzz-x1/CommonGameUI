@@ -1,5 +1,15 @@
 {
   "dependencies": {
+    "com.ui-framework.mvvm.unity": {
+      "version": "file:../../../src/UIFramework.Mvvm.Unity",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {
+        "com.ui-framework.unity": "0.1.0",
+        "com.unity.ugui": "2.0.0",
+        "com.unity.nuget.mono-cecil": "1.11.6"
+      }
+    },
     "com.ui-framework.unity": {
       "version": "file:../../../src/UIFramework.Unity",
       "depth": 0,

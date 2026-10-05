@@ -3,7 +3,8 @@
   "references": [
     "UIFramework.Unity",
     "StarCourt.UnityDemo",
-    "Unity.ugui"
+    "Unity.ugui",
+    "UIFramework.Mvvm.Unity"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"
@@ -13,6 +14,7 @@
   "precompiledReferences": [
     "UIFramework.Core.dll",
     "nunit.framework.dll",
-    "Newtonsoft.Json.dll"
+    "Newtonsoft.Json.dll",
+    "UIFramework.Mvvm.dll"
   ]
 }

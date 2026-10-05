@@ -24,3 +24,8 @@ src/UIFramework.Unity/Runtime/Plugins/*.pdb
 Demo/Unity/Assets/Temp/
 Demo/Unity/Assets/Temp.meta
 Demo/Unity/Assets/InitTestScene*.unity*
+
+src/UIFramework.Mvvm.Unity/**/Plugins/*.dll
+src/UIFramework.Mvvm.Unity/**/Plugins/*.pdb
+
+Demo/Godot/addons/ui_framework_mvvm/

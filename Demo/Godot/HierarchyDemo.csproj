@@ -11,5 +11,7 @@
     <ProjectReference Include="../../src/UIFramework.Core/UIFramework.Core.csproj" />
     <ProjectReference Include="../../src/UIFramework.Godot/UIFramework.Godot.csproj" />
     <ProjectReference Include="../../src/UIFramework.Generators/UIFramework.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/UIFramework.Mvvm/UIFramework.Mvvm.csproj" />
   </ItemGroup>
+  <Import Project="../../build/UIFramework.Mvvm.targets" />
 </Project>

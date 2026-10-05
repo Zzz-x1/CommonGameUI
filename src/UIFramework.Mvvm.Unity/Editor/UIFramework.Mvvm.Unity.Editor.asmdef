@@ -1,0 +1,5 @@
+{
+  "name": "UIFramework.Mvvm.Unity.Editor",
+  "references": ["UIFramework.Mvvm.Unity", "UIFramework.Unity", "Unity.ugui", "Unity.TextMeshPro"],
+  "includePlatforms": ["Editor"]
+}

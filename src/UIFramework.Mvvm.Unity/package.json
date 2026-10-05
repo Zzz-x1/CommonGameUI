@@ -1,0 +1,11 @@
+{
+  "name": "com.ui-framework.mvvm.unity",
+  "version": "0.1.0",
+  "displayName": "UI Framework MVVM",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.ui-framework.unity": "0.1.0",
+    "com.unity.ugui": "2.0.0",
+    "com.unity.nuget.mono-cecil": "1.11.6"
+  }
+}

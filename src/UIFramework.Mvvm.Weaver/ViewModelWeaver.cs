@@ -16,7 +16,42 @@ public sealed class ViewModelWeaver
     {
         int count = 0;
         foreach (var type in Types(_module.Types).Where(t => Attribute(t, "ViewModelAttribute")).ToArray()) if (Weave(type)) count++;
+        if (WeaveConverters()) count++;
         return count;
+    }
+    private bool WeaveConverters()
+    {
+        if (_module.Assembly.CustomAttributes.Any(a => a.AttributeType.FullName == Prefix + "ConverterProviderAttribute")) return false;
+        var methods = Types(_module.Types).SelectMany(t => t.Methods).Where(m => Attribute(m, "ConverterAttribute")).ToArray();
+        if (methods.Length == 0) return false;
+        var provider = new TypeDefinition("UIFramework.Mvvm.Generated", "ConverterProvider", TypeAttributes.Public | TypeAttributes.Class, _module.TypeSystem.Object);
+        _module.Types.Add(provider); provider.Interfaces.Add(new InterfaceImplementation(RuntimeType("IConverterProvider")));
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _module.TypeSystem.Void);
+        provider.Methods.Add(constructor); var ci = constructor.Body.GetILProcessor(); ci.Emit(OpCodes.Ldarg_0);
+        ci.Emit(OpCodes.Call, new MethodReference(".ctor", _module.TypeSystem.Void, _module.TypeSystem.Object) { HasThis = true }); ci.Emit(OpCodes.Ret);
+        var signature = _runtime.GetType(Prefix + "IConverterProvider").Methods.Single();
+        var get = new MethodDefinition("GetConverters", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.HideBySig, _module.ImportReference(signature.ReturnType)); provider.Methods.Add(get);
+        var il = get.Body.GetILProcessor(); var info = RuntimeType("ConverterInfo"); il.Emit(OpCodes.Ldc_I4, methods.Length); il.Emit(OpCodes.Newarr, info);
+        var infoCtor = Runtime("ConverterInfo", ".ctor"); var func = infoCtor.Parameters[3].ParameterType;
+        for (int index = 0; index < methods.Length; index++)
+        {
+            var method = methods[index];
+            if (!method.IsPublic || !method.IsStatic || method.HasGenericParameters || method.Parameters.Count != 1 || method.ReturnType.FullName == "System.Void") throw new InvalidOperationException("Converter must be public static TOut Convert(TIn): " + method.FullName);
+            var call = new MethodDefinition("Convert_" + index, MethodAttributes.Private | MethodAttributes.Static, _module.TypeSystem.Object); call.Parameters.Add(new ParameterDefinition(_module.TypeSystem.Object)); provider.Methods.Add(call);
+            var body = call.Body.GetILProcessor(); body.Emit(OpCodes.Ldarg_0); Unbox(body, method.Parameters[0].ParameterType); body.Emit(OpCodes.Call, method); Box(body, method.ReturnType); body.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldstr, method.DeclaringType.FullName + "." + method.Name);
+            var typeClass = new TypeReference("System", "Type", _module, _module.TypeSystem.CoreLibrary);
+            var handle = new TypeReference("System", "RuntimeTypeHandle", _module, _module.TypeSystem.CoreLibrary, true);
+            var getType = new MethodReference("GetTypeFromHandle", typeClass, typeClass) { HasThis = false }; getType.Parameters.Add(new ParameterDefinition(handle));
+            il.Emit(OpCodes.Ldtoken, _module.ImportReference(method.Parameters[0].ParameterType)); il.Emit(OpCodes.Call, getType);
+            il.Emit(OpCodes.Ldtoken, _module.ImportReference(method.ReturnType)); il.Emit(OpCodes.Call, getType);
+            il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldftn, call);
+            var functionCtor = new MethodReference(".ctor", _module.TypeSystem.Void, func) { HasThis = true }; functionCtor.Parameters.Add(new ParameterDefinition(_module.TypeSystem.Object)); functionCtor.Parameters.Add(new ParameterDefinition(_module.TypeSystem.IntPtr));
+            il.Emit(OpCodes.Newobj, functionCtor); il.Emit(OpCodes.Newobj, infoCtor); il.Emit(OpCodes.Stelem_Ref);
+        }
+        il.Emit(OpCodes.Ret);
+        var attribute = new CustomAttribute(Runtime("ConverterProviderAttribute", ".ctor")); attribute.ConstructorArguments.Add(new CustomAttributeArgument(_module.ImportReference(_runtime.GetType(Prefix + "ConverterProviderAttribute").Methods.Single(m => m.Name == ".ctor").Parameters[0].ParameterType), provider)); _module.Assembly.CustomAttributes.Add(attribute);
+        return true;
     }
     private static IEnumerable<TypeDefinition> Types(IEnumerable<TypeDefinition> types)
     { foreach (var type in types) { yield return type; foreach (var nested in Types(type.NestedTypes)) yield return nested; } }
@@ -57,10 +92,12 @@ public sealed class ViewModelWeaver
             if (property.SetMethod != null) Setter(type, property, events, Dependencies(properties, property.Name));
         }
         ValidateDependencies(properties);
+        Notify(type, properties, events, inherited);
         Dispatch(type, "Read", properties, commands, inherited);
         Dispatch(type, "Write", properties, commands, inherited);
         Dispatch(type, "CanExecute", properties, commands, inherited);
         Dispatch(type, "Execute", properties, commands, inherited);
+        Describe(type, properties, commands, inherited);
         type.CustomAttributes.Add(new CustomAttribute(Runtime("WovenViewModelAttribute", ".ctor")));
         return true;
     }
@@ -68,6 +105,26 @@ public sealed class ViewModelWeaver
     {
         var attribute = property.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == Prefix + "FieldNotifyAttribute");
         return attribute == null ? Array.Empty<string>() : ((CustomAttributeArgument[])attribute.ConstructorArguments[0].Value).Select(a => (string)a.Value).ToArray();
+    }
+    private void Describe(TypeDefinition type, List<PropertyDefinition> properties, List<MethodDefinition> commands, bool inherited)
+    {
+        var memberType = RuntimeType("MvvmMember");
+        var method = new MethodDefinition("Describe", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig | (inherited ? 0 : MethodAttributes.NewSlot), new ArrayType(memberType)); type.Methods.Add(method);
+        var il = method.Body.GetILProcessor(); il.Emit(OpCodes.Ldc_I4, properties.Count + commands.Count); il.Emit(OpCodes.Newarr, memberType);
+        var typeClass = new TypeReference("System", "Type", _module, _module.TypeSystem.CoreLibrary);
+        var getType = new MethodReference("GetTypeFromHandle", typeClass, typeClass) { HasThis = false };
+        getType.Parameters.Add(new ParameterDefinition(new TypeReference("System", "RuntimeTypeHandle", _module, _module.TypeSystem.CoreLibrary, true)));
+        int index = 0;
+        foreach (var property in properties) Emit(property.Name, property.PropertyType, 0, Attribute(property, "FieldNotifyAttribute"), property.SetMethod?.IsPublic == true);
+        foreach (var command in commands) Emit(command.Name, command.Parameters.FirstOrDefault(p => p.ParameterType.FullName != "System.Threading.CancellationToken")?.ParameterType ?? _module.TypeSystem.Void, 1, false, false);
+        il.Emit(OpCodes.Ret);
+        void Emit(string name, TypeReference valueType, int kind, bool observable, bool writable)
+        {
+            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index++); il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldtoken, _module.ImportReference(valueType)); il.Emit(OpCodes.Call, getType);
+            il.Emit(OpCodes.Ldc_I4, kind); il.Emit(OpCodes.Ldc_I4, observable ? 1 : 0); il.Emit(OpCodes.Ldc_I4, writable ? 1 : 0);
+            il.Emit(OpCodes.Newobj, Runtime("MvvmMember", ".ctor")); il.Emit(OpCodes.Stelem_Ref);
+        }
     }
     private static void ValidateDependencies(List<PropertyDefinition> properties)
     {
@@ -121,8 +178,23 @@ public sealed class ViewModelWeaver
         il.Emit(OpCodes.Ldloc, previous); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, _module.ImportReference(property.GetMethod));
         var different = new GenericInstanceMethod(Runtime("MvvmNotifications", "Different")); different.GenericArguments.Add(_module.ImportReference(property.PropertyType));
         il.Emit(OpCodes.Call, different); il.Emit(OpCodes.Brfalse, done);
-        foreach (var name in notifications) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, events); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Call, Runtime("MvvmNotifications", "Raise")); }
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, property.Name);
+        il.Emit(OpCodes.Callvirt, new MethodReference("__mvvmNotify", _module.TypeSystem.Void, type) { HasThis = true, Parameters = { new ParameterDefinition(_module.TypeSystem.String) } });
         il.Append(done);
+    }
+    private void Notify(TypeDefinition type, List<PropertyDefinition> properties, FieldReference events, bool inherited)
+    {
+        var method = new MethodDefinition("__mvvmNotify", MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig | (inherited ? 0 : MethodAttributes.NewSlot), _module.TypeSystem.Void);
+        method.Parameters.Add(new ParameterDefinition(_module.TypeSystem.String)); type.Methods.Add(method);
+        var il = method.Body.GetILProcessor();
+        foreach (var property in properties.Where(p => Attribute(p, "FieldNotifyAttribute")))
+        {
+            var next = Compare(il, property.Name);
+            foreach (var name in Dependencies(properties, property.Name))
+            { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, events); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Call, Runtime("MvvmNotifications", "Raise")); }
+            il.Emit(OpCodes.Ret); il.Append(next);
+        }
+        il.Emit(OpCodes.Ret);
     }
     private void Dispatch(TypeDefinition type, string name, List<PropertyDefinition> properties, List<MethodDefinition> commands, bool inherited)
     {

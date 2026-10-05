@@ -18,7 +18,8 @@ public class PlayerVm
     [Command] public Task Fail() => Task.FromException(Failure);
     public Exception Failure { get; } = new IOException("original command error");
 }
-[ViewModel] public class ExtendedVm : PlayerVm { [FieldNotify] public string Name { get; set; } = ""; }
+[ViewModel] public class ExtendedVm : PlayerVm { [FieldNotify] public string Name { get; set; } = ""; [FieldNotify(nameof(Gold))] public bool Rich => Gold >= 1000; }
+public static class TestConverters { [Converter] public static string Gold(int value) => "G" + value; }
 public sealed class MvvmTests
 {
     private sealed class Host : IUIHost
@@ -32,6 +33,7 @@ public sealed class MvvmTests
         public void Edit(int value) { Value = value; Changed?.Invoke(); } public void Dispose() { }
     }
     private static IMvvmObject Object(object vm) => (IMvvmObject)vm;
+    [Fact] public void StaticConvertersUseDirectWovenCalls() => Assert.Equal("G10", Converters.Find("UIFramework.Mvvm.Tests.TestConverters.Gold")(10));
     [Fact] public void SetterPreservesLogicAndComputedDependencies()
     {
         var vm = new PlayerVm(); var changes = new List<string>(); ((INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
@@ -46,7 +48,7 @@ public sealed class MvvmTests
         Assert.Same(vm.Failure, await Assert.ThrowsAsync<IOException>(() => bound.Execute("Fail", null, default)));
     }
     [Fact] public void DerivedVmObservesBaseProperties()
-    { var vm = new ExtendedVm(); var names = new List<string>(); ((INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => names.Add(e.PropertyName!); vm.Gold = 20; vm.Name = "A"; Assert.Equal(new[] { "Gold", "CanBuy", "Name" }, names); Assert.Equal(20, Object(vm).Read("Gold")); }
+    { var vm = new ExtendedVm(); var names = new List<string>(); ((INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => names.Add(e.PropertyName!); vm.Gold = 20; vm.Name = "A"; Assert.Equal(new[] { "Gold", "Rich", "CanBuy", "Name" }, names); Assert.Equal(20, Object(vm).Read("Gold")); }
     [Fact] public async Task TwoWayNormalizesAndUnsubscribes()
     {
         await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.UseMvvm(runtime);

@@ -1769,3 +1769,13 @@ GitHub Actions 的 Documentation 工作流仅在 PR 构建检查和手动 workfl
 两端 GUI 参考 UE Viewmodels、View Bindings、控件属性入口；Unity 使用 UXML／USS，不使用 IMGUI，运行时保持 uGUI。支持原生资产发现、三种来源、拖放搜索、方向与转换、列表条目资源、保存／Undo／Prefab override，以及独立临时 Runtime 安全预览；预览不执行命令、不写原资产。Manual 无预览工厂时明确显示缺少预览来源。
 
 验收包含两端真实游戏 UI 示例、核心和织入回归、Godot headless、Unity 原生编辑器／Play Mode、隔离 WebGL IL2CPP 示例。阶段验证后本地提交，不推送。当前已完成节点扩展和通知／访问 Weaver 初始接入：原有核心 157 项、织入后运行测试 5 项通过（setter 副作用与相等值、计算依赖、继承通知、直接命令与异常身份、双向归一化、嵌套替换与解除订阅）；列表、完整错误边界、两端适配／GUI／预览、Demo 和 AOT 验收仍在实施，不能据此宣称模块完成。
+
+### 18.1 运行时与两端接入阶段
+
+运行时现已包含三种来源的所有权、跨 Context 共享、带循环引用的资产克隆、绑定清理、嵌套路径替换、双向归一化、集合增量操作、共享命令忙碌状态和取消等待。Weaver 生成直接访问入口及成员描述，计算依赖通过虚方法覆盖支持继承。Cecil 固定为 0.11.5，与 Unity 的官方 Mono Cecil 包保持一致；仅构建工具引用，不进入游戏运行时。
+
+Unity 通过 ILPostProcessor 处理项目程序集及 Portable PDB，注入 Preserve 入口供后续裁剪验证。Godot GUI 插件以源码安装到 addons，确保原生场景能保存 C# 脚本引用；Prepare-GodotMvvm.ps1 从模块源码安装，Demo 内生成副本不重复维护。代码绑定可用 UseMvvm；原生配置和帧观察分别通过 UseUnityMvvm／UseGodotMvvm 一次接入。
+
+两端编辑器已具备数据源、绑定表、成员拖放、转换器筛选和属性入口。Unity 使用 UXML／USS；Godot 使用 EditorDock／Inspector 插件及原生 Undo 管理器。初始值预览使用独立 Runtime 克隆来源，禁用命令与反向写入，退出时恢复显示值。完整 GUI 操作验证仍在继续。
+
+本阶段验证：核心／生成器 157 项，MVVM 织入后运行测试 13 项通过；Godot 原生 headless 14 项通过，覆盖资产不变、循环引用、原生类型数组独立、双向编辑、命令、清理、预览恢复和场景配置保存重开。Unity 真实 ILPP 编译与原生 Play Mode 1 项资产／绑定流程通过。Godot 插件启用后的 headless 编辑器导入通过。游戏 Demo 业务迁移、完整 GUI Undo／Prefab 验收、双语用户文档和 WebGL IL2CPP 尚未完成，模块仍处于实施中。
