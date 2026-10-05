@@ -6,6 +6,8 @@
 
 ## 文档
 
+双击根目录的 [Open-Docs.cmd](Open-Docs.cmd)，自动启动本地文档并打开浏览器。也可运行 `./scripts/Open-Docs.ps1`；需要 Node.js 22+，首次运行自动安装文档依赖。
+
 | 章节 | 中文 | English |
 | --- | --- | --- |
 | Getting Started | [Godot](docs/site/getting-started/godot.md) / [Unity](docs/site/getting-started/unity.md) | [Godot](docs/site/en/getting-started/godot.md) / [Unity](docs/site/en/getting-started/unity.md) |

@@ -1815,3 +1815,7 @@ Godot 购买确认改为单个命令执行购买、CloseToAsync、奖励展示�
 项目只使用节点绑定和 Context.RegisterViewModelFactory／GetSharedViewModel／WhenMvvmIdleAsync。跨 Context 共享使用 second.ShareMvvm(first)，需在创建节点前配置；引用计数由内部维护，最后一个 Context 自动释放 Runtime。ConfigureMvvm 保留给模块适配、隔离预览及低层测试，不作为入门初始化步骤。
 
 两端 Demo 移除 Runtime 构造、启用和释放；项目订阅节点仅负责自身模型事件，不再承担 MVVM 生命周期。验证：核心 157、MVVM 34（包括无 VM 声明时的启动织入、自动初始化／释放、共享 Context 最后释放）、Godot 客户端 139、原生 MVVM 14、Unity Play Mode 26、WebGL IL2CPP 高裁剪 17 项通过。Godot 编辑器来源／Undo／配置恢复，Unity 编辑器 Undo／Prefab Override／预览恢复通过。源码构建无警告无错误，中英文文档链接／代码一致性及站点构建通过。
+
+### 文档快捷启动
+
+新增根目录 Open-Docs.cmd 与 scripts/Open-Docs.ps1：双击启动 VitePress 并打开网页；已运行服务直接复用，端口占用其他站点明确报错。服务在后台隐藏启动，首次缺少依赖时执行锁定依赖安装。默认 4173，Port 可指定，NoBrowser 用于不打开窗口的验证。
