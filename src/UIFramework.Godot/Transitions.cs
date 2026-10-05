@@ -3,7 +3,7 @@ using Godot;
 namespace UIFramework.Godot;
 
 /// <summary>Offsets displace the authored anchored rectangle; relative offsets follow live size, scale/alpha multiply authored values.</summary>
-public sealed record GodotTransitionFrame
+public sealed record TransitionFrame
 {
     public Vector2 Offset { get; init; }
     public Vector2 RelativeOffset { get; init; }
@@ -12,35 +12,37 @@ public sealed record GodotTransitionFrame
 }
 
 /// <summary>Immutable reusable recipes. Every operation captures independent presentation state.</summary>
-public static class GodotTransitions
+public static class Transitions
 {
+    public static IUITransition Select(Func<TransitionContext, IUITransition> select) => global::UIFramework.Transitions.Select(select);
+
     private static bool Destroyed(TransitionContext context, GodotObject target) =>
-        context.Node.Element is GodotUIElement { IsLifetimeEnding: true } &&
+        context.Node.Element is UIElement { IsLifetimeEnding: true } &&
         (!GodotObject.IsInstanceValid(target) || target is global::Godot.Node node && node.IsQueuedForDeletion());
     public static IUITransition Fade(double duration = 0.15, string? targetPath = null, double delay = 0,
         Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut) =>
-        GodotUI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Fade));
+        UI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Fade));
     public static IUITransition SlideHorizontal(double duration = 0.20, string? targetPath = null, double delay = 0,
         Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut) =>
-        GodotUI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Slide));
+        UI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Slide));
     public static IUITransition ScaleFade(double duration = 0.16, float fromScale = 0.94f, string? targetPath = null,
         double delay = 0, Tween.TransitionType transition = Tween.TransitionType.Cubic, Tween.EaseType ease = Tween.EaseType.InOut) =>
-        GodotUI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Scale, fromScale));
+        UI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Scale, fromScale));
 
     /// <summary>Explicit start/end frames, independent of entering/exiting; use Transitions.Select to choose them.</summary>
-    public static IUITransition Simple(GodotTransitionFrame from, GodotTransitionFrame to, double duration = 0.20,
+    public static IUITransition Simple(TransitionFrame from, TransitionFrame to, double duration = 0.20,
         double delay = 0, string? targetPath = null, Tween.TransitionType transition = Tween.TransitionType.Cubic,
         Tween.EaseType ease = Tween.EaseType.InOut) =>
-        GodotUI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Custom, from: from, to: to));
+        UI.Configure(() => new Recipe(duration, delay, targetPath, transition, ease, Effect.Custom, from: from, to: to));
 
     /// <summary>Project restoration must restore all animation-owned tracks; method/audio tracks remain project responsibilities.</summary>
     public static IUITransition Animation(string playerPath, string enterAnimation, string exitAnimation,
-        Action<Control> restore) => GodotUI.Configure(() => new AnimationRecipe(playerPath, enterAnimation, exitAnimation, restore));
+        Action<Control> restore) => UI.Configure(() => new AnimationRecipe(playerPath, enterAnimation, exitAnimation, restore));
 
     private enum Effect { Fade, Slide, Scale, Custom }
-    private static Control Display(TransitionContext context) => context.Element is GodotUIElement element
+    private static Control Display(TransitionContext context) => context.Element is UIElement element
         ? element.Control : throw new ArgumentException("A Godot transition requires a Godot display.");
-    private static void ValidateFrame(GodotTransitionFrame frame)
+    private static void ValidateFrame(TransitionFrame frame)
     {
         ArgumentNullException.ThrowIfNull(frame);
         if (!frame.Offset.IsFinite() || !frame.RelativeOffset.IsFinite() || !frame.Scale.IsFinite()
@@ -56,9 +58,9 @@ public static class GodotTransitions
         private readonly float _scale;
         private readonly Tween.TransitionType _transition;
         private readonly Tween.EaseType _ease;
-        private readonly GodotTransitionFrame? _from, _to;
+        private readonly TransitionFrame? _from, _to;
         public Recipe(double duration, double delay, string? path, Tween.TransitionType transition, Tween.EaseType ease,
-            Effect effect, float scale = 1, GodotTransitionFrame? from = null, GodotTransitionFrame? to = null)
+            Effect effect, float scale = 1, TransitionFrame? from = null, TransitionFrame? to = null)
         {
             if (!double.IsFinite(duration) || duration < 0) throw new ArgumentOutOfRangeException(nameof(duration));
             if (!double.IsFinite(delay) || delay < 0 || !double.IsFinite(duration + delay)) throw new ArgumentOutOfRangeException(nameof(delay));
@@ -75,7 +77,7 @@ public static class GodotTransitions
             var root = Display(context);
             var target = _path == null ? root : root.GetNode<Control>(_path)
                 ?? throw new KeyNotFoundException($"Animation target '{_path}' was not found.");
-            var neutral = new GodotTransitionFrame();
+            var neutral = new TransitionFrame();
             var away = _effect switch
             {
                 Effect.Fade => neutral with { Alpha = 0 },
@@ -87,13 +89,13 @@ public static class GodotTransitions
             var to = _effect == Effect.Custom ? _to! : context.Entering ? neutral : away;
             return new Run(target, context, _duration, _delay, _transition, _ease, from, to);
         }
-        private static GodotTransitionFrame SlideFrame(TransitionContext context)
+        private static TransitionFrame SlideFrame(TransitionContext context)
         {
             if (context.Direction == TransitionDirection.None)
                 throw new InvalidOperationException("SlideHorizontal requires a stack forward/backward operation.");
             var sign = context.Direction == TransitionDirection.Forward ? 1f : -1f;
             if (!context.Entering) sign = -sign;
-            return new GodotTransitionFrame { RelativeOffset = new Vector2(sign, 0) };
+            return new TransitionFrame { RelativeOffset = new Vector2(sign, 0) };
         }
     }
     private sealed class Run : IUITransitionRun
@@ -103,13 +105,13 @@ public static class GodotTransitions
         private readonly double _duration, _delay;
         private readonly Tween.TransitionType _transition;
         private readonly Tween.EaseType _ease;
-        private readonly GodotTransitionFrame _from, _to;
+        private readonly TransitionFrame _from, _to;
         private readonly bool _move, _resize, _fade;
         private readonly Color _color;
         private readonly Vector2 _scale, _pivot;
         private readonly Vector4 _offsets;
         public Run(Control target, TransitionContext context, double duration, double delay,
-            Tween.TransitionType transition, Tween.EaseType ease, GodotTransitionFrame from, GodotTransitionFrame to)
+            Tween.TransitionType transition, Tween.EaseType ease, TransitionFrame from, TransitionFrame to)
         {
             _target = target; _context = context; _duration = duration; _delay = delay; _transition = transition; _ease = ease;
             _from = from; _to = to;
@@ -149,7 +151,7 @@ public static class GodotTransitions
             var elapsed = 0d;
             while (elapsed < total)
             {
-                await ((GodotUIHost)_context.Node.Context.Host).NextFrameAsync();
+                await ((UIHost)_context.Node.Context.Host).NextFrameAsync();
                 token.ThrowIfCancellationRequested();
                 elapsed += _target.GetProcessDeltaTime();
                 Apply(Math.Min(elapsed, total));
@@ -210,7 +212,7 @@ public static class GodotTransitions
                 player.Advance(0);
                 while (!finished)
                 {
-                    await ((GodotUIHost)context.Node.Context.Host).NextFrameAsync();
+                    await ((UIHost)context.Node.Context.Host).NextFrameAsync();
                     token.ThrowIfCancellationRequested();
                     if (finished) break;
                     if (!player.IsPlaying() || player.CurrentAnimation != name)
@@ -222,14 +224,14 @@ public static class GodotTransitions
                 context.ReportProgress(1);
             }
             catch (Exception ex) { primary = ex; throw; }
-            finally { if (!Destroyed(context, player)) GodotUI.Cleanup(primary, () => player.AnimationFinished -= Finished); }
+            finally { if (!Destroyed(context, player)) UI.Cleanup(primary, () => player.AnimationFinished -= Finished); }
         }
         public void Restore()
         {
             Exception? primary = null;
             try { if (!Destroyed(context, player)) player.Stop(keepState: true); }
-            catch (Exception ex) { GodotUI.Report(ex, "Stop transition animation"); primary = ex; }
-            if (!Destroyed(context, root)) GodotUI.Cleanup(primary, () => restore(root));
+            catch (Exception ex) { UI.Report(ex, "Stop transition animation"); primary = ex; }
+            if (!Destroyed(context, root)) UI.Cleanup(primary, () => restore(root));
             if (primary != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
         }
     }

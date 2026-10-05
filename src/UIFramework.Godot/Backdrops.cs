@@ -2,11 +2,11 @@ using Godot;
 
 namespace UIFramework.Godot;
 
-public static class GodotBackdrops
+public static class Backdrops
 {
     /// <summary>observe must retain and inspect each task, including failures after the backdrop is freed.</summary>
     public static IUIBackdropFactory Dim(Action<Task> observe, Color? color = null, double duration = 0.12) =>
-        GodotUI.Configure(() => new Factory(observe, color ?? new Color(0.08f, 0.14f, 0.13f, 0.68f), duration));
+        UI.Configure(() => new Factory(observe, color ?? new Color(0.08f, 0.14f, 0.13f, 0.68f), duration));
 
     private sealed class Factory : IUIBackdropFactory
     {
@@ -24,7 +24,7 @@ public static class GodotBackdrops
         public Task<IUIBackdrop> CreateAsync(IUIElement? mount, Func<Task> requestDismiss, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            if (mount is not GodotUIElement target) throw new ArgumentException("Backdrop requires a Godot mount.");
+            if (mount is not UIElement target) throw new ArgumentException("Backdrop requires a Godot mount.");
             var control = new ColorRect { Name = "ModalBackdrop", Color = _color, MouseFilter = Control.MouseFilterEnum.Stop, Visible = false };
             try
             {
@@ -37,16 +37,16 @@ public static class GodotBackdrops
     }
     private sealed class Backdrop : IUIBackdrop
     {
-        private readonly GodotUIElement _display;
-        private readonly GodotLifetimeRunner _frames;
+        private readonly UIElement _display;
+        private readonly LifetimeRunner _frames;
         private readonly double _duration;
         private readonly Func<Task> _dismiss;
         private readonly Action<Task> _observe;
         private readonly ColorRect _control;
         private bool _interactive;
-        public Backdrop(ColorRect control, double duration, Func<Task> dismiss, Action<Task> observe, GodotUIElement mount)
+        public Backdrop(ColorRect control, double duration, Func<Task> dismiss, Action<Task> observe, UIElement mount)
         {
-            _frames = GodotLifetimeRunner.Get(control.GetTree()); _control = control; _display = new GodotUIElement(control, true, mount);
+            _frames = LifetimeRunner.Get(control.GetTree()); _control = control; _display = new UIElement(control, true, mount);
             _duration = duration; _dismiss = dismiss; _observe = observe;
             control.GuiInput += Input;
         }
@@ -60,7 +60,7 @@ public static class GodotBackdrops
                     // The observer belongs to the application, not this soon-to-be-disposed display.
                     _observe(_dismiss());
                 }
-                catch (Exception ex) { GodotUI.Report(ex, "Observe backdrop dismiss request"); throw; }
+                catch (Exception ex) { UI.Report(ex, "Observe backdrop dismiss request"); throw; }
             }
         }
         public Task ShowAsync(bool playAnimation, CancellationToken token) => ChangeAsync(true, playAnimation, token);
@@ -95,10 +95,10 @@ public static class GodotBackdrops
             catch (Exception ex)
             {
                 primary = ex;
-                if (!_display.DisplayWasDestroyed) GodotUI.Cleanup(ex, () => _control.Visible = wasVisible);
+                if (!_display.DisplayWasDestroyed) UI.Cleanup(ex, () => _control.Visible = wasVisible);
                 throw;
             }
-            finally { if (!_display.DisplayWasDestroyed) GodotUI.Cleanup(primary, () => _control.Modulate = original); }
+            finally { if (!_display.DisplayWasDestroyed) UI.Cleanup(primary, () => _control.Modulate = original); }
         }
         public void SetVisible(bool visible) => _display.SetVisible(visible);
         public void Restore(bool visible) { if (_display.DisplayWasDestroyed) return; _control.Modulate = Colors.White; _display.SetVisible(visible); }

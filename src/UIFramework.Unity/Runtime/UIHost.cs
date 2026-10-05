@@ -7,14 +7,14 @@ using UnityEngine.UI;
 
 namespace UIFramework.Unity
 {
-    public sealed class UnityUIHost : IUIHost, IUILog
+    public sealed class UIHost : IUIHost, IUILog
     {
         private readonly int _thread = Thread.CurrentThread.ManagedThreadId;
         private readonly EventSystem _events;
-        private readonly UnityFramePump _frames;
+        private readonly FramePump _frames;
         private bool _lifetimeEnding;
         internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
-        public UnityUIHost(EventSystem events, UnityFramePump frames)
+        public UIHost(EventSystem events, FramePump frames)
         {
             _events = events ? events : throw new ArgumentNullException(nameof(events));
             _frames = frames ? frames : throw new ArgumentNullException(nameof(frames));
@@ -32,7 +32,7 @@ namespace UIFramework.Unity
             VerifyAccess();
             if (element == null) return;
             VerifyEvents();
-            if (!(element is UnityUIElement display)) throw new ArgumentException("Expected a Unity display.", nameof(element));
+            if (!(element is UIElement display)) throw new ArgumentException("Expected a Unity display.", nameof(element));
             foreach (var selectable in display.Rect.GetComponentsInChildren<Selectable>())
                 if (selectable.isActiveAndEnabled && selectable.IsInteractable())
                 { _events.SetSelectedGameObject(selectable.gameObject); return; }

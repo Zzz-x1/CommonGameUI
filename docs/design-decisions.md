@@ -1865,4 +1865,12 @@ Core 增加 IUINode，业务对象通过一个 Core UINode 执行状态与清理
 
 本阶段 Core 构建无警告，核心／生成器 163 项、MVVM 34 项通过。新增 5 项验证资源业务身份、单实例重开、配置与参数顺序、来源历史身份、原生结果弹窗以及配置失败的原始异常与资源释放、工厂返回空时不转用资源脚本。两端原生类、Demo、编辑器和用户示例仍在迁移，尚未完成本次整体重构或引擎验收。
 
-用户进一步要求编辑器可配置转换器，参考 [UE MVVM 工作流](https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-viewmodel-for-unreal-engine)。绑定行支持类型筛选的转换函数选择；选择后显示函数参数配置，参数可来自明确常量或 VM 成员；多来源参数变更触发重新求值。双向绑定的正向和反向分别配置，不能猜测逆转换。沿用显式 Converter 标记与 Cecil 直接调用，不增加运行时反射业务调用或新 Analyzer；GUI 配置、预览和运行时使用同一转换执行逻辑，错误原样传播。
+用户进一步要求编辑器可配置转换器，参考 [UE MVVM 工作流](https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-viewmodel-for-unreal-engine)。绑定行支持类型筛选的转换函数选择；选择后显示函数参数配置，遵循 UE 一个输入、一个返回值的转换函数范围，输入可来自明确常量或 VM 成员，成员变更触发重新求值；本轮不添加多输入转换机制。双向绑定的正向和反向分别配置，不能猜测逆转换。沿用显式 Converter 标记与 Cecil 直接调用，不增加运行时反射业务调用或新 Analyzer；GUI 配置、预览和运行时使用同一转换执行逻辑，错误原样传播。
+
+### 21.2 原生基类与资源阶段（实施中）
+
+两端业务基类已改为原生组件：Unity UINode 继承 MonoBehaviour，Godot UINode 继承 Control。资源注册从 Prefab／PackedScene 根节点取得实际业务脚本，配置回调在 Context 与参数建立后执行，框架初始化前完成 Awake／_Ready；原生回调仅负责本地控件准备，Context 业务使用框架初始化。GetRoot 与 GetControl 使用统一名称；业务脚本可直接序列化原生控件引用。Godot 的原生 Name／IsVisible 与逻辑命名冲突，因此两端业务基类统一暴露 UIName／IsUIVisible，IUINode 接口仍使用 Name／IsVisible。
+
+原生节点自动绑定组件生命周期，显式绑定其他对象不覆盖自动绑定。Unity 原生测试发现销毁时释放显示对象早于转场恢复；现由节点取消 Lifetime，并等待参与转场完成恢复后再释放。新增回归验证原始取消异常及无额外清理错误。
+
+验证：核心／生成器 164 项、Unity 原生节点 7 项通过；Godot 首个窗口教程 8 项 headless 通过；Unity 教程及两端适配构建无警告无错误。首个窗口中英文教程已同步原生脚本挂载和控件引用。游戏 Demo、完整 MVVM 编辑器和其余用户文档仍在迁移，本阶段不代表整体重构完成。

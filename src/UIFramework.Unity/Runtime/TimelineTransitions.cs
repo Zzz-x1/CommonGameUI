@@ -6,10 +6,10 @@ using UnityEngine.Playables;
 
 namespace UIFramework.Unity
 {
-    public static partial class UnityTransitions
+    public static partial class Transitions
     {
         public static IUITransition Timeline(string enterDirectorPath, string exitDirectorPath, Action<RectTransform> restore) =>
-            UnityUI.Configure<IUITransition>(() => new TimelineRecipe(enterDirectorPath, exitDirectorPath, restore ?? throw new ArgumentNullException(nameof(restore))));
+            UI.Configure<IUITransition>(() => new TimelineRecipe(enterDirectorPath, exitDirectorPath, restore ?? throw new ArgumentNullException(nameof(restore))));
 
         private sealed class TimelineRecipe : IUITransition
         {
@@ -19,7 +19,7 @@ namespace UIFramework.Unity
             { _enter = enter; _exit = exit; _restore = restore; }
             public IUITransitionRun Create(TransitionContext context)
             {
-                var root = context.Node.GetRect(); var path = context.Entering ? _enter : _exit;
+                var root = context.Node.GetRoot(); var path = context.Entering ? _enter : _exit;
                 var target = path == null ? root : root.Find(path);
                 if (!target) throw new InvalidOperationException("Timeline director path not found: " + path);
                 var director = target.GetComponent<PlayableDirector>();
@@ -56,7 +56,7 @@ namespace UIFramework.Unity
                 _director.extrapolationMode = DirectorWrapMode.Hold;
                 _director.time = 0; _director.Play(); _director.Evaluate();
                 _context.ReportProgress(0);
-                var host = (UnityUIHost)_context.Node.Context.Host;
+                var host = (UIHost)_context.Node.Context.Host;
                 var started = Time.realtimeSinceStartupAsDouble;
                 double elapsed;
                 do
@@ -81,7 +81,7 @@ namespace UIFramework.Unity
                     _director.timeUpdateMode = _mode; _director.extrapolationMode = _wrap; _director.time = _time;
                 }
                 catch (Exception error) { first = error; throw; }
-                finally { UnityUI.Cleanup(first, () => _restore(_root)); }
+                finally { UI.Cleanup(first, () => _restore(_root)); }
             }
         }
     }

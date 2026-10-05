@@ -6,10 +6,10 @@ using UnityEngine.UI;
 
 namespace UIFramework.Unity
 {
-    public static class UnityBackdrops
+    public static class Backdrops
     {
         public static IUIBackdropFactory Dim(Action<Task> observe, Color? color = null, double duration = .15) =>
-            UnityUI.Configure<IUIBackdropFactory>(() => new Factory(observe, color ?? new Color(.04f, .07f, .12f, .7f), duration));
+            UI.Configure<IUIBackdropFactory>(() => new Factory(observe, color ?? new Color(.04f, .07f, .12f, .7f), duration));
         private sealed class Factory : IUIBackdropFactory
         {
             private readonly Action<Task> _observe;
@@ -24,7 +24,7 @@ namespace UIFramework.Unity
             public Task<IUIBackdrop> CreateAsync(IUIElement mount, Func<Task> requestDismiss, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
-                var target = mount as UnityUIElement ?? throw new ArgumentException("Backdrop requires a Unity mount.");
+                var target = mount as UIElement ?? throw new ArgumentException("Backdrop requires a Unity mount.");
                 target.Host.VerifyAccess();
                 var go = new GameObject("ModalBackdrop", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Button));
                 try
@@ -37,17 +37,17 @@ namespace UIFramework.Unity
                     button.navigation = new Navigation { mode = Navigation.Mode.None };
                     button.onClick.AddListener(() => _observe(requestDismiss()));
                     go.SetActive(false);
-                    return Task.FromResult<IUIBackdrop>(new Backdrop(new UnityUIElement(target.Host, rect, true, target), _duration));
+                    return Task.FromResult<IUIBackdrop>(new Backdrop(new UIElement(target.Host, rect, true, target), _duration));
                 }
-                catch (Exception ex) { UnityUI.Cleanup(ex, () => { go.transform.SetParent(null); UnityEngine.Object.Destroy(go); }); throw; }
+                catch (Exception ex) { UI.Cleanup(ex, () => { go.transform.SetParent(null); UnityEngine.Object.Destroy(go); }); throw; }
             }
         }
         private sealed class Backdrop : IUIBackdrop
         {
-            private readonly UnityUIElement _display;
+            private readonly UIElement _display;
             private readonly CanvasGroup _group;
             private readonly double _duration;
-            public Backdrop(UnityUIElement display, double duration)
+            public Backdrop(UIElement display, double duration)
             { _display = display; _group = display.Rect.GetComponent<CanvasGroup>(); _duration = duration; }
             public Task ShowAsync(bool playAnimation, CancellationToken token) => ChangeAsync(true, playAnimation, token);
             public Task HideAsync(bool playAnimation, CancellationToken token) => ChangeAsync(false, playAnimation, token);
@@ -74,10 +74,10 @@ namespace UIFramework.Unity
                 catch (Exception ex)
                 {
                     primary = ex;
-                    UnityUI.Cleanup(ex, () => _display.SetVisible(wasVisible));
+                    UI.Cleanup(ex, () => _display.SetVisible(wasVisible));
                     throw;
                 }
-                finally { if (!_display.DisplayWasDestroyed) UnityUI.Cleanup(primary, () => _group.alpha = original); }
+                finally { if (!_display.DisplayWasDestroyed) UI.Cleanup(primary, () => _group.alpha = original); }
             }
             public void Restore(bool visible) => _display.SetVisible(visible);
             public void SetVisible(bool visible) => _display.SetVisible(visible);

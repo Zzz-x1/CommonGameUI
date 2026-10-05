@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace UIFramework.Unity
 {
-    public sealed class UnityUIElement : IUIElement
+    public sealed class UIElement : IUIElement, IUIResourceNodeProvider
     {
         private sealed class GroupDefaults
         {
@@ -15,18 +15,18 @@ namespace UIFramework.Unity
             { Interactive = group.interactable; Raycasts = group.blocksRaycasts; IgnoreParents = group.ignoreParentGroups; }
         }
         private static readonly ConditionalWeakTable<CanvasGroup, GroupDefaults> Defaults = new ConditionalWeakTable<CanvasGroup, GroupDefaults>();
-        private readonly UnityUIHost _host;
+        private readonly UIHost _host;
         private readonly bool _owned;
         private readonly CanvasGroup _group;
         private readonly GroupDefaults _default;
         private bool _disposed;
         private bool _lifetimeEnding;
-        private readonly UnityUIElement _lifetimeOwner;
+        private readonly UIElement _lifetimeOwner;
         internal bool IsLifetimeEnding => _lifetimeEnding || (_lifetimeOwner?.IsLifetimeEnding ?? false);
         internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
         internal bool DisplayWasDestroyed => !_disposed && IsLifetimeEnding && (!Rect);
-        public UnityUIElement(UnityUIHost host, RectTransform rect, bool owned = false) : this(host, rect, owned, null) { }
-        internal UnityUIElement(UnityUIHost host, RectTransform rect, bool owned, UnityUIElement lifetimeOwner)
+        public UIElement(UIHost host, RectTransform rect, bool owned = false) : this(host, rect, owned, null) { }
+        internal UIElement(UIHost host, RectTransform rect, bool owned, UIElement lifetimeOwner)
         {
             _lifetimeOwner = lifetimeOwner;
             _host = host ?? throw new ArgumentNullException(nameof(host));
@@ -38,12 +38,21 @@ namespace UIFramework.Unity
             _default = Defaults.GetValue(_group, g => new GroupDefaults(g));
             foreach (var group in rect.GetComponentsInChildren<CanvasGroup>(true)) Defaults.GetValue(group, item => new GroupDefaults(item));
         }
+
+        public IUINode GetNode(Type businessType)
+        {
+            VerifyAlive();
+            var scripts = Rect.GetComponents<UINode>();
+            if (scripts.Length != 1 || !businessType.IsInstanceOfType(scripts[0]))
+                throw new InvalidOperationException("UI prefab root must contain exactly one matching UI script: " + businessType.FullName);
+            return scripts[0];
+        }
         public RectTransform Rect { get; }
-        public UnityUIHost Host => _host;
+        public UIHost Host => _host;
         private void VerifyAlive()
         {
             _host.VerifyAccess();
-            if (_disposed || !Rect) throw new ObjectDisposedException(nameof(UnityUIElement));
+            if (_disposed || !Rect) throw new ObjectDisposedException(nameof(UIElement));
         }
         public void SetVisible(bool visible) { if (DisplayWasDestroyed) return; VerifyAlive(); Rect.gameObject.SetActive(visible); }
         public void SetInteractive(bool interactive)

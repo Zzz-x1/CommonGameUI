@@ -2,12 +2,12 @@ using Godot;
 
 namespace UIFramework.Godot;
 
-public sealed class GodotUIHost : IUIHost, IUILog
+public sealed class UIHost : IUIHost, IUILog
 {
     private readonly int _thread = System.Environment.CurrentManagedThreadId;
     private readonly Viewport _viewport;
-    private readonly GodotLifetimeRunner _frames;
-    public GodotUIHost(Viewport viewport) { _viewport = viewport; _frames = GodotLifetimeRunner.Get(viewport.GetTree()); }
+    private readonly LifetimeRunner _frames;
+    public UIHost(Viewport viewport) { _viewport = viewport; _frames = LifetimeRunner.Get(viewport.GetTree()); }
     public Task NextFrameAsync() { VerifyAccess(); return _frames.NextFrameAsync(); }
     public void VerifyAccess()
     {
@@ -19,8 +19,8 @@ public sealed class GodotUIHost : IUIHost, IUILog
     {
         VerifyAccess();
         if (element == null) return;
-        if (!(element is GodotUIElement godot)) throw new ArgumentException("Expected a Godot display.", nameof(element));
-        var control = GodotUIElement.Enumerate(godot.Control).FirstOrDefault(c =>
+        if (!(element is UIElement godot)) throw new ArgumentException("Expected a Godot display.", nameof(element));
+        var control = UIElement.Enumerate(godot.Control).FirstOrDefault(c =>
             c.IsVisibleInTree() && c.FocusMode != Control.FocusModeEnum.None && (!(c is BaseButton b) || !b.Disabled));
         control?.GrabFocus();
     }
@@ -35,10 +35,10 @@ public sealed class GodotUIHost : IUIHost, IUILog
     public void Error(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
 }
 
-public sealed class GodotSceneLoader : IUIResourceLoader
+public sealed class UIResourceLoader : IUIResourceLoader
 {
-    private readonly GodotUIHost _host;
-    public GodotSceneLoader(GodotUIHost host) => _host = host;
+    private readonly UIHost _host;
+    public UIResourceLoader(UIHost host) => _host = host;
     public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
     {
         _host.VerifyAccess(); token.ThrowIfCancellationRequested();
@@ -56,13 +56,13 @@ public sealed class GodotSceneLoader : IUIResourceLoader
         return new SceneResource(_host, resource, scene);
     }
 
-    private sealed class SceneResource(GodotUIHost host, string path, PackedScene scene) : IUIResource
+    private sealed class SceneResource(UIHost host, string path, PackedScene scene) : IUIResource
     {
         private PackedScene? _scene = scene;
         public IUIElement Instantiate(IUIElement? mount)
         {
             host.VerifyAccess();
-            if (!(mount is GodotUIElement target)) throw new InvalidOperationException("A Godot scene needs an explicit Control mount.");
+            if (!(mount is UIElement target)) throw new InvalidOperationException("A Godot scene needs an explicit Control mount.");
             var instance = (_scene ?? throw new ObjectDisposedException(nameof(SceneResource))).Instantiate();
             if (!(instance is Control control))
             {
@@ -70,8 +70,8 @@ public sealed class GodotSceneLoader : IUIResourceLoader
                 throw new InvalidOperationException($"UI resource '{path}' must have a Control root.");
             }
             control.Visible = false;
-            try { target.Control.AddChild(control); return new GodotUIElement(control, owned: true); }
-            catch (Exception ex) { GodotUI.Cleanup(ex, control.Free); throw; }
+            try { target.Control.AddChild(control); return new UIElement(control, owned: true); }
+            catch (Exception ex) { UI.Cleanup(ex, control.Free); throw; }
         }
         public void Dispose()
         {

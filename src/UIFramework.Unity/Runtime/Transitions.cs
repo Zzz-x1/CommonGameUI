@@ -5,40 +5,42 @@ using UnityEngine;
 
 namespace UIFramework.Unity
 {
-    public sealed class UnityTransitionFrame
+    public sealed class TransitionFrame
     {
         public Vector2 Offset { get; }
         public Vector2 RelativeOffset { get; }
         public float Scale { get; }
         public float Alpha { get; }
-        public UnityTransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, float scale = 1, float alpha = 1)
+        public TransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, float scale = 1, float alpha = 1)
         { Offset = offset; RelativeOffset = relativeOffset; Scale = scale; Alpha = alpha; }
     }
-    public static partial class UnityTransitions
+    public static partial class Transitions
     {
+    public static IUITransition Select(Func<TransitionContext, IUITransition> select) => global::UIFramework.Transitions.Select(select);
+
         private static bool Destroyed(TransitionContext context, UnityEngine.Object target) =>
-            context.Node.Element is UnityUIElement display && display.IsLifetimeEnding && !target;
+            context.Node.Element is UIElement display && display.IsLifetimeEnding && !target;
         public static IUITransition Fade(double duration = .18, string targetPath = null) =>
-            Transitions.Select(c => Simple(c.Entering ? new UnityTransitionFrame(alpha: 0) : new UnityTransitionFrame(),
-                c.Entering ? new UnityTransitionFrame() : new UnityTransitionFrame(alpha: 0), duration, targetPath));
+            Transitions.Select(c => Simple(c.Entering ? new TransitionFrame(alpha: 0) : new TransitionFrame(),
+                c.Entering ? new TransitionFrame() : new TransitionFrame(alpha: 0), duration, targetPath));
         public static IUITransition ScaleFade(double duration = .22, string targetPath = null) =>
-            Transitions.Select(c => Simple(c.Entering ? new UnityTransitionFrame(scale: .85f, alpha: 0) : new UnityTransitionFrame(),
-                c.Entering ? new UnityTransitionFrame() : new UnityTransitionFrame(scale: .85f, alpha: 0), duration, targetPath));
+            Transitions.Select(c => Simple(c.Entering ? new TransitionFrame(scale: .85f, alpha: 0) : new TransitionFrame(),
+                c.Entering ? new TransitionFrame() : new TransitionFrame(scale: .85f, alpha: 0), duration, targetPath));
         public static IUITransition SlideHorizontal(double duration = .28, string targetPath = null) =>
             Transitions.Select(c =>
             {
                 var sign = c.Direction == TransitionDirection.Backward ? -1 : 1;
-                var away = new UnityTransitionFrame(relativeOffset: new Vector2(sign * (c.Entering ? 1 : -1), 0));
-                return Simple(c.Entering ? away : new UnityTransitionFrame(), c.Entering ? new UnityTransitionFrame() : away, duration, targetPath);
+                var away = new TransitionFrame(relativeOffset: new Vector2(sign * (c.Entering ? 1 : -1), 0));
+                return Simple(c.Entering ? away : new TransitionFrame(), c.Entering ? new TransitionFrame() : away, duration, targetPath);
             });
-        public static IUITransition Simple(UnityTransitionFrame from, UnityTransitionFrame to, double duration = .25, string targetPath = null, AnimationCurve easing = null) =>
-            UnityUI.Configure<IUITransition>(() =>
+        public static IUITransition Simple(TransitionFrame from, TransitionFrame to, double duration = .25, string targetPath = null, AnimationCurve easing = null) =>
+            UI.Configure<IUITransition>(() =>
             {
                 if (double.IsNaN(duration) || double.IsInfinity(duration) || duration < 0) throw new ArgumentOutOfRangeException(nameof(duration));
                 Validate(from); Validate(to);
                 return new Recipe(from, to, duration, targetPath, easing ?? AnimationCurve.EaseInOut(0, 0, 1, 1));
             });
-        private static void Validate(UnityTransitionFrame frame)
+        private static void Validate(TransitionFrame frame)
         {
             if (!Finite(frame.Offset.x) || !Finite(frame.Offset.y) || !Finite(frame.RelativeOffset.x) || !Finite(frame.RelativeOffset.y)
                 || !Finite(frame.Scale) || frame.Scale <= 0 || !Finite(frame.Alpha) || frame.Alpha < 0 || frame.Alpha > 1)
@@ -47,18 +49,18 @@ namespace UIFramework.Unity
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         internal static RectTransform Target(TransitionContext context, string path)
         {
-            var root = context.Node.GetRect();
+            var root = context.Node.GetRoot();
             if (path == null) return root;
             var target = root.Find(path) as RectTransform;
             return target ? target : throw new InvalidOperationException("Transition RectTransform not found: " + path);
         }
         private sealed class Recipe : IUITransition
         {
-            private readonly UnityTransitionFrame _from, _to;
+            private readonly TransitionFrame _from, _to;
             private readonly double _duration;
             private readonly string _path;
             private readonly AnimationCurve _easing;
-            public Recipe(UnityTransitionFrame from, UnityTransitionFrame to, double duration, string path, AnimationCurve easing)
+            public Recipe(TransitionFrame from, TransitionFrame to, double duration, string path, AnimationCurve easing)
             { _from = from; _to = to; _duration = duration; _path = path; _easing = easing; }
             public IUITransitionRun Create(TransitionContext context) => new Run(context, Target(context, _path), _from, _to, _duration, _easing);
         }
@@ -67,13 +69,13 @@ namespace UIFramework.Unity
             private readonly TransitionContext _context;
             private readonly RectTransform _target;
             private readonly CanvasGroup _group;
-            private readonly UnityTransitionFrame _from, _to;
+            private readonly TransitionFrame _from, _to;
             private readonly Vector2 _position;
             private readonly Vector3 _scale;
             private readonly float _alpha;
             private readonly double _duration;
             private readonly AnimationCurve _easing;
-            public Run(TransitionContext context, RectTransform target, UnityTransitionFrame from, UnityTransitionFrame to, double duration, AnimationCurve easing)
+            public Run(TransitionContext context, RectTransform target, TransitionFrame from, TransitionFrame to, double duration, AnimationCurve easing)
             {
                 _context = context; _target = target; _from = from; _to = to; _duration = duration; _easing = easing;
                 _group = target.GetComponent<CanvasGroup>();
@@ -82,7 +84,7 @@ namespace UIFramework.Unity
             }
             public async Task PlayAsync(CancellationToken token)
             {
-                var host = (UnityUIHost)_context.Node.Context.Host;
+                var host = (UIHost)_context.Node.Context.Host;
                 await host.NextFrameAsync();
                 token.ThrowIfCancellationRequested();
                 var size = _target.rect.size;
@@ -105,7 +107,7 @@ namespace UIFramework.Unity
             public void Restore() { if (Destroyed(_context, _target)) return; _target.anchoredPosition = _position; _target.localScale = _scale; _group.alpha = _alpha; }
         }
         public static IUITransition Animation(string playerPath, string enterClip, string exitClip, Action<RectTransform> restore) =>
-            UnityUI.Configure<IUITransition>(() => new ClipRecipe(playerPath, enterClip, exitClip, restore ?? throw new ArgumentNullException(nameof(restore))));
+            UI.Configure<IUITransition>(() => new ClipRecipe(playerPath, enterClip, exitClip, restore ?? throw new ArgumentNullException(nameof(restore))));
         private sealed class ClipRecipe : IUITransition
         {
             private readonly string _path, _enter, _exit;
@@ -140,7 +142,7 @@ namespace UIFramework.Unity
             }
             public async Task PlayAsync(CancellationToken token)
             {
-                var host = (UnityUIHost)_context.Node.Context.Host;
+                var host = (UIHost)_context.Node.Context.Host;
                 token.ThrowIfCancellationRequested();
                 _player[_name].wrapMode = WrapMode.ClampForever;
                 _player[_name].speed = 0;
@@ -170,7 +172,7 @@ namespace UIFramework.Unity
                     var state = _player[_name]; state.speed = _speed; state.time = _time; state.wrapMode = _wrap;
                 }
                 catch (Exception ex) { primary = ex; throw; }
-                finally { UnityUI.Cleanup(primary, () => _restore(_root)); }
+                finally { UI.Cleanup(primary, () => _restore(_root)); }
             }
         }
     }

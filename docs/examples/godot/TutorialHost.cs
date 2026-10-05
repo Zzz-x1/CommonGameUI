@@ -1,3 +1,4 @@
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -22,10 +23,10 @@ public partial class TutorialHost : Control
     private async Task InitializeAsync()
     {
         _openWindowButton = GetNode<Button>("OpenWindow");
-        UI = GodotUI.Create(this);
+        UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
         _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
-        UI.Register(() => new HelloWindow(_windows, Observe), "res://HelloWindow.tscn");
+        UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;
         _openWindowButton.Disabled = false;

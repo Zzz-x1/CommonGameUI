@@ -37,31 +37,22 @@ HelloWindow (Control, Full Rect, Mouse Filter=Ignore)
 
 ## 3. 编写窗口脚本
 
-新建 `HelloWindow.cs`。它继承框架的 `UINode`，不继承 Godot `Node`，也不挂到场景上。框架在打开资源时创建这个业务节点；它通过资源路径取得按钮并关闭自身。
+新建 `HelloWindow.cs`。`EngineUI.UINode` 继承 Control；`EngineUI` 是 `UIFramework.Godot` 的命名空间别名。构建后把脚本挂到 HelloWindow 场景根节点，将 Close 按钮拖入 Inspector 的 Close Button 字段。框架直接管理这个场景脚本，按钮使用原生引用。
 
 ```csharp
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using UIFramework;
-using UIFramework.Godot;
+using EngineUI = global::UIFramework.Godot;
 
-public sealed class HelloWindow : UINode
+public partial class HelloWindow : EngineUI.UINode
 {
-    private readonly PanelContainerNode _windows;
-    private readonly Action<Task> _observe;
+    [Export] public Button CloseButton { get; set; } = null!;
 
-    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _windows = windows;
-        _observe = observe;
-    }
-
-    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
-    {
-        var closeButton = this.GetControl<Button>("Content/Close");
-        closeButton.Pressed += () => _observe(_windows.CloseAsync(this));
+        CloseButton.Pressed += () => Observe(((PanelContainerNode)Parent!).CloseAsync(this));
         return Task.CompletedTask;
     }
 }
@@ -83,6 +74,7 @@ Main (Control, TutorialHost.cs)
 <summary>展开完整 TutorialHost.cs</summary>
 
 ```csharp
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -107,10 +99,10 @@ public partial class TutorialHost : Control
     private async Task InitializeAsync()
     {
         _openWindowButton = GetNode<Button>("OpenWindow");
-        UI = GodotUI.Create(this);
+        UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
         _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
-        UI.Register(() => new HelloWindow(_windows, Observe), "res://HelloWindow.tscn");
+        UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;
         _openWindowButton.Disabled = false;
@@ -147,7 +139,7 @@ public partial class TutorialHost : Control
 
 ## 5. 挂载脚本并设置主场景
 
-把 `TutorialHost.cs` 挂到 Main 根 Control 上；不要把 `HelloWindow.cs` 挂到 HelloWindow 场景上，它是由注册工厂创建的框架节点。确认节点名称与脚本中的 `GetNode` 路径一致，并在 Project Settings → Application → Run 中把 `Main.tscn` 设为主场景。
+把 `TutorialHost.cs` 挂到 Main 根 Control 上；确认 HelloWindow 场景根节点已挂载 `HelloWindow.cs`，Close Button 已引用关闭按钮。确认节点名称与脚本中的 `GetNode` 路径一致，并在 Project Settings → Application → Run 中把 `Main.tscn` 设为主场景。
 
 ## 6. 运行并检查
 

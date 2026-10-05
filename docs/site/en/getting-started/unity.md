@@ -33,31 +33,23 @@ Drag `HelloWindow` into `Assets/Resources/UI/HelloWindow.prefab`, then delete th
 
 ## 3. Write the window script
 
-Create `HelloWindow.cs`. This is a framework business node created by the registration factory. It is not a MonoBehaviour and is not attached to the Prefab. It finds the close button by its resource path and asks its container to close the current node.
+Create `HelloWindow.cs`. `EngineUI.UINode` derives from MonoBehaviour; `EngineUI` aliases the `UIFramework.Unity` namespace. After compilation, open the window Prefab, attach HelloWindow to its root and drag Content/Close into the Close Button field. The serialized reference continues to identify the control after renaming or reparenting.
 
 ```csharp
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UIFramework;
-using UIFramework.Unity;
+using UnityEngine;
 using UnityEngine.UI;
+using EngineUI = global::UIFramework.Unity;
 
-public sealed class HelloWindow : UINode
+public sealed class HelloWindow : EngineUI.UINode
 {
-    private readonly PanelContainerNode _windows;
-    private readonly Action<Task> _observe;
+    [SerializeField] private Button closeButton = null;
 
-    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _windows = windows;
-        _observe = observe;
-    }
-
-    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
-    {
-        var closeButton = this.GetComponent<Button>("Content/Close");
-        closeButton.onClick.AddListener(() => _observe(_windows.CloseAsync(this)));
+        closeButton.onClick.AddListener(() => Observe(((PanelContainerNode)Parent).CloseAsync(this)));
         return Task.CompletedTask;
     }
 }
@@ -82,6 +74,7 @@ The host creates a Context and Panel container, registers the Prefab, and opens 
 <summary>Expand the complete TutorialHost.cs</summary>
 
 ```csharp
+using EngineUI = global::UIFramework.Unity;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UIFramework;
@@ -105,10 +98,10 @@ public sealed class TutorialHost : MonoBehaviour
 
     private async Task InitializeAsync()
     {
-        _ui = UnityUI.Create(Canvas, Events);
+        _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
         _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
-        _ui.Register(() => new HelloWindow(_windows, Observe), "UI/HelloWindow");
+        _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);
         OpenWindowButton.interactable = true;
@@ -154,7 +147,7 @@ Attach `TutorialHost.cs` to the Canvas. Assign these references in the Inspector
 | WindowsMount | WindowsMount under Canvas |
 | OpenWindowButton | OpenWindowButton under Canvas |
 
-Set OpenWindowButton's Interactable value off initially. Keep both scripts in `Assets`; do not attach the `HelloWindow` class as a component. The container loads its Prefab from the path passed to `Register`.
+Set OpenWindowButton's Interactable value off initially. Confirm that the window Prefab root has a HelloWindow component and its Close Button reference is assigned. The container loads the Prefab and returns its business script; it does not call `new HelloWindow()`.
 
 ## 6. Run and check
 

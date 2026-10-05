@@ -139,4 +139,29 @@ public sealed class NativeIdentityTests
         Assert.Contains("factory returned null", error.Message);
         Assert.Empty(loader.Instances); Assert.Empty(windows.Children);
     }
+    private sealed class CancelingTransition(Action restore) : IUITransition, IUITransitionRun
+    {
+        public readonly TaskCompletionSource<bool> Started = new();
+        public IUITransitionRun Create(TransitionContext context) => this;
+        public Task PlayAsync(CancellationToken token)
+        { Started.SetResult(true); return Task.Delay(Timeout.Infinite, token); }
+        public void Restore() => restore();
+    }
+    [Fact] public async Task DisposingParticipantWaitsForTransitionRestorationBeforeReleasingDisplay()
+    {
+        var loader = new Loader(() => new View()); var host = new TestHost();
+        await using var ui = new UIContext(host, loader, host);
+        ui.Register<View>("native", view => view.Configured = true);
+        var windows = await Container<PanelContainerNode>(ui);
+        var restored = 0;
+        var transition = new CancelingTransition(() => { Assert.Equal(0, loader.Instances.Single().Disposals); restored++; });
+        windows.ChildTransition = transition;
+        var opening = windows.OpenAsync<View>(); await transition.Started.Task;
+        var owner = loader.Instances.Single().GetNode(typeof(View));
+        var disposal = owner.DisposeAsync().AsTask();
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening);
+        await disposal;
+        Assert.Equal(1, restored); Assert.Equal(1, loader.Instances.Single().Disposals);
+        Assert.Empty(UIFailure.GetSecondaryExceptions(canceled));
+    }
 }

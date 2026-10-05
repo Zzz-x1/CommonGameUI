@@ -16,6 +16,8 @@ public class UINode : IUINode
     private int _busy;
     private TaskCompletionSource<bool>? _idle;
     private Task? _disposeTask;
+    private int _transitionParticipants;
+    private TaskCompletionSource<bool>? _transitionsIdle;
     private bool _visible;
     private bool _interactive;
     private bool _committedVisible;
@@ -198,6 +200,15 @@ public class UINode : IUINode
         catch (Exception ex) { ReportFailure(ex, $"GetChild {Name}/{name}"); throw; }
     }
 
+    internal void BeginTransition()
+    {
+        if (_transitionParticipants++ == 0) _transitionsIdle = new TaskCompletionSource<bool>();
+    }
+    internal void EndTransition()
+    {
+        if (--_transitionParticipants == 0) _transitionsIdle!.SetResult(true);
+    }
+
     internal Task PrepareEnterAsync(LifecycleContext context, CancellationToken token) => RunAsync("Entering", async ct =>
     {
         await OnEnteringAsync(context, ct);
@@ -318,6 +329,7 @@ public class UINode : IUINode
             }
             await Attempt(() => { _lifetime.Cancel(); return Task.CompletedTask; });
             if (_busy != 0 && _idle != null) await _idle.Task;
+            if (_transitionParticipants != 0) await _transitionsIdle!.Task;
             await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
             foreach (var child in Enumerable.Reverse(_children.ToArray()))
                 await Attempt(async () => await child.DisposeAsync());

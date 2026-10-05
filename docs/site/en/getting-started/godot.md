@@ -37,31 +37,22 @@ Keep Mouse Filter=Stop on `Content` so the panel receives input. The script expe
 
 ## 3. Write the window script
 
-Create `HelloWindow.cs`. It derives from the framework's `UINode`, not a Godot `Node`, and is not attached to the scene. The framework creates this business node when it opens the resource; the node finds the button by path and closes itself.
+Create `HelloWindow.cs`. `EngineUI.UINode` derives from Control; `EngineUI` aliases `UIFramework.Godot`. After building, attach the script to the HelloWindow scene root and drag its Close button into the Inspector's Close Button field. The framework manages that scene script directly, and the button is a native reference.
 
 ```csharp
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using UIFramework;
-using UIFramework.Godot;
+using EngineUI = global::UIFramework.Godot;
 
-public sealed class HelloWindow : UINode
+public partial class HelloWindow : EngineUI.UINode
 {
-    private readonly PanelContainerNode _windows;
-    private readonly Action<Task> _observe;
+    [Export] public Button CloseButton { get; set; } = null!;
 
-    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _windows = windows;
-        _observe = observe;
-    }
-
-    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
-    {
-        var closeButton = this.GetControl<Button>("Content/Close");
-        closeButton.Pressed += () => _observe(_windows.CloseAsync(this));
+        CloseButton.Pressed += () => Observe(((PanelContainerNode)Parent!).CloseAsync(this));
         return Task.CompletedTask;
     }
 }
@@ -83,6 +74,7 @@ The host creates a Context and Panel container, registers the window scene, and 
 <summary>Expand the complete TutorialHost.cs</summary>
 
 ```csharp
+using EngineUI = global::UIFramework.Godot;
 using Godot;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -107,10 +99,10 @@ public partial class TutorialHost : Control
     private async Task InitializeAsync()
     {
         _openWindowButton = GetNode<Button>("OpenWindow");
-        UI = GodotUI.Create(this);
+        UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
         _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
-        UI.Register(() => new HelloWindow(_windows, Observe), "res://HelloWindow.tscn");
+        UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;
         _openWindowButton.Disabled = false;
@@ -147,7 +139,7 @@ public partial class TutorialHost : Control
 
 ## 5. Attach the script and set the main scene
 
-Attach `TutorialHost.cs` to the root Control in Main. Do not attach `HelloWindow.cs` to the HelloWindow scene; the registration factory creates that framework node. Match the node names to the `GetNode` paths in the script, then set `Main.tscn` as the main scene in Project Settings → Application → Run.
+Attach `TutorialHost.cs` to the root Control in Main. Confirm that the HelloWindow scene root has `HelloWindow.cs` attached and its Close Button field references the close button. Match the node names to the `GetNode` paths in the script, then set `Main.tscn` as the main scene in Project Settings → Application → Run.
 
 ## 6. Run and check
 

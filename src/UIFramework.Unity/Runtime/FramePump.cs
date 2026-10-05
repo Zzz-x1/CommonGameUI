@@ -6,7 +6,7 @@ using UnityEngine;
 namespace UIFramework.Unity
 {
     // Completion runs in Update on Unity's thread; no worker-thread polling or async void.
-    public sealed class UnityFramePump : MonoBehaviour
+    public sealed class FramePump : MonoBehaviour
     {
         private readonly List<TaskCompletionSource<bool>> _pending = new List<TaskCompletionSource<bool>>();
         public Task NextFrameAsync()
@@ -28,7 +28,7 @@ namespace UIFramework.Unity
             var pending = _pending.ToArray();
             _pending.Clear();
             foreach (var completion in pending)
-                completion.SetException(new ObjectDisposedException(nameof(UnityFramePump)));
+                completion.SetException(new ObjectDisposedException(nameof(FramePump)));
         }
     }
 }

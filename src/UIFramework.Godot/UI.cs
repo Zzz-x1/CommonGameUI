@@ -1,9 +1,10 @@
+using CoreNode = global::UIFramework.UINode;
 using Godot;
 
 namespace UIFramework.Godot;
 
 /// <summary>Godot setup helpers. Must be called on the scene thread.</summary>
-public static class GodotUI
+public static class UI
 {
     /// <summary>Create a context from a live scene node. Creates only the structural Root.</summary>
     public static UIContext Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null)
@@ -14,8 +15,8 @@ public static class GodotUI
             if (!GodotObject.IsInstanceValid(owner) || owner.IsQueuedForDeletion())
                 throw new ObjectDisposedException(nameof(owner));
             if (!owner.IsInsideTree()) throw new InvalidOperationException("The UI owner must be inside the Godot scene tree.");
-            var host = new GodotUIHost(owner.GetViewport());
-            return new UIContext(host, loader ?? new GodotSceneLoader(host), logger ?? host);
+            var host = new UIHost(owner.GetViewport());
+            return new UIContext(host, loader ?? new UIResourceLoader(host), logger ?? host);
         }
         catch (Exception ex) { Report(ex, "Create Godot UI context"); throw; }
     }
@@ -56,23 +57,28 @@ public static class GodotUI
 }
 
 /// <summary>Convenience APIs for borrowed scene Controls; no resources are loaded or cloned.</summary>
-public static class GodotUIExtensions
+public static class UIExtensions
 {
+        public static Task AttachToAsync(this UINode node, IUINode parent, string name, CancellationToken token = default) =>
+            node.Node.AttachAsync(parent, name, new UIElement(node), token);
+        public static Task BindAsync(this TabContainerNode tabs, string name, UINode node, CancellationToken token = default) =>
+            tabs.BindAsync(name, node, new UIElement(node), token);
+
     /// <summary>Attach an existing node to a borrowed Control. Returns the core initialization task directly.</summary>
-    public static Task AttachToAsync(this UINode node, UINode parent, string name, Control control,
+    public static Task AttachToAsync(this IUINode node, IUINode parent, string name, Control control,
         CancellationToken token = default)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(node);
             VerifyControl(parent, control);
-            return node.AttachAsync(parent, name, new GodotUIElement(control), token);
+            return node.Node.AttachAsync(parent, name, new UIElement(control), token);
         }
-        catch (Exception ex) { GodotUI.Report(ex, $"Attach Godot node '{name}'"); throw; }
+        catch (Exception ex) { UI.Report(ex, $"Attach Godot node '{name}'"); throw; }
     }
 
     /// <summary>Create and attach a container to a borrowed mount. No project containers are supplied automatically.</summary>
-    public static async Task<T> CreateContainerAsync<T>(this UINode parent, string name, Control mount,
+    public static async Task<T> CreateContainerAsync<T>(this IUINode parent, string name, Control mount,
         CancellationToken token = default) where T : ContainerNode, new()
     {
         try
@@ -83,53 +89,53 @@ public static class GodotUIExtensions
             await node.AttachToAsync(parent, name, mount, token);
             return node;
         }
-        catch (Exception ex) { GodotUI.Report(ex, $"Create Godot container '{name}'"); throw; }
+        catch (Exception ex) { UI.Report(ex, $"Create Godot container '{name}'"); throw; }
     }
 
     /// <summary>Bind a borrowed embedded page using a basic node.</summary>
     public static Task BindAsync(this TabContainerNode tabs, string name, Control page,
-        CancellationToken token = default) => tabs.BindAsync(name, new UINode(), page, token);
+        CancellationToken token = default) => tabs.BindAsync(name, new CoreNode(), page, token);
 
     /// <summary>Bind a borrowed embedded page using a custom node.</summary>
-    public static Task BindAsync(this TabContainerNode tabs, string name, UINode node, Control page,
+    public static Task BindAsync(this TabContainerNode tabs, string name, IUINode node, Control page,
         CancellationToken token = default)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(node);
             VerifyControl(tabs, page);
-            return tabs.BindAsync(name, node, new GodotUIElement(page), token);
+            return tabs.BindAsync(name, node, new UIElement(page), token);
         }
-        catch (Exception ex) { GodotUI.Report(ex, $"Bind Godot Tab '{name}'"); throw; }
+        catch (Exception ex) { UI.Report(ex, $"Bind Godot Tab '{name}'"); throw; }
     }
 
     /// <summary>Get the live Control associated with this logical node.</summary>
-    public static Control GetControl(this UINode node)
+    public static Control GetRoot(this IUINode node)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(node);
             node.Context.Host.VerifyAccess();
             if (node.State is NodeState.Disposing or NodeState.Disposed) throw new ObjectDisposedException(node.Name);
-            if (node.Element is not GodotUIElement display) throw new InvalidOperationException("Node does not have a Godot Control display.");
+            if (node.Element is not UIElement display) throw new InvalidOperationException("Node does not have a Godot Control display.");
             VerifyControl(node, display.Control);
             return display.Control;
         }
-        catch (Exception ex) { GodotUI.Report(ex, "Get Godot Control"); throw; }
+        catch (Exception ex) { UI.Report(ex, "Get Godot Control"); throw; }
     }
 
     /// <summary>Get a typed child Control; missing paths and mismatched types fail explicitly.</summary>
-    public static T GetControl<T>(this UINode node, string path) where T : Control
+    public static T GetControl<T>(this IUINode node, string path) where T : Control
     {
         try
         {
-            return node.GetControl().GetNode<T>(path)
+            return node.GetRoot().GetNode<T>(path)
                 ?? throw new KeyNotFoundException($"Godot Control path '{path}' was not found.");
         }
-        catch (Exception ex) { GodotUI.Report(ex, $"Get Godot Control '{path}'"); throw; }
+        catch (Exception ex) { UI.Report(ex, $"Get Godot Control '{path}'"); throw; }
     }
 
-    private static void VerifyControl(UINode parent, Control control)
+    private static void VerifyControl(IUINode parent, Control control)
     {
         ArgumentNullException.ThrowIfNull(parent);
         parent.Context.Host.VerifyAccess();
@@ -137,6 +143,6 @@ public static class GodotUIExtensions
         if (!GodotObject.IsInstanceValid(control) || control.IsQueuedForDeletion())
             throw new ObjectDisposedException(nameof(control));
         if (!control.IsInsideTree()) throw new InvalidOperationException("The borrowed Control must be inside the Godot scene tree.");
-        if (parent.Context.Host is not GodotUIHost) throw new InvalidOperationException("Godot helpers require a Godot UI context.");
+        if (parent.Context.Host is not UIHost) throw new InvalidOperationException("Godot helpers require a Godot UI context.");
     }
 }

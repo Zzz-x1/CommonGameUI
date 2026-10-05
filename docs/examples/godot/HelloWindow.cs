@@ -1,25 +1,16 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using UIFramework;
-using UIFramework.Godot;
+using EngineUI = global::UIFramework.Godot;
 
-public sealed class HelloWindow : UINode
+public partial class HelloWindow : EngineUI.UINode
 {
-    private readonly PanelContainerNode _windows;
-    private readonly Action<Task> _observe;
+    [Export] public Button CloseButton { get; set; } = null!;
 
-    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _windows = windows;
-        _observe = observe;
-    }
-
-    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
-    {
-        var closeButton = this.GetControl<Button>("Content/Close");
-        closeButton.Pressed += () => _observe(_windows.CloseAsync(this));
+        CloseButton.Pressed += () => Observe(((PanelContainerNode)Parent!).CloseAsync(this));
         return Task.CompletedTask;
     }
 }

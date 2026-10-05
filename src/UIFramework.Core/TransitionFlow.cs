@@ -55,6 +55,8 @@ internal static class TransitionFlow
             orders.Clear();
             if (primary == null && failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
         }
+        var participants = items.Select(item => item.Node.Node).Distinct().ToArray();
+        foreach (var participant in participants) participant.BeginTransition();
         try
         {
             foreach (var item in items)
@@ -133,6 +135,10 @@ internal static class TransitionFlow
             Restore(ex);
             Finish(ex is OperationCanceledException ? TransitionStage.Canceled : TransitionStage.Failed, ex);
             throw;
+        }
+        finally
+        {
+            foreach (var participant in participants) participant.EndTransition();
         }
     }
 }

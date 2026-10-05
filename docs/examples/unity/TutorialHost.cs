@@ -1,3 +1,4 @@
+using EngineUI = global::UIFramework.Unity;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UIFramework;
@@ -21,10 +22,10 @@ public sealed class TutorialHost : MonoBehaviour
 
     private async Task InitializeAsync()
     {
-        _ui = UnityUI.Create(Canvas, Events);
+        _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
         _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
-        _ui.Register(() => new HelloWindow(_windows, Observe), "UI/HelloWindow");
+        _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);
         OpenWindowButton.interactable = true;

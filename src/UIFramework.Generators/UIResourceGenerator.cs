@@ -45,9 +45,9 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                     var type = node.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var suffix = node.Symbol.Name;
                     ITypeSymbol? argumentType = null;
-                    for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
-                        if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.UINode<TArgs>")
-                            argumentType = baseType.TypeArguments[0];
+                    foreach (var contract in node.Symbol.AllInterfaces)
+                        if (contract.OriginalDefinition.ToDisplayString() == "UIFramework.IParameterizedNode<TArgs>")
+                            argumentType = contract.TypeArguments[0];
                     var argumentDeclaration = argumentType == null ? "" : argumentType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + " args, ";
                     var argumentCall = argumentType == null ? "null" : "args";
                     foreach (var pair in new[] { (Container: "StackContainerNode", Method: "Push"), (Container: "PanelContainerNode", Method: "Open"), (Container: "ModalContainerNode", Method: "Open") })
@@ -62,8 +62,8 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                                 .Append(suffix).Append("Async(this global::UIFramework.PanelContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.OpenAsync<")
                                 .Append(type).Append(">(null, playAnimation, cancellationToken);\n");
                     }
-                    for (var baseType = node.Symbol.BaseType; baseType != null; baseType = baseType.BaseType)
-                        if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.DialogNode<TResult>")
+                    foreach (var baseType in node.Symbol.AllInterfaces)
+                        if (baseType.OriginalDefinition.ToDisplayString() == "UIFramework.IDialogNode<TResult>")
                         {
                             var resultType = baseType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                             source.Append("public static global::System.Threading.Tasks.Task<").Append(resultType).Append("> Show")

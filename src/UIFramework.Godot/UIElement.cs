@@ -4,21 +4,21 @@ using System.Runtime.CompilerServices;
 namespace UIFramework.Godot;
 
 /// <summary>Owned scene root or borrowed embedded Control. All access belongs to the scene thread.</summary>
-public sealed class GodotUIElement : IUIElement
+public sealed class UIElement : IUIElement, IUIResourceNodeProvider
 {
     private sealed record ControlState(Control Control, Control.MouseFilterEnum Mouse, Control.FocusModeEnum Focus);
     private static readonly ConditionalWeakTable<Control, ControlState> Defaults = new();
     private readonly bool _owned;
     private bool _disposed;
     private bool _lifetimeEnding;
-    private readonly GodotUIElement? _lifetimeOwner;
+    private readonly UIElement? _lifetimeOwner;
     internal bool IsLifetimeEnding => _lifetimeEnding || (_lifetimeOwner?.IsLifetimeEnding ?? false);
     internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
     internal bool DisplayWasDestroyed => !_disposed && IsLifetimeEnding && (!GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion());
     private readonly string _name;
 
-    public GodotUIElement(Control control, bool owned = false) : this(control, owned, null) { }
-    internal GodotUIElement(Control control, bool owned, GodotUIElement? lifetimeOwner)
+    public UIElement(Control control, bool owned = false) : this(control, owned, null) { }
+    internal UIElement(Control control, bool owned, UIElement? lifetimeOwner)
     {
         _lifetimeOwner = lifetimeOwner;
         Control = control ?? throw new ArgumentNullException(nameof(control));
@@ -28,13 +28,21 @@ public sealed class GodotUIElement : IUIElement
             Defaults.GetValue(child, c => new ControlState(c, c.MouseFilter, c.FocusMode));
     }
 
+
+    public IUINode GetNode(Type businessType)
+    {
+        VerifyAlive();
+        if (Control is not IUINode owner || !businessType.IsInstanceOfType(owner))
+            throw new InvalidOperationException($"UI scene root must use the business script {businessType.FullName}.");
+        return owner;
+    }
     public Control Control { get; }
     public T Get<T>(string path) where T : global::Godot.Node => Control.GetNode<T>(path);
 
     private void VerifyAlive()
     {
         if (_disposed || !GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion())
-            throw new ObjectDisposedException(nameof(GodotUIElement), $"Display '{_name}' is no longer available.");
+            throw new ObjectDisposedException(nameof(UIElement), $"Display '{_name}' is no longer available.");
     }
 
     public void SetVisible(bool visible) { if (DisplayWasDestroyed) return; VerifyAlive(); Control.Visible = visible; }
@@ -64,7 +72,7 @@ public sealed class GodotUIElement : IUIElement
         if (_disposed) return default;
         if (DisplayWasDestroyed) { _disposed = true; return default; }
         if (!GodotObject.IsInstanceValid(Control) || Control.IsQueuedForDeletion())
-            throw new ObjectDisposedException(nameof(GodotUIElement), "Display was destroyed before its logical owner.");
+            throw new ObjectDisposedException(nameof(UIElement), "Display was destroyed before its logical owner.");
         if (_owned)
         {
             // Remove the disposed display from sibling ordering immediately. QueueFree alone

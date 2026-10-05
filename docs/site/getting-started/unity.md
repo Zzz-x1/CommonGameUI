@@ -33,31 +33,23 @@ HelloWindow (RectTransform, Stretch)
 
 ## 3. 编写窗口脚本
 
-新建 `HelloWindow.cs`。这个类是框架的业务节点，由注册工厂创建；它不是 MonoBehaviour，不挂到 Prefab 上。它按资源路径找到关闭按钮，并让所属容器关闭当前节点。
+新建 `HelloWindow.cs`。`EngineUI.UINode` 继承 MonoBehaviour；`EngineUI` 是 `UIFramework.Unity` 的命名空间别名。脚本编译后，打开窗口 Prefab，把 HelloWindow 挂到根对象，并将 Content 下的 Close 按钮拖入 Close Button 字段。按钮直接使用序列化引用，移动或重命名控件无需修改代码。
 
 ```csharp
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UIFramework;
-using UIFramework.Unity;
+using UnityEngine;
 using UnityEngine.UI;
+using EngineUI = global::UIFramework.Unity;
 
-public sealed class HelloWindow : UINode
+public sealed class HelloWindow : EngineUI.UINode
 {
-    private readonly PanelContainerNode _windows;
-    private readonly Action<Task> _observe;
+    [SerializeField] private Button closeButton = null;
 
-    public HelloWindow(PanelContainerNode windows, Action<Task> observe)
+    protected override Task OnInitializeAsync(CancellationToken token)
     {
-        _windows = windows;
-        _observe = observe;
-    }
-
-    protected override Task OnInitializeAsync(CancellationToken cancellationToken)
-    {
-        var closeButton = this.GetComponent<Button>("Content/Close");
-        closeButton.onClick.AddListener(() => _observe(_windows.CloseAsync(this)));
+        closeButton.onClick.AddListener(() => Observe(((PanelContainerNode)Parent).CloseAsync(this)));
         return Task.CompletedTask;
     }
 }
@@ -82,6 +74,7 @@ EventSystem
 <summary>展开完整 TutorialHost.cs</summary>
 
 ```csharp
+using EngineUI = global::UIFramework.Unity;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UIFramework;
@@ -105,10 +98,10 @@ public sealed class TutorialHost : MonoBehaviour
 
     private async Task InitializeAsync()
     {
-        _ui = UnityUI.Create(Canvas, Events);
+        _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
         _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
-        _ui.Register(() => new HelloWindow(_windows, Observe), "UI/HelloWindow");
+        _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);
         OpenWindowButton.interactable = true;
@@ -154,7 +147,7 @@ public sealed class TutorialHost : MonoBehaviour
 | WindowsMount | Canvas 下的 WindowsMount |
 | OpenWindowButton | Canvas 下的 OpenWindowButton |
 
-将 OpenWindowButton 的 Interactable 初始设为关闭。窗口和宿主脚本都放在 `Assets` 中；`HelloWindow` 类不挂组件，容器根据 `Register` 的资源路径加载 Prefab。
+将 OpenWindowButton 的 Interactable 初始设为关闭。确认窗口 Prefab 根对象已经挂载 HelloWindow，Close Button 引用已赋值。容器加载 Prefab 后取得其中的业务脚本；不调用 `new HelloWindow()`。
 
 ## 6. 运行并检查
 
