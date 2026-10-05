@@ -80,6 +80,23 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 
 中间对象替换后重新订阅。响应路径的中间属性也需要 `FieldNotify`。空路径默认报错；显式空值不会隐藏成员缺失或类型错误，也不会创建缺失对象。
 
+## 暂停绑定，让动画接管
+
+角色培养保存了新的战力，但界面需要逐步增长显示时，先暂停该属性绑定，动画结束后恢复：
+
+```csharp
+this.PauseBinding(nameof(HeroVm.Power));
+// Commit the business value, then animate the control.
+// The application decides completion, cancellation and cleanup timing.
+this.ResumeBinding(nameof(HeroVm.Power));
+```
+
+暂停期间 VM 可以继续更新；绑定既不覆盖动画，也不将控件变化回写 VM。恢复立即显示 VM 最新值，包含转换器与显式空值规则。OneTime 也在恢复时同步一次。
+
+同一来源属性绑定到多个控件时一起暂停；不影响其他属性、子节点、命令或列表。同名属性来自不同路径时使用完整路径，例如 `"Hero.Power"`。重复暂停、未暂停就恢复、缺失绑定直接报错。
+
+这是同步配对 API，不提供动画包装或自动恢复。动画取消／失败时由项目决定恢复时机；节点已关闭则绑定已清理，不能继续恢复。
+
 ## 列表和命令
 
 动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `CollectionTarget`／`CollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，声明 **Manual / Item** 来源。条目可以是基础节点，无需业务 View 类。

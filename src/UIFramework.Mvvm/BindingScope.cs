@@ -59,6 +59,33 @@ internal sealed class BindingScope : IAsyncDisposable
         _sources.Add(name, value); SourcesChanged?.Invoke(); return value;
     }
     public IDisposable Bind(string path, IBindingTarget target, BindingOptions options) => Own(new PropertyBinding(this, path, target, options));
+    public void PauseBinding(string propertyName) => ChangeBindingState(propertyName, true);
+    public void ResumeBinding(string propertyName) => ChangeBindingState(propertyName, false);
+    private void ChangeBindingState(string propertyName, bool pause)
+    {
+        try
+        {
+            Node.Context.Host.VerifyAccess();
+            if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
+            if (string.IsNullOrWhiteSpace(propertyName)) throw new ArgumentException("A VM property name or source path is required.", nameof(propertyName));
+            var bindings = _bindings.OfType<PropertyBinding>().Where(binding => !binding.Disposed && binding.HasSource &&
+                (propertyName.Contains('.') ? binding.SourcePath == propertyName : binding.Member == propertyName)).ToArray();
+            if (bindings.Length == 0) throw new KeyNotFoundException("No property binding: " + propertyName);
+            if (bindings.Select(binding => binding.SourcePath).Distinct(StringComparer.Ordinal).Count() != 1)
+                throw new InvalidOperationException("Ambiguous property binding; use a complete Source.Member path: " + propertyName);
+            if (bindings.Any(binding => binding.Paused == pause))
+                throw new InvalidOperationException(pause ? "Property binding is already paused: " + propertyName : "Property binding is not paused: " + propertyName);
+            foreach (var binding in bindings) binding.Paused = pause;
+            if (!pause)
+            {
+                Exception? first = null;
+                foreach (var binding in bindings)
+                    try { binding.Refresh(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+                if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+            }
+        }
+        catch (Exception error) { _runtime.Report(error, pause ? "MVVM pause binding" : "MVVM resume binding"); throw; }
+    }
     public IDisposable Command(string path, ICommandTarget target, object? parameter) => Own(new CommandBinding(this, path, target, parameter));
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
     private T Own<T>(T binding) where T : IDisposable { _bindings.Add(binding); return binding; }
@@ -155,9 +182,15 @@ internal sealed class BindingScope : IAsyncDisposable
     {
         private readonly BindingScope _scope; private readonly Path? _path; private readonly IBindingTarget _target; private readonly BindingOptions _options;
         private bool _updating; private bool _disposed;
+        internal string SourcePath { get; }
+        internal string Member => SourcePath.Substring(SourcePath.LastIndexOf('.') + 1);
+        internal bool HasSource => !_options.HasConstantValue;
+        internal bool Disposed => _disposed;
+        internal bool Paused { get; set; }
+        internal void Refresh() => Pull();
         internal PropertyBinding(BindingScope scope, string path, IBindingTarget target, BindingOptions options)
         {
-            _scope = scope; _target = target; _options = options;
+            _scope = scope; _target = target; _options = options; SourcePath = path;
             try
             {
                 if (options.HasConstantValue && options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
@@ -177,7 +210,9 @@ internal sealed class BindingScope : IAsyncDisposable
         }
         private void Pull()
         {
-            if (_updating) return; _scope.Node.Context.Host.VerifyAccess(); _updating = true;
+            _scope.Node.Context.Host.VerifyAccess();
+            if (_updating || Paused) return;
+            _updating = true;
             try
             {
                 if (_options.HasConstantValue)
@@ -198,7 +233,9 @@ internal sealed class BindingScope : IAsyncDisposable
         }
         private void Push()
         {
-            if (_updating) return; _scope.Node.Context.Host.VerifyAccess(); _updating = true;
+            _scope.Node.Context.Host.VerifyAccess();
+            if (_updating || Paused) return;
+            _updating = true;
             try
             {
                 var (owner, member) = _path!.Resolve();

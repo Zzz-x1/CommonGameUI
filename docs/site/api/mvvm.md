@@ -38,6 +38,8 @@ T CreateViewModel<T>(this IUINode node, string name, object? template = null) wh
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
     BindingMode mode = BindingMode.OneWay);
 IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
+void PauseBinding(this IUINode node, string propertyName);
+void ResumeBinding(this IUINode node, string propertyName);
 IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
     object? parameter = null);
 IDisposable BindCollection(this IUINode node, string path, ICollectionTarget target,

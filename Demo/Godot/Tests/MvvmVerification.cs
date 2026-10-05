@@ -34,6 +34,10 @@ public partial class MvvmVerification : global::Godot.Node
         var vm = node.GetViewModel<NativePlayerVm>("Player"); Check(vm != template, "Original asset was used"); Check(ReferenceEquals(vm, vm.Other), "Asset cycle not preserved"); Check(label.Text == "100", "Initial display missing");
         button.EmitSignal(BaseButton.SignalName.Pressed); Check(vm.Gold == 90 && template.Gold == 100, "Purchase modified template");
         slider.Value = 70; Check(vm.Gold == 70 && label.Text == "70", "Two-way editor"); vm.Items.Add(2); Check(template.Items.Count == 1, "Typed arrays shared storage");
+        node.PauseBinding(nameof(NativePlayerVm.Gold)); vm.Gold = 55; slider.Value = 33;
+        Check(vm.Gold == 55 && label.Text == "70", "Paused GUI bindings suppress both directions");
+        node.ResumeBinding("Player.Gold"); Check(label.Text == "55" && slider.Value == 55, "Resume GUI group from latest VM value");
+        vm.Gold = 70;
         await node.DisposeAsync(); vm.Gold = 40; Check(label.Text == "70", "Closed node retained bindings"); await ui.DisposeAsync(); await runtime.DisposeAsync();
         await using (var preview = new EngineMvvm.BindingPreview(config)) { Check(label.Text == "100", "Preview initial value"); Check(slider.Value == 100, "Preview slider value"); button.EmitSignal(BaseButton.SignalName.Pressed); Check(template.Gold == 100, "Preview command changed asset"); }
         Check(label.Text == "70" && slider.Value == 70, "Preview did not restore controls");

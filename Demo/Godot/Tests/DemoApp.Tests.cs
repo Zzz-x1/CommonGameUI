@@ -237,6 +237,7 @@ public partial class DemoApp
         int level = Store.State.Levels[0];
         await hero.TrainAsync();
         Pass(Store.State.Levels[0] == level + 1 && Modals.Current is TrainingView, "training timeline");
+        Pass(hero.GetControl<Label>("Stats").Text.EndsWith("战力 " + Store.State.Power(0)), "training counter resumes latest VM value");
         await BackAsync();
         var question = AskAsync("测试确认");
         while (Modals.Current is not ConfirmView || !Modals.Current.IsInteractive)

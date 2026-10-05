@@ -80,6 +80,23 @@ Two-way bindings initially use the VM value. After control input, the normalized
 
 Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive properties also require `FieldNotify`. Null paths throw by default. Explicit null presentation neither hides missing members or wrong types nor creates missing objects.
 
+## Pause bindings for animation
+
+After character training saves a new power value, pause its binding while the control displays the count-up animation, then resume:
+
+```csharp
+this.PauseBinding(nameof(HeroVm.Power));
+// Commit the business value, then animate the control.
+// The application decides completion, cancellation and cleanup timing.
+this.ResumeBinding(nameof(HeroVm.Power));
+```
+
+The VM can keep updating while paused. Bindings neither overwrite animation nor write control changes back to the VM. Resume immediately displays the latest VM value, including conversion and explicit null handling. OneTime also synchronizes once on resume.
+
+All controls bound to the same source property pause together. Other properties, child nodes, commands and lists continue. If the name matches different source paths, specify the full path, such as `"Hero.Power"`. Repeated pause, resume without pause and missing bindings raise errors.
+
+These are synchronous paired APIs without animation wrappers or automatic recovery. The application decides when to resume after cancellation or failure. Closing the node releases its bindings; do not resume afterward.
+
 ## Lists and commands
 
 Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `CollectionTarget` / `CollectionTarget`. Add `MvvmBindings` to the item scene or Prefab and declare a **Manual / Item** source. Items can be basic nodes without a business View class.

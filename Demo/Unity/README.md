@@ -72,3 +72,5 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 ## Timeline 过场
 
 大厅首次入场和购买奖励采用真实 Timeline 多轨动画，资产位于 Assets/Timelines。打开对应 .playable 可编辑立绘、面板、文字和装饰轨道；Prefab 的 Transitions/Enter、Exit 配置 PlayableDirector 及本地绑定。其他来源或简化演出沿用条件分支选择轻量动画。制作脚本 ClientTimelineAuthoring.Build 用 Unity 原生 API 保存资源，不在运行时生成轨道。
+
+角色培养：进入角色详情并点击培养，先保存等级和属性，再暂停 Hero.Power 绑定播放战力／攻击数值增长，动画完成后显式 ResumeBinding 同步最新值。简化演出使用较短计数动画。

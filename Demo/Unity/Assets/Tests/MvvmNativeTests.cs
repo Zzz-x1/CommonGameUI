@@ -45,6 +45,12 @@ namespace StarCourt.UnityDemo.Tests
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
             var vm = node.GetViewModel<NativePlayerVm>("Player"); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
             button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
+            var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
+            slider.GetComponent<Slider>().maxValue = 200;
+            node.Bind("Player.Gold", slider.GetComponent<Slider>().ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
+            node.PauseBinding(nameof(NativePlayerVm.Gold)); vm.Gold = 120; slider.GetComponent<Slider>().value = 15;
+            Assert.That(vm.Gold, Is.EqualTo(120)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
+            node.ResumeBinding("Player.Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));
             vm.Items.Add(2); Assert.That(template.Items.Count, Is.EqualTo(1)); vm.Gold = 0; Assert.That(button.GetComponent<Button>().interactable, Is.False);
             await node.DisposeAsync(); vm.Gold = 50; Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
             await ui.DisposeAsync(); await runtime.DisposeAsync();

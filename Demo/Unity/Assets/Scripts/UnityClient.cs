@@ -86,6 +86,18 @@ namespace StarCourt.UnityDemo
             await Pages.PushAsync<LoginView>();
         }
         private void Refresh() => PlayerVm.Refresh(Store.State);
+        public Task RunAsync(IUINode owner, Func<Task> action) => RunAsync(async () =>
+        {
+            var display = (EngineUI.UIElement)owner.Element;
+            var focus = owner.Context.Host.CaptureFocus();
+            display.SetInteractive(false);
+            try { await action(); }
+            finally
+            {
+                if (owner.State == NodeState.Ready)
+                { display.SetInteractive(owner.IsInteractive); owner.Context.Host.RestoreFocus(focus); }
+            }
+        });
         private async Task RunAsync(Func<Task> action)
         {
             if (Busy) throw new InvalidOperationException("A client operation is still running.");

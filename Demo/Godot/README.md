@@ -85,3 +85,5 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 大厅金币使用 Shared Asset 克隆；设置和装备详情使用节点独立实例；背包使用 ObservableCollection 与条目场景，筛选／排序由项目 VM 维护。购买确认由单个命令提交业务、等待关闭自身确认窗口，再展示奖励；VM 在命令完成后释放。编辑器底部 View Bindings 可编辑条目绑定，原始玩家模板位于 Assets/Mvvm。
 
 [模块入门与 GUI](../../docs/site/manual/mvvm.md)。
+
+角色培养：进入角色详情并点击培养，先保存等级和属性，再暂停 Hero.Power 绑定播放战力／攻击数值增长，动画完成后显式 ResumeBinding 同步最新值。简化演出使用较短计数动画。

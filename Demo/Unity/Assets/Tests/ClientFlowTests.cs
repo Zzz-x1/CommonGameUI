@@ -86,6 +86,7 @@ namespace StarCourt.UnityDemo.Tests
             await Click(hero, "Panel/Equip"); await WaitFor<ConfirmView>(); await ClickAndWait(_app.Modals.Current, "Panel/Yes");
             await ClickAndWait(hero, "Panel/Train"); await ClickAndWait(_app.Modals.Current, "Panel/Close");
             Assert.That(_app.Store.State.Equipment[0], Is.EqualTo(0)); Assert.That(_app.Store.State.Levels[0], Is.EqualTo(13));
+            Assert.That(hero.GetControl<Text>("Panel/Text").text, Does.StartWith("攻击 340"));
             await Route("Quests"); await ClickAndWait(_app.Pages.Current, "Panel/Claim"); await ClickAndWait(_app.Modals.Current, "Panel/Close");
             Assert.That(_app.Pages.Current.GetControl<Button>("Panel/Claim").interactable, Is.False);
             var saved = new ClientStore(Path.Combine(Application.persistentDataPath, _save)).State;

@@ -63,6 +63,9 @@ namespace MvvmWebSample
             var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)).GetComponent<Button>(); node.BindCommand("Player.Buy", button.ClickTarget()); button.onClick.Invoke(); Check(vm.Gold == 70, "Command dispatch"); vm.Gold = 0; Check(!button.interactable, "Computed CanExecute");
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)).GetComponent<Slider>(); slider.maxValue = 100;
             node.Bind("Player.Gold", slider.ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") }); slider.value = 25; Check(vm.Gold == 25, "Two-way write");
+            node.PauseBinding(nameof(PlayerVm.Gold)); vm.Gold = 55; slider.value = 8;
+            Check(vm.Gold == 55 && label.text == "Gold 25", "Paused property group blocks both directions");
+            node.ResumeBinding("Player.Gold"); Check(label.text == "Gold 55" && slider.value == 55, "Resume latest VM value");
             var nested = new GameObject("Selected", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); vm.Selected = new PlayerVm { Gold = 3 };
             node.Bind("Player.Selected.Gold", BindingTargets.Property(nested, "text"), new BindingOptions { Convert = Converters.Find("FormatNumber"), HasNullValue = true, NullValue = "none" }); vm.Selected = new PlayerVm { Gold = 7 }; Check(nested.text == "7", "Nested replacement"); vm.Selected = null; Check(nested.text == "none", "Null presentation");
             var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.Gold = 42; var clone = runtime.GetSharedViewModel(asset); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetSharedViewModel(asset)), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
