@@ -217,5 +217,6 @@ public static class MvvmExtensions
     public static void PauseBinding(this IUINode node, string propertyName) => Scope(node.Node).PauseBinding(propertyName);
     public static void ResumeBinding(this IUINode node, string propertyName) => Scope(node.Node).ResumeBinding(propertyName);
     public static IDisposable BindCommand(this IUINode node, string path, ICommandTarget target, object? parameter = null) => Scope(node.Node).Command(path, target, parameter);
+    public static IDisposable BindCommand(this IUINode node, string path, ICommandTarget target, CommandBindingOptions options) => Scope(node.Node).Command(path, target, options);
     public static IDisposable BindCollection(this IUINode node, string path, ICollectionTarget target, bool oneTime = false) => Scope(node.Node).Collection(path, target, oneTime);
 }

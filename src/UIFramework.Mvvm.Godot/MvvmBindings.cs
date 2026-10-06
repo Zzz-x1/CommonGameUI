@@ -22,7 +22,7 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
         foreach (var binding in Bindings.Where(b => b.Enabled))
         {
             var control = GetTarget(binding);
-            if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget());
+            if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget(), binding.GetCommandOptions());
             else if (binding.Kind == ViewBindingKind.Collection)
                 node.BindCollection(binding.Source, new CollectionTarget(node, control, binding.ItemScene ?? throw new InvalidOperationException("Item scene is required.")), binding.OneTimeCollection);
             else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(control, binding.Member, options.Mode), options); }

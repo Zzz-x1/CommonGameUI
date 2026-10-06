@@ -87,6 +87,7 @@ internal sealed class BindingScope : IAsyncDisposable
         catch (Exception error) { _runtime.Report(error, pause ? "MVVM pause binding" : "MVVM resume binding"); throw; }
     }
     public IDisposable Command(string path, ICommandTarget target, object? parameter) => Own(new CommandBinding(this, path, target, parameter));
+    public IDisposable Command(string path, ICommandTarget target, CommandBindingOptions options) => Own(new CommandBinding(this, path, target, options));
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
     private T Own<T>(T binding) where T : IDisposable { _bindings.Add(binding); return binding; }
     internal void Observe(Task task) { _tasks.Add(task); _runtime.Observe(task); }
@@ -250,12 +251,24 @@ internal sealed class BindingScope : IAsyncDisposable
     }
     private sealed class CommandBinding : IDisposable
     {
-        private readonly BindingScope _scope; private readonly Path _path; private readonly ICommandTarget _target; private readonly object? _parameter;
+        private readonly BindingScope _scope; private readonly Path _path; private readonly ICommandTarget _target; private object? _parameter;
+        private readonly Path? _parameterPath;
         private bool _disposed;
         internal CommandBinding(BindingScope scope, string path, ICommandTarget target, object? parameter)
+            : this(scope, path, target, new CommandBindingOptions { Mode = parameter == null ? CommandParameterMode.None : CommandParameterMode.Constant, ConstantValue = parameter }) { }
+        internal CommandBinding(BindingScope scope, string path, ICommandTarget target, CommandBindingOptions options)
         {
-            _scope = scope; _parameter = parameter; _target = target; _path = new Path(scope, path, true, true);
-            try { _path.Changed += Update; scope._runtime.CommandStateChanged += Update; target.Invoked += Invoke; Update(); }
+            _scope = scope; if (options == null) throw new ArgumentNullException(nameof(options)); _target = target; _path = new Path(scope, path, true, true);
+            try
+            {
+                if (options.Mode == CommandParameterMode.SourcePath) _parameterPath = new Path(scope, options.ParameterPath, false);
+                else _parameter = options.ConstantValue;
+                var (vm, member) = _path.Resolve(); var type = vm!.Describe().Single(m => m.Name == member && m.Kind == MvvmMemberKind.Command).Type;
+                if (options.ConstantText != null && options.Mode == CommandParameterMode.Constant) _parameter = CommandParameters.ParseConstant(options.ConstantText, type);
+                if (options.Mode != CommandParameterMode.SourcePath) CommandParameters.Validate(type, _parameter);
+                else { var (owner, valueMember) = _parameterPath!.Resolve(); var valueType = owner!.Describe().Single(m => m.Name == valueMember).Type; if (!type.IsAssignableFrom(valueType)) throw new InvalidCastException("Command parameter source type mismatch."); }
+                _path.Changed += Update; scope._runtime.CommandStateChanged += Update; target.Invoked += Invoke; Update();
+            }
             catch (Exception error)
             { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
         }
@@ -270,11 +283,17 @@ internal sealed class BindingScope : IAsyncDisposable
         }
         private void Invoke()
         {
-            var (vm, member) = _path.Resolve();
-            if (_scope._runtime.IsRunning(vm!, member) || !vm!.CanExecute(member)) throw new InvalidOperationException("Command is unavailable.");
-            _scope.Run(vm, member, _parameter);
+            try
+            {
+                var (vm, member) = _path.Resolve();
+                if (_scope._runtime.IsRunning(vm!, member) || !vm!.CanExecute(member)) throw new InvalidOperationException("Command is unavailable.");
+                var parameter = _parameterPath == null ? _parameter : _parameterPath.Read();
+                CommandParameters.Validate(vm.Describe().Single(m => m.Name == member && m.Kind == MvvmMemberKind.Command).Type, parameter);
+                _scope.Run(vm, member, parameter);
+            }
+            catch (Exception error) { _scope._runtime.Report(error, "MVVM command parameter"); throw; }
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Update; _scope._runtime.CommandStateChanged -= Update; _path.Dispose(); if (_model != null) _model.PropertyChanged -= Changed; _target.Invoked -= Invoke; _target.Dispose(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Update; _scope._runtime.CommandStateChanged -= Update; _path.Dispose(); _parameterPath?.Dispose(); if (_model != null) _model.PropertyChanged -= Changed; _target.Invoked -= Invoke; _target.Dispose(); }
     }
     private sealed class CollectionBinding : IDisposable
     {

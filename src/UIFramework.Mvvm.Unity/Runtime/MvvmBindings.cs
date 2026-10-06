@@ -16,6 +16,10 @@ namespace UIFramework.Mvvm.Unity
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
         public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
         public GameObject ItemPrefab; public bool OneTimeCollection;
+        public CommandParameterMode ParameterMode; public string ParameterConstant = "", ParameterPath = "";
+        public CommandBindingOptions GetCommandOptions() => ParameterMode == CommandParameterMode.SourcePath
+            ? new CommandBindingOptions { ParameterPath = ParameterPath }
+            : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant ? ParameterConstant : null };
         public BindingOptions GetOptions(bool preview = false)
         {
             var options = Converters.Configure(Converter, ConvertBack, Mode, ConverterInput, ConverterConstant, HasNullValue, NullValue);
@@ -34,7 +38,7 @@ namespace UIFramework.Mvvm.Unity
             foreach (var binding in Bindings.Where(b => b.Enabled))
             {
                 if (!binding.Target) throw new InvalidOperationException("Missing binding target: " + binding.Source);
-                if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget());
+                if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget(), binding.GetCommandOptions());
                 else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, new CollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab), binding.OneTimeCollection);
                 else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member, options.Mode), options); }
             }

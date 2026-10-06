@@ -134,6 +134,28 @@ namespace UIFramework.Mvvm.EditorUnity
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
                 Text("来源路径", b.Source, v => Binding(b, "Source", property => property.stringValue = v));
             Choice("绑定类型", b.Kind, v => { Binding(b, "Kind", property => property.intValue = (int)v); BindingDetails(); });
+            if (b.Kind == ViewBindingKind.Command)
+            {
+                var parts = b.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(v => v.Name == parts[0]);
+                Type vmType = source?.Template ? source.Template.GetType() : null;
+                foreach (var part in parts.Skip(1).Take(parts.Length - 2)) vmType = vmType?.GetProperty(part)?.PropertyType;
+                var command = vmType?.GetMethods().SingleOrDefault(m => m.Name == parts.Last() && m.IsDefined(typeof(CommandAttribute), true));
+                var parameter = command?.GetParameters().SingleOrDefault(p => p.ParameterType != typeof(System.Threading.CancellationToken));
+                if (parameter != null)
+                {
+                    _details.Add(new Label("命令参数：" + parameter.ParameterType.Name));
+                    Choice("参数方式", b.ParameterMode, v => { Binding(b, "ParameterMode", p => p.intValue = (int)v); BindingDetails(); });
+                    if (b.ParameterMode == CommandParameterMode.Constant) Text("参数常量", b.ParameterConstant, v => Binding(b, "ParameterConstant", p => p.stringValue = v));
+                    if (b.ParameterMode == CommandParameterMode.SourcePath) Text("参数来源", b.ParameterPath, v => Binding(b, "ParameterPath", p => p.stringValue = v));
+                    try
+                    {
+                        if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType));
+                        else if (b.ParameterMode == CommandParameterMode.None) CommandParameters.Validate(parameter.ParameterType, null);
+                        else { var path = b.ParameterPath.Split('.'); var ps = _view.ViewModels.Single(v => v.Name == path[0]); var pt = ps.Template.GetType(); foreach (var part in path.Skip(1)) pt = pt.GetProperty(part)?.PropertyType ?? throw new MissingMemberException(pt.FullName, part); if (!parameter.ParameterType.IsAssignableFrom(pt)) throw new InvalidCastException("参数来源类型不匹配"); }
+                    }
+                    catch (Exception error) { _details.Add(new HelpBox(error.Message, HelpBoxMessageType.Error)); }
+                }
+            }
             if (b.Kind == ViewBindingKind.Property)
             {
                 Choice("方向", b.Mode, v => { Binding(b, "Mode", property => property.intValue = (int)v); if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) Binding(b, "ConverterInput", property => property.intValue = (int)ConverterInput.ViewModel); BindingDetails(); });

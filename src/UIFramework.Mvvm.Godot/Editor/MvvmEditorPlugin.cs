@@ -158,6 +158,22 @@ public partial class MvvmEditorPlugin : EditorPlugin
         if (target != null && b.Kind == ViewBindingKind.Property) { targetType = BindingTargetRegistry.Find(target.GetType(), b.Member).ValueType; }
         if (b.Kind != ViewBindingKind.Property)
         {
+            if (b.Kind == ViewBindingKind.Command)
+            {
+                var path = b.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(v => v.Name == path[0]);
+                Type? vmType = source?.Template?.GetType(); foreach (var part in path.Skip(1).Take(path.Length - 2)) vmType = vmType?.GetProperty(part)?.PropertyType;
+                var command = vmType?.GetMethods().SingleOrDefault(m => m.Name == path.Last() && m.IsDefined(typeof(CommandAttribute), true));
+                var parameter = command?.GetParameters().SingleOrDefault(p => p.ParameterType != typeof(CancellationToken));
+                if (parameter != null)
+                {
+                    _details.AddChild(new Label { Text = "命令参数：" + parameter.ParameterType.Name });
+                    Choice("参数方式", b.ParameterMode, v => Edit(b.ParameterMode, v, value => b.ParameterMode = value));
+                    if (b.ParameterMode == CommandParameterMode.Constant) Text("参数常量", b.ParameterConstant, v => Edit(b.ParameterConstant, v, value => b.ParameterConstant = value));
+                    if (b.ParameterMode == CommandParameterMode.SourcePath) Text("参数来源", b.ParameterPath, v => Edit(b.ParameterPath, v, value => b.ParameterPath = value));
+                    try { if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType)); else if (b.ParameterMode == CommandParameterMode.None) CommandParameters.Validate(parameter.ParameterType, null); else if (!parameter.ParameterType.IsAssignableFrom(SourceType(b.ParameterPath) ?? throw new MissingMemberException(b.ParameterPath))) throw new InvalidCastException("参数来源类型不匹配"); }
+                    catch (Exception error) { _details.AddChild(new Label { Text = error.Message }); }
+                }
+            }
             if (b.Kind == ViewBindingKind.Collection) Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
             return;
         }

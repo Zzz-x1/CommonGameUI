@@ -34,6 +34,7 @@ public sealed class MvvmMember
     public MvvmMemberKind Kind { get; }
     public bool Observable { get; }
     public bool Writable { get; }
+    public Type? ParameterType => Kind == MvvmMemberKind.Command && Type != typeof(void) ? Type : null;
     public MvvmMember(string name, Type type, MvvmMemberKind kind, bool observable, bool writable)
     { Name = name; Type = type; Kind = kind; Observable = observable; Writable = writable; }
 }
