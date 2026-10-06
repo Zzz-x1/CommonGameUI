@@ -142,11 +142,20 @@ public partial class MvvmEditorPlugin : EditorPlugin
     private void BindingDetails()
     {
         ClearDetails(); if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is not ViewBindingResource b) return;
-        Target(b); Text("目标属性", b.Member, v => Edit(b.Member, v, value => b.Member = value));
+        Target(b);
+        var selectedTarget = _view!.Targets[_view.Bindings.IndexOf(b)];
+        if (GodotObject.IsInstanceValid(selectedTarget) && b.Kind == ViewBindingKind.Property)
+        {
+            var definitions = BindingTargetRegistry.Members(selectedTarget.GetType());
+            var picker = new OptionButton(); foreach (var definition in definitions) picker.AddItem(definition.Member);
+            picker.Selected = definitions.ToList().FindIndex(d => d.Member == b.Member);
+            picker.ItemSelected += index => Edit(b.Member, definitions[(int)index].Member, value => b.Member = value);
+            _details.AddChild(new Label { Text = "目标属性" }); _details.AddChild(picker);
+        }
         if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel) Text("来源路径", b.Source, v => Edit(b.Source, v, value => b.Source = value));
         Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value)); Choice("方向", b.Mode, v => { var oldMode = b.Mode; var oldInput = b.ConverterInput; Change("Change Binding Direction", () => { b.Mode = v; if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) b.ConverterInput = ConverterInput.ViewModel; }, () => { b.Mode = oldMode; b.ConverterInput = oldInput; }); });
         var sourceType = SourceType(b.Source); var target = _view!.Targets[_view.Bindings.IndexOf(b)]; Type? targetType = null;
-        if (target != null && b.Kind == ViewBindingKind.Property) { using var property = EngineMvvm.BindingTargets.Property(target, b.Member); targetType = property.ValueType; }
+        if (target != null && b.Kind == ViewBindingKind.Property) { targetType = BindingTargetRegistry.Find(target.GetType(), b.Member).ValueType; }
         if (b.Kind != ViewBindingKind.Property)
         {
             if (b.Kind == ViewBindingKind.Collection) Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));

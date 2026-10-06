@@ -1912,3 +1912,11 @@ Unity 的 MvvmBindings 继续保存组件引用与数据列表，所有 GUI 配�
 验证：核心／生成器 165、MVVM 52、Godot 客户端 140、Godot 原生 MVVM 16、Unity Play Mode 31 项通过；WebGL IL2CPP 高裁剪构建与浏览器运行 19 项通过。用户文档链接／双语检查和站点构建通过。新增测试覆盖四种绑定模式、同源多控件、来源歧义、嵌套对象替换、配对错误、转换异常身份、双向抑制及节点清理。Godot 退出的既有 ObjectDB 警告仍按 21.4 保留，未标为解决。
 
 用户确认：小改动不需要构建验证，以源码检查为主；不因小的可逆调整追加构建或重复全量验证。
+
+## 23. 迁移项目 MVVM 缺口补齐（2026-10-06，已确认）
+
+针对 Fruit-platter 迁移报告 F-01～F-06，统一补齐两端属性目标扩展、运行／预览共用解析、命令参数及异步集合工厂。I-01～I-06 属于现有扩展点或项目集成规则，不另建 Addressables、业务导航或状态作用域机制。生命周期通知继续只读，不放宽结构重入保护。外部项目不修改。
+
+属性目标由程序集 BindingTargetProvider 标记的 IBindingTargetProvider 显式提供强类型 BindingTargetDefinition。运行时与编辑器共用 BindingTargetRegistry，发现成员不创建绑定、不订阅事件；基类定义适用于派生组件，同成员优先最具体定义，重复／歧义直接报错。双向及 View→VM 要求目标声明通知。Unity 增加 enabled／color／alpha，Godot 增加 Modulate／SelfModulate；其他自定义属性显式注册，不反射调用业务成员。Unity ILPostProcessor 保留提供者和方法，沿用 IL2CPP 强类型调用。
+
+阶段一：MVVM 54 项通过，包含无订阅发现、派生定义优先、通知解绑及不可观察目标拒绝双向。两端 GUI 与预览已迁移注册表；原生编辑器和 IL2CPP 验证在本轮后续集成阶段集中执行，尚未计为通过。

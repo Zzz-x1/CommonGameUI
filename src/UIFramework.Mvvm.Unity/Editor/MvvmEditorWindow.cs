@@ -129,7 +129,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private void BindingDetails()
         {
             _details.Clear(); if (!_view || _bindings.selectedIndex < 0) return; var b = _visible[_bindings.selectedIndex];
-            Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v)[0]); BindingDetails(); });
+            Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v).FirstOrDefault() ?? ""); BindingDetails(); });
             var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Binding(b, "Member", property => property.stringValue = e.newValue)); _details.Add(member);
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
                 Text("来源路径", b.Source, v => Binding(b, "Source", property => property.stringValue = v));
@@ -159,19 +159,13 @@ namespace UIFramework.Mvvm.EditorUnity
             Type sourceType = null, targetType = null;
             var parts = binding.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(s => s.Name == parts[0]);
             if (source != null) { sourceType = source.Template ? source.Template.GetType() : null; foreach (var part in parts.Skip(1)) sourceType = sourceType?.GetProperty(part)?.PropertyType; }
-            if (binding.Target && binding.Kind == ViewBindingKind.Property && TargetMembers(binding.Target).Contains(binding.Member)) { using (var target = EngineMvvm.BindingTargets.Property(binding.Target, binding.Member)) targetType = target.ValueType; }
+            if (binding.Target && binding.Kind == ViewBindingKind.Property && TargetMembers(binding.Target).Contains(binding.Member)) { targetType = BindingTargetRegistry.Find(binding.Target.GetType(), binding.Member).ValueType; }
             var input = reverse ? targetType : sourceType; var output = reverse ? sourceType : targetType;
             var choices = new List<string> { "" }; choices.AddRange(Converters.Discover().Where(c => (input != null || (!reverse && binding.ConverterInput == ConverterInput.Constant)) && output != null && (!reverse && binding.ConverterInput == ConverterInput.Constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name));
             var field = new DropdownField(label, choices, -1); field.SetValueWithoutNotify(current); field.RegisterValueChangedCallback(e => { set(e.newValue); BindingDetails(); }); _details.Add(field);
         }
-        private static List<string> TargetMembers(Component target)
-        {
-            var names = new List<string>();
-            if (target is UnityEngine.UI.Text || target is TMPro.TMP_Text || target is UnityEngine.UI.InputField || target is TMPro.TMP_InputField) names.Add("text");
-            if (target is UnityEngine.UI.Slider) names.Add("value"); if (target is UnityEngine.UI.Toggle) names.Add("isOn");
-            if (target is UnityEngine.UI.Image) names.Add("sprite"); if (target is UnityEngine.UI.RawImage) names.Add("texture"); if (target is UnityEngine.UI.Selectable) names.Add("interactable");
-            names.Add("activeSelf"); return names;
-        }
+        private static List<string> TargetMembers(Component target) => target
+            ? BindingTargetRegistry.Members(target.GetType()).Select(d => d.Member).ToList() : new List<string>();
         private void Text(string label, string value, Action<string> set)
         { var field = new TextField(label) { value = value }; field.RegisterValueChangedCallback(e => { set(e.newValue); Refresh(); }); _details.Add(field); }
         private void Object(string label, Type type, UnityEngine.Object value, bool scene, Action<UnityEngine.Object> set)

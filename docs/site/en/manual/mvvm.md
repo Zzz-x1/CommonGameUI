@@ -116,3 +116,7 @@ await ui.DisposeAsync();
 Original exceptions are logged and propagated. UI bindings and notifications run on the engine thread. Direct field writes do not notify.
 
 Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [Lifecycle](lifecycle.md)
+
+## Custom control properties
+
+Implement `IBindingTargetProvider.GetTargets()` and mark the assembly with `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`. Return strongly typed `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)` definitions. `subscribe` is optional for display bindings; TwoWay and View→VM require it. Runtime, the property picker and preview use the same definitions. Member discovery does not subscribe to control events.

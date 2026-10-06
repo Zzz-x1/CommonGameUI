@@ -3,6 +3,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+[assembly: UIFramework.Mvvm.BindingTargetProvider(typeof(UIFramework.Mvvm.Unity.BuiltinBindingTargets))]
+
 namespace UIFramework.Mvvm.Unity
 {
     public static class BindingTargets
@@ -14,22 +16,8 @@ namespace UIFramework.Mvvm.Unity
         public static IBindingTarget TextTarget(this InputField input) => new Target<string>(input, () => input.text, input.SetTextWithoutNotify, callback => { UnityEngine.Events.UnityAction<string> listener = _ => callback(); input.onValueChanged.AddListener(listener); return () => input.onValueChanged.RemoveListener(listener); });
         public static IBindingTarget TextTarget(this TMP_InputField input) => new Target<string>(input, () => input.text, input.SetTextWithoutNotify, callback => { UnityEngine.Events.UnityAction<string> listener = _ => callback(); input.onValueChanged.AddListener(listener); return () => input.onValueChanged.RemoveListener(listener); });
         public static ICommandTarget ClickTarget(this Button button) => new ButtonTarget(button);
-        public static IBindingTarget Property(Component component, string member)
-        {
-            switch (member)
-            {
-                case "text":
-                    if (component is Text text) return text.TextTarget(); if (component is TMP_Text tmp) return tmp.TextTarget();
-                    if (component is InputField input) return input.TextTarget(); return ((TMP_InputField)component).TextTarget();
-                case "value": return ((Slider)component).ValueTarget();
-                case "isOn": return ((Toggle)component).ToggleTarget();
-                case "interactable": return new Target<bool>(component, () => ((Selectable)component).interactable, v => ((Selectable)component).interactable = v);
-                case "activeSelf": return new Target<bool>(component, () => component.gameObject.activeSelf, v => component.gameObject.SetActive(v));
-                case "sprite": return new Target<Sprite>(component, () => ((Image)component).sprite, v => ((Image)component).sprite = v);
-                case "texture": return new Target<Texture>(component, () => ((RawImage)component).texture, v => ((RawImage)component).texture = v);
-                default: throw new MissingMemberException(component.GetType().FullName, member);
-            }
-        }
+        public static IBindingTarget Property(Component component, string member, BindingMode mode = BindingMode.OneWay) =>
+            BindingTargetRegistry.Find(component.GetType(), member).CreateTarget(component, mode);
         private sealed class Target<T> : IBindingTarget
         {
             private readonly UnityEngine.Object _owner; private readonly Func<T> _read; private readonly Action<T> _write; private readonly Action _disconnect;
@@ -43,6 +31,29 @@ namespace UIFramework.Mvvm.Unity
             private readonly Button _button; public ButtonTarget(Button button) { _button = button; button.onClick.AddListener(Invoke); }
             private void Invoke() => Invoked?.Invoke(); public event Action Invoked; public void SetEnabled(bool enabled) => _button.interactable = enabled;
             public void Dispose() { if (_button) _button.onClick.RemoveListener(Invoke); }
+        }
+    }
+}
+
+namespace UIFramework.Mvvm.Unity
+{
+    public sealed class BuiltinBindingTargets : IBindingTargetProvider
+    {
+        public System.Collections.Generic.IEnumerable<BindingTargetDefinition> GetTargets()
+        {
+            yield return BindingTargetDefinition.Create<Text, string>("text", t => t.text, (t,v) => t.text = v);
+            yield return BindingTargetDefinition.Create<TMP_Text, string>("text", t => t.text, (t,v) => t.text = v);
+            yield return BindingTargetDefinition.Create<InputField, string>("text", t => t.text, (t,v) => t.SetTextWithoutNotify(v), (t,a) => { UnityEngine.Events.UnityAction<string> h = _ => a(); t.onValueChanged.AddListener(h); return () => { if(t) t.onValueChanged.RemoveListener(h); }; });
+            yield return BindingTargetDefinition.Create<TMP_InputField, string>("text", t => t.text, (t,v) => t.SetTextWithoutNotify(v), (t,a) => { UnityEngine.Events.UnityAction<string> h = _ => a(); t.onValueChanged.AddListener(h); return () => { if(t) t.onValueChanged.RemoveListener(h); }; });
+            yield return BindingTargetDefinition.Create<Slider, float>("value", t => t.value, (t,v) => t.SetValueWithoutNotify(v), (t,a) => { UnityEngine.Events.UnityAction<float> h = _ => a(); t.onValueChanged.AddListener(h); return () => { if(t) t.onValueChanged.RemoveListener(h); }; });
+            yield return BindingTargetDefinition.Create<Toggle, bool>("isOn", t => t.isOn, (t,v) => t.SetIsOnWithoutNotify(v), (t,a) => { UnityEngine.Events.UnityAction<bool> h = _ => a(); t.onValueChanged.AddListener(h); return () => { if(t) t.onValueChanged.RemoveListener(h); }; });
+            yield return BindingTargetDefinition.Create<Selectable, bool>("interactable", t => t.interactable, (t,v) => t.interactable = v);
+            yield return BindingTargetDefinition.Create<Component, bool>("activeSelf", t => t.gameObject.activeSelf, (t,v) => t.gameObject.SetActive(v));
+            yield return BindingTargetDefinition.Create<Image, Sprite>("sprite", t => t.sprite, (t,v) => t.sprite = v);
+            yield return BindingTargetDefinition.Create<RawImage, Texture>("texture", t => t.texture, (t,v) => t.texture = v);
+            yield return BindingTargetDefinition.Create<Behaviour, bool>("enabled", t => t.enabled, (t,v) => t.enabled = v);
+            yield return BindingTargetDefinition.Create<Graphic, Color>("color", t => t.color, (t,v) => t.color = v);
+            yield return BindingTargetDefinition.Create<CanvasGroup, float>("alpha", t => t.alpha, (t,v) => t.alpha = v);
         }
     }
 }

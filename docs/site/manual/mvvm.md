@@ -116,3 +116,7 @@ await ui.DisposeAsync();
 原始错误会记录并传播。UI 绑定和通知在引擎线程执行；直接改字段不会产生通知。
 
 相关：[GUI 配置](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [生命周期](lifecycle.md)
+
+## 自定义控件属性
+
+实现 `IBindingTargetProvider.GetTargets()`，在程序集中声明 `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`，返回强类型 `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)`。显示绑定可省略 `subscribe`；双向及 View→VM 必须提供通知和解绑。运行时、属性选择器和预览共用定义，查询成员不连接控件事件。

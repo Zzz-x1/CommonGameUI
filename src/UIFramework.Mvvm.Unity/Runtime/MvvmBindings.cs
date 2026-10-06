@@ -36,7 +36,7 @@ namespace UIFramework.Mvvm.Unity
                 if (!binding.Target) throw new InvalidOperationException("Missing binding target: " + binding.Source);
                 if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget());
                 else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, new CollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab), binding.OneTimeCollection);
-                else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member), options); }
+                else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member, options.Mode), options); }
             }
         }
     }

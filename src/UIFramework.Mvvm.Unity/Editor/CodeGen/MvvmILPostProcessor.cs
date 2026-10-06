@@ -17,7 +17,9 @@ namespace UIFramework.Mvvm.Unity.CodeGen
             using var module = ModuleDefinition.ReadModule(pe, new ReaderParameters { AssemblyResolver = resolver, ReadSymbols = pdb.Length != 0, SymbolStream = pdb, SymbolReaderProvider = new Mono.Cecil.Cil.PortablePdbReaderProvider() });
             using var runtime = ModuleDefinition.ReadModule(assembly.References.Single(r => Path.GetFileName(r) == "UIFramework.Mvvm.dll"));
             var weaver = new ViewModelWeaver(module, runtime); weaver.Process();
-            if (!weaver.Changed) return null;
+            var providers = module.Assembly.CustomAttributes.Where(a => a.AttributeType.FullName == "UIFramework.Mvvm.BindingTargetProviderAttribute")
+                .Select(a => ((TypeReference)a.ConstructorArguments[0].Value).FullName).ToArray();
+            if (!weaver.Changed && providers.Length == 0) return null;
             var engine = resolver.Resolve(new AssemblyNameReference("UnityEngine.CoreModule", new System.Version(0, 0, 0, 0)));
             var preserve = module.ImportReference(engine.MainModule.GetType("UnityEngine.Scripting.PreserveAttribute").Methods.Single(m => m.IsConstructor && !m.HasParameters));
             Preserve(module.Types);
@@ -25,8 +27,8 @@ namespace UIFramework.Mvvm.Unity.CodeGen
             {
                 foreach (var type in types)
                 {
-                    if (type.CustomAttributes.Any(a => a.AttributeType.FullName == "UIFramework.Mvvm.WovenViewModelAttribute") || type.FullName == "UIFramework.Mvvm.Generated.ConverterProvider")
-                    { type.CustomAttributes.Add(new CustomAttribute(preserve)); foreach (var method in type.Methods) method.CustomAttributes.Add(new CustomAttribute(preserve)); }
+                    if (type.CustomAttributes.Any(a => a.AttributeType.FullName == "UIFramework.Mvvm.WovenViewModelAttribute") || type.FullName == "UIFramework.Mvvm.Generated.ConverterProvider" || providers.Contains(type.FullName))
+                    { if (!type.CustomAttributes.Any(a => a.AttributeType.FullName == preserve.DeclaringType.FullName)) type.CustomAttributes.Add(new CustomAttribute(preserve)); foreach (var method in type.Methods) if (!method.CustomAttributes.Any(a => a.AttributeType.FullName == preserve.DeclaringType.FullName)) method.CustomAttributes.Add(new CustomAttribute(preserve)); }
                     Preserve(type.NestedTypes);
                 }
             }
