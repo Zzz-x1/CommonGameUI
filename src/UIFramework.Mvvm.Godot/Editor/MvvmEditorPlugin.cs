@@ -41,7 +41,13 @@ public partial class MvvmEditorPlugin : EditorPlugin
         EditorInterface.Singleton.GetSelection().SelectionChanged += Selected;
     }
     public override void _ExitTree()
-    { StopPreview(); ObserveTasks(); EditorInterface.Singleton.GetSelection().SelectionChanged -= Selected; RemoveInspectorPlugin(_inspector); RemoveDock(_editorDock); _editorDock.QueueFree(); }
+    {
+        StopPreview(); ObserveTasks();
+        EditorInterface.Singleton.GetSelection().SelectionChanged -= Selected;
+        RemoveInspectorPlugin(_inspector); RemoveDock(_editorDock);
+        _sources.Clear(); _bindings.Clear(); ClearDetails(); _edits.Clear(); _view = null;
+        _editorDock.QueueFree();
+    }
     public override void _Process(double delta) => ObserveTasks();
     private void ObserveTasks() { foreach (var task in _tasks.ToArray()) if (task.IsCompleted) { _tasks.Remove(task); task.GetAwaiter().GetResult(); } }
     private void StartPreview()

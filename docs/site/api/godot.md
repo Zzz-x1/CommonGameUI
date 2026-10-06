@@ -88,6 +88,7 @@ ValueTask UIElement.DisposeAsync()
 ## 参数要点
 
 - Create 要求 owner 已进入场景树；默认使用 UIResourceLoader 和 Host 日志。
+- 默认 `UIResourceLoader.LoadAsync` 在场景线程同步调用 `ResourceLoader.Load`，返回已完成任务；加载无法中断，完成后检查取消令牌。
 - targetPath 相对资源根；null 表示根。挂载／绑定借用 Control。
 - Simple 按 from→to 播放；方向分支由 Select 选择。Offset 为像素，RelativeOffset 按 Size；Scale／Alpha 乘原值。
 - duration／delay 有限非负；fromScale 为正，Alpha 在 0..1。delay 计入进度。

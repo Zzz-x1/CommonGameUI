@@ -39,21 +39,13 @@ public sealed class UIResourceLoader : IUIResourceLoader
 {
     private readonly UIHost _host;
     public UIResourceLoader(UIHost host) => _host = host;
-    public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
+    public Task<IUIResource> LoadAsync(string resource, CancellationToken token)
     {
         _host.VerifyAccess(); token.ThrowIfCancellationRequested();
-        var error = ResourceLoader.LoadThreadedRequest(resource, "PackedScene");
-        if (error != Error.Ok) throw new IOException($"Cannot request UI resource '{resource}': {error}.");
-        // Godot cannot cancel a threaded request. Drain it before returning cancellation.
-        while (ResourceLoader.LoadThreadedGetStatus(resource) == ResourceLoader.ThreadLoadStatus.InProgress)
-            await _host.NextFrameAsync();
-        var status = ResourceLoader.LoadThreadedGetStatus(resource);
-        var loaded = ResourceLoader.LoadThreadedGet(resource);
-        if (status != ResourceLoader.ThreadLoadStatus.Loaded)
-            throw new IOException($"Cannot load UI resource '{resource}': {status}.");
+        var scene = ResourceLoader.Load<PackedScene>(resource)
+            ?? throw new IOException($"Cannot load UI resource '{resource}'.");
         token.ThrowIfCancellationRequested();
-        if (!(loaded is PackedScene scene)) throw new InvalidOperationException($"UI resource '{resource}' must be a PackedScene.");
-        return new SceneResource(_host, resource, scene);
+        return Task.FromResult<IUIResource>(new SceneResource(_host, resource, scene));
     }
 
     private sealed class SceneResource(UIHost host, string path, PackedScene scene) : IUIResource

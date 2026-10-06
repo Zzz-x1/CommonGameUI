@@ -97,14 +97,15 @@ public partial class DemoApp
             scene = new Control(); AddChild(scene); context = EngineUI.UI.Create(this);
             var tabs = await context.Root.CreateContainerAsync<TabContainerNode>("Animated", scene);
             var page = new Control(); scene.AddChild(page);
+            using var animation = timeline ? new Animation { Length = .5 } : null;
+            using var library = timeline ? new AnimationLibrary() : null;
             if (timeline)
             {
                 var player = new AnimationPlayer { Name = "AnimationPlayer" }; page.AddChild(player);
-                var animation = new Animation { Length = .5 };
-                int track = animation.AddTrack(Animation.TrackType.Value);
+                int track = animation!.AddTrack(Animation.TrackType.Value);
                 animation.TrackSetPath(track, ".:modulate");
                 animation.TrackInsertKey(track, 0, Colors.Transparent); animation.TrackInsertKey(track, .5, Colors.White);
-                var library = new AnimationLibrary(); library.AddAnimation("enter", animation); library.AddAnimation("exit", animation);
+                library!.AddAnimation("enter", animation); library.AddAnimation("exit", animation);
                 player.AddAnimationLibrary("", library);
             }
             node = new UINode { Transition = timeline

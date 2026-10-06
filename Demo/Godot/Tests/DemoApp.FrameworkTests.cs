@@ -165,7 +165,7 @@ public partial class DemoApp
         await ui.DisposeAsync();
         remaining.Dispose();
         Check(loader.Loads == 2 && loader.Releases == 2 && loader.Instances == 1, "Context retained a preload or instantiated it.");
-        GD.Print("PASS resources: threaded acquisition, pure/shared preload, independent instance hold, explicit/context release");
+        GD.Print("PASS resources: acquisition, pure/shared preload, independent instance hold, explicit/context release");
     }
 
     private async Task RunAdapterSelfTestAsync()
@@ -298,14 +298,15 @@ public partial class DemoApp
             Name = "Animator"
         };
         page.AddChild(player);
-        var library = new AnimationLibrary();
-        var enterClip = new Animation { Length = 0.02 };
+        using var library = new AnimationLibrary();
+        using var enterClip = new Animation { Length = 0.02 };
         var alphaTrack = enterClip.AddTrack(Animation.TrackType.Value);
         enterClip.TrackSetPath(alphaTrack, new NodePath(".:modulate"));
         enterClip.TrackInsertKey(alphaTrack, 0, new Color(tint.R, tint.G, tint.B, 0));
         enterClip.TrackInsertKey(alphaTrack, .02, tint);
         library.AddAnimation("enter", enterClip);
-        library.AddAnimation("exit", new Animation { Length = 0.02 });
+        using var exitClip = new Animation { Length = 0.02 };
+        library.AddAnimation("exit", exitClip);
         player.AddAnimationLibrary("", library);
         var restored = false;
         var authored = EngineUI.Transitions.Animation("Animator", "enter", "exit", c =>

@@ -22,6 +22,6 @@ Button close = inventory.GetControl<Button>("Content/Close");
 - Call Create on the scene thread after owner enters the tree. Replace loader/logger as needed.
 - Animate independent content wrappers so layout Containers do not overwrite Slide/Scale positions.
 - The framework disposes dynamic scenes; original scenes own borrowed controls. Transfer new-control ownership with owned: true.
-- Await ui.DisposeAsync before releasing scenes. Background loading does not allow background widget access.
+- The default loader calls `ResourceLoader.Load` synchronously on the scene thread; `LoadAsync` returns a completed task and does not mean background loading. Loading cannot be interrupted, but cancellation is checked after it returns. Await `ui.DisposeAsync()` before releasing scenes.
 
 [Godot API](../api/godot.md) · [Resources](../manual/resources.md)

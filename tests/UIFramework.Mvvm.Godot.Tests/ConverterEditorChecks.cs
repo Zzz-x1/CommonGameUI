@@ -6,7 +6,15 @@ namespace NativeMvvm.Tests;
 [Tool]
 public partial class ConverterEditorChecks : MvvmEditorPlugin
 {
-    public override void _EnterTree() { base._EnterTree(); CallDeferred(nameof(OpenScene)); }
+    private bool _waitingForScan;
+    public override void _EnterTree() { base._EnterTree(); _waitingForScan = true; }
+    public override void _Process(double delta)
+    {
+        base._Process(delta);
+        if (!_waitingForScan || EditorInterface.Singleton.GetResourceFilesystem().IsScanning()) return;
+        _waitingForScan = false;
+        CallDeferred(nameof(OpenScene));
+    }
     private void OpenScene() { EditorInterface.Singleton.OpenSceneFromPath("res://Window.tscn"); CallDeferred(nameof(CheckEditor)); }
     private void CheckEditor()
     {

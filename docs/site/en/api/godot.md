@@ -88,6 +88,7 @@ ValueTask UIElement.DisposeAsync()
 ## Parameter notes
 
 - Create requires owner in the scene tree; defaults are UIResourceLoader and Host logging.
+- The default `UIResourceLoader.LoadAsync` calls `ResourceLoader.Load` synchronously on the scene thread and returns a completed task; loading cannot be interrupted, and cancellation is checked afterward.
 - targetPath is relative to the root; null means root. Attach/bind borrow Controls.
 - Simple plays from→to; Select chooses direction branches. Offset uses pixels, RelativeOffset uses Size, and Scale/Alpha multiply authored values.
 - duration/delay are finite and nonnegative; fromScale is positive; Alpha is within 0..1. Delay counts toward progress.

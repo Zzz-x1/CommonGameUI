@@ -44,8 +44,8 @@ internal sealed class InventoryGridTarget : ICollectionTarget, IAsyncDisposable
     public void Remove(int index) { _items.Remove(index); Arrange(); }
     public void Move(int oldIndex, int newIndex) { _items.Move(oldIndex, newIndex); Arrange(); }
     public void Clear() => _items.Clear();
-    public void Dispose() => _items.Dispose();
-    public ValueTask DisposeAsync() => _items.DisposeAsync();
+    public void Dispose() { _items.Changed -= Arrange; _items.Dispose(); }
+    public ValueTask DisposeAsync() { _items.Changed -= Arrange; return _items.DisposeAsync(); }
     private void Arrange()
     {
         var rows = _mount.GetChildren().Cast<Control>().ToArray();

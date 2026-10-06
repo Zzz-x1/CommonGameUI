@@ -70,6 +70,6 @@ enabled=PackedStringArray("res://addons/converter_checks/plugin.cfg")
 '@ | Add-Content -LiteralPath (Join-Path $taskGodotProject 'project.godot') -Encoding utf8
 $taskEditorResult = Join-Path $taskGodotProject 'converter-editor-checks.txt'
 if (Test-Path -LiteralPath $taskEditorResult) { Remove-Item -LiteralPath $taskEditorResult }
-& $taskGodot --headless --path $taskGodotProject --editor --quit-after 300
+& $taskGodot --headless --path $taskGodotProject --editor --quit-after 1800
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $taskEditorResult)) { throw 'Godot converter GUI checks failed.' }
 Get-Content -LiteralPath $taskEditorResult

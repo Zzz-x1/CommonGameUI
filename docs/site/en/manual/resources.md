@@ -19,6 +19,7 @@ await ui.DisposeAsync();
 - A Context shares loading by path. Leases/instances hold independent references; the last release returns the resource.
 - Canceling one waiter does not affect others. A resource path is required for preload.
 - Context disposal awaits load completion and resource cleanup. Non-cancelable native requests may delay cancellation.
+- Godot's default loader calls `ResourceLoader.Load` synchronously on the scene thread; `LoadAsync` does not mean background loading. Loading cannot be interrupted; cancellation is checked afterward.
 - Releasing framework references does not guarantee immediate texture/cache reclamation.
 
 [Custom engine](../integrations/custom-engine.md) · [Async shutdown](async-and-errors.md)

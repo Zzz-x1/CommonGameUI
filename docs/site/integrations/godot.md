@@ -22,6 +22,6 @@ Button close = inventory.GetControl<Button>("Content/Close");
 - 在场景线程、owner 进入树后调用 Create；loader／logger 可自行替换。
 - Slide／Scale 使用独立内容包装层，避免布局 Container 重写动画位置。
 - 动态场景实例由框架销毁；借用控件由原场景拥有。转移新控件所有权时显式传 owned: true。
-- 释放场景前 await ui.DisposeAsync。后台加载不代表可以在后台线程操作控件。
+- 默认资源加载器在场景线程同步调用 `ResourceLoader.Load`；`LoadAsync` 返回已完成任务，不代表后台加载。加载期间无法中断，返回后会检查取消令牌。释放场景前 await `ui.DisposeAsync()`。
 
 [Godot API](../api/godot.md) · [资源管理](../manual/resources.md)

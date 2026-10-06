@@ -41,7 +41,8 @@ public partial class MvvmVerification : global::Godot.Node
         await node.DisposeAsync(); vm.Gold = 40; Check(label.Text == "70", "Closed node retained bindings"); await ui.DisposeAsync(); await runtime.DisposeAsync();
         await using (var preview = new EngineMvvm.BindingPreview(config)) { Check(label.Text == "100", "Preview initial value"); Check(slider.Value == 100, "Preview slider value"); button.EmitSignal(BaseButton.SignalName.Pressed); Check(template.Gold == 100, "Preview command changed asset"); }
         Check(label.Text == "70" && slider.Value == 70, "Preview did not restore controls");
-        template.Other = null; var packed = new PackedScene(); Check(packed.Pack(view) == Error.Ok, "Pack view"); var path = "user://mvvm-config-verification.tscn"; Check(ResourceSaver.Save(packed, path) == Error.Ok, "Save configuration");
+        template.Other = null; var path = "user://mvvm-config-verification.tscn";
+        using (var packed = new PackedScene()) { Check(packed.Pack(view) == Error.Ok, "Pack view"); Check(ResourceSaver.Save(packed, path) == Error.Ok, "Save configuration"); }
         using var saved = ResourceLoader.Load<PackedScene>(path, cacheMode: ResourceLoader.CacheMode.Ignore); var restored = saved.Instantiate<Control>(); var restoredConfig = restored.GetNode<MvvmBindings>("MvvmBindings");
         Check(restoredConfig.ViewModels.Count == 1 && restoredConfig.Bindings.Count == 3, "Configuration was not serialized"); restored.Free(); DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
         view.QueueFree(); template.Dispose(); await VerifyCollectionAsync();
