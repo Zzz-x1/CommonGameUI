@@ -15,11 +15,12 @@ namespace UIFramework.Mvvm.Unity
         public bool Enabled = true; public Component Target; public string Member = "text"; public string Source = "";
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
         public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
-        public GameObject ItemPrefab; public bool OneTimeCollection;
-        public CommandParameterMode ParameterMode; public string ParameterConstant = "", ParameterPath = "";
+        public GameObject ItemPrefab; public bool OneTimeCollection; public Component ItemFactory;
+        public List<CollectionSourceMapping> ItemSources = new List<CollectionSourceMapping>();
+        public bool ParameterIsNull; public CommandParameterMode ParameterMode; public string ParameterConstant = "", ParameterPath = "";
         public CommandBindingOptions GetCommandOptions() => ParameterMode == CommandParameterMode.SourcePath
             ? new CommandBindingOptions { ParameterPath = ParameterPath }
-            : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant ? ParameterConstant : null };
+            : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant && !ParameterIsNull ? ParameterConstant : null };
         public BindingOptions GetOptions(bool preview = false)
         {
             var options = Converters.Configure(Converter, ConvertBack, Mode, ConverterInput, ConverterConstant, HasNullValue, NullValue);
@@ -33,14 +34,18 @@ namespace UIFramework.Mvvm.Unity
         public List<ViewBindingData> Bindings = new List<ViewBindingData>();
         public IReadOnlyList<ViewModelSource> Sources => ViewModels.Select(s => new ViewModelSource
         { Name = s.Name, Type = s.Template ? s.Template.GetType() : throw new InvalidOperationException("VM asset is required: " + s.Name), Creation = s.Creation, Template = s.Template }).ToArray();
-        public void Apply(UINode node)
+        public CollectionTarget GetCollectionTarget(IUINode node, ViewBindingData binding, bool preview = false) =>
+            new CollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab, preview,
+                binding.ItemFactory ? (ICollectionItemFactory)binding.ItemFactory : null, binding.ItemSources);
+        public void Apply(UINode node) => Apply(node, false);
+        public void Apply(UINode node, bool preview)
         {
             foreach (var binding in Bindings.Where(b => b.Enabled))
             {
                 if (!binding.Target) throw new InvalidOperationException("Missing binding target: " + binding.Source);
-                if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget(), binding.GetCommandOptions());
-                else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, new CollectionTarget(node, (RectTransform)binding.Target.transform, binding.ItemPrefab), binding.OneTimeCollection);
-                else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member, options.Mode), options); }
+                if (binding.Kind == ViewBindingKind.Command) { if (preview) continue; node.BindCommand(binding.Source, ((Button)binding.Target).ClickTarget(), binding.GetCommandOptions()); }
+                else if (binding.Kind == ViewBindingKind.Collection) node.BindCollection(binding.Source, GetCollectionTarget(node, binding, preview), binding.OneTimeCollection);
+                else { var options = binding.GetOptions(preview); node.Bind(binding.Source, BindingTargets.Property(binding.Target, binding.Member, options.Mode), options); }
             }
         }
     }

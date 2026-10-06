@@ -264,9 +264,10 @@ internal sealed class BindingScope : IAsyncDisposable
                 if (options.Mode == CommandParameterMode.SourcePath) _parameterPath = new Path(scope, options.ParameterPath, false);
                 else _parameter = options.ConstantValue;
                 var (vm, member) = _path.Resolve(); var type = vm!.Describe().Single(m => m.Name == member && m.Kind == MvvmMemberKind.Command).Type;
+                if (options.Mode == CommandParameterMode.None && type != typeof(void)) throw new ArgumentException("Command requires a business parameter.");
                 if (options.ConstantText != null && options.Mode == CommandParameterMode.Constant) _parameter = CommandParameters.ParseConstant(options.ConstantText, type);
                 if (options.Mode != CommandParameterMode.SourcePath) CommandParameters.Validate(type, _parameter);
-                else { var (owner, valueMember) = _parameterPath!.Resolve(); var valueType = owner!.Describe().Single(m => m.Name == valueMember).Type; if (!type.IsAssignableFrom(valueType)) throw new InvalidCastException("Command parameter source type mismatch."); }
+                else { var (owner, valueMember) = _parameterPath!.Resolve(); if (owner == null) throw new InvalidOperationException("Null command parameter source."); var valueType = owner.Describe().Single(m => m.Name == valueMember).Type; if (!type.IsAssignableFrom(valueType)) throw new InvalidCastException("Command parameter source type mismatch."); }
                 _path.Changed += Update; scope._runtime.CommandStateChanged += Update; target.Invoked += Invoke; Update();
             }
             catch (Exception error)
@@ -297,11 +298,11 @@ internal sealed class BindingScope : IAsyncDisposable
     }
     private sealed class CollectionBinding : IDisposable
     {
-        private readonly Path _path; private readonly ICollectionTarget _target; private readonly bool _oneTime;
+        private readonly BindingScope _scope; private readonly Path _path; private readonly ICollectionTarget _target; private readonly bool _oneTime;
         private INotifyCollectionChanged? _collection;
         private bool _disposed;
         internal CollectionBinding(BindingScope scope, string path, ICollectionTarget target, bool oneTime)
-        { _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
+        { _scope = scope; _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
         private void Reload()
         {
             if (_collection != null) _collection.CollectionChanged -= Changed;
@@ -326,6 +327,6 @@ internal sealed class BindingScope : IAsyncDisposable
                 case NotifyCollectionChangedAction.Reset: Reload(); break;
             }
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Reload; _path.Dispose(); if (_collection != null) _collection.CollectionChanged -= Changed; _target.Dispose(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Reload; _path.Dispose(); if (_collection != null) _collection.CollectionChanged -= Changed; if (_target is IAsyncDisposable asyncTarget) _scope.Observe(asyncTarget.DisposeAsync().AsTask()); else _target.Dispose(); }
     }
 }

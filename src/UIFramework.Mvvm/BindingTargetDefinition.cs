@@ -67,13 +67,17 @@ public static class BindingTargetRegistry
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            if (!Providers.TryGetValue(assembly, out var targets))
+            BindingTargetDefinition[] targets;
+            lock (Providers)
             {
-                targets = assembly.GetCustomAttributes<BindingTargetProviderAttribute>()
-                    .SelectMany(a => ((IBindingTargetProvider)Activator.CreateInstance(a.Type)!).GetTargets()).ToArray();
-                if (targets.GroupBy(d => (d.TargetType, d.Member)).Any(g => g.Count() != 1))
-                    throw new InvalidOperationException("Duplicate binding target definition in " + assembly.FullName);
-                Providers.Add(assembly, targets);
+                if (!Providers.TryGetValue(assembly, out targets!))
+                {
+                    targets = assembly.GetCustomAttributes<BindingTargetProviderAttribute>()
+                        .SelectMany(a => ((IBindingTargetProvider)Activator.CreateInstance(a.Type)!).GetTargets()).ToArray();
+                    if (targets.GroupBy(d => (d.TargetType, d.Member)).Any(g => g.Count() != 1))
+                        throw new InvalidOperationException("Duplicate binding target definition in " + assembly.FullName);
+                    Providers.Add(assembly, targets);
+                }
             }
             foreach (var target in targets) yield return target;
         }

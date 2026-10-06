@@ -19,6 +19,7 @@ public abstract partial class ClientPage : ClientView
     private bool _favorites;
     private int _sort;
     private ClientInventoryVm? _inventoryVm;
+    private ClientShopVm? _shopVm;
     public TextureRect SelectedIcon { get; private set; } = null!;
 
     protected override async Task OnInitializeAsync(CancellationToken token)
@@ -29,7 +30,7 @@ public abstract partial class ClientPage : ClientView
             var name = page.Name.ToString();
             await Tabs.BindAsync(name, new UINode { Transition = ClientTransitions.Category(Module) }, page, token);
             Wire("Tabs/" + name, () => SelectTabAsync(name));
-            foreach (var button in page.GetChildren().OfType<Button>().Where(_ => Module != "Inventory"))
+            foreach (var button in page.GetChildren().OfType<Button>().Where(_ => Module is not "Inventory" and not "Shop"))
             {
                 var path = $"Pages/{name}/{button.Name}";
                 Wire(path, () => SelectEntryAsync(path));
@@ -45,6 +46,19 @@ public abstract partial class ClientPage : ClientView
                 var mount = Get<Control>("Pages/" + name);
                 foreach (var child in mount.GetChildren()) child.Free();
                 this.BindCollection(name == "装备" ? "Inventory.Equipment" : "Inventory.Materials", new InventoryGridTarget(this, mount, row));
+            }
+        }
+        if (Module == "Shop")
+        {
+            _shopVm = this.CreateViewModel<ClientShopVm>("Shop"); _shopVm.Open = id => App.ModalAsync(new ModalArgs("Shop", id, Text: Tabs.CurrentName == "礼包" ? "礼包包含当前装备 × 1，以及经验手记 × 3。" : ""));
+            this.SetViewModel("Player", App.PlayerVm);
+            foreach (var name in new[] { "装备", "材料", "礼包" })
+            {
+                var mount = Get<Control>("Pages/" + name); foreach (var child in mount.GetChildren()) child.Free();
+                var target = new EngineMvvm.CollectionTarget(this, mount, null, factory: new ShopItemFactory(), sources: new[] {
+                    new CollectionSourceMapping { ParentSource = "Shop", ItemSource = "Shop" }, new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } });
+                target.Changed += () => ArrangeShop(mount);
+                this.BindCollection("Shop." + (name == "装备" ? "Equipment" : name == "材料" ? "Materials" : "Bundles"), target);
             }
         }
         if (Module is "Inventory" or "Friends")
@@ -106,6 +120,15 @@ public abstract partial class ClientPage : ClientView
         {
             UpdateInventory("装备", _inventoryVm!.Equipment); UpdateInventory("材料", _inventoryVm.Materials); return;
         }
+        if (Module == "Shop")
+        {
+            foreach (var name in new[] { "装备", "材料", "礼包" })
+            {
+                var items = name == "装备" ? _shopVm!.Equipment : name == "材料" ? _shopVm!.Materials : _shopVm!.Bundles;
+                if (items.Count == 0) foreach (var id in Entries(name)) { var (title, info, icon) = Describe(name, id); items.Add(new ClientInventoryItemVm { Id = id, Title = title, Info = info, Icon = icon }); }
+            }
+            return;
+        }
         foreach (var page in Get<Control>("Pages").GetChildren().Cast<Control>())
         {
             var name = page.Name.ToString();
@@ -131,6 +154,16 @@ public abstract partial class ClientPage : ClientView
             Get<Button>("ClaimAll").Disabled = !Enumerable.Range(0, 8).Any(i => !Data.DeletedMail.Contains(i) && !Data.Claimed.Contains($"m{i}"));
     }
 
+    private static void ArrangeShop(Control mount)
+    {
+        var rows = mount.GetChildren().OfType<Control>().ToArray();
+        for (int i = 0; i < rows.Length; i++) { var row = rows[i]; row.Name = "C" + i; row.AnchorLeft = .006f + .25f * (i % 4); row.AnchorRight = row.AnchorLeft + .238f; row.AnchorTop = .012f + i / 4 / 3f; row.AnchorBottom = row.AnchorTop + .3093333f; row.OffsetLeft = row.OffsetRight = row.OffsetTop = row.OffsetBottom = 0; }
+    }
+    private sealed class ShopItemFactory : ICollectionItemFactory
+    {
+        public Task<IUINode> CreateAsync(global::UIFramework.Mvvm.CollectionItemContext context, CancellationToken cancellationToken) =>
+            context.LoadAsync("res://Scenes/Client/ShopRow.tscn", node => node.Bind("Player.Gold", EngineMvvm.BindingTargets.Property(((EngineUI.UIElement)node.Element!).Control, "SelfModulate"), new BindingOptions { Convert = value => (int)value! >= Catalog.Items[((ClientInventoryItemVm)context.Item).Id].Price ? Colors.White : new Color(.7f, .7f, .7f) }), cancellationToken);
+    }
     private void UpdateInventory(string tab, System.Collections.ObjectModel.ObservableCollection<ClientInventoryItemVm> items)
     {
         _inventoryVm!.Update(items, Entries(tab).ToArray(), id =>

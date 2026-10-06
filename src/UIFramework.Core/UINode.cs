@@ -130,7 +130,7 @@ public class UINode : IUINode
     }
 
     /// <summary>Bind an existing display or attach a logical node. Does not load or clone a resource.</summary>
-    public async Task AttachAsync(IUINode owner, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null)
+    public async Task AttachAsync(IUINode owner, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null, bool? initiallyVisible = null)
     {
         if (owner == null) throw new ArgumentNullException(nameof(owner));
         var parent = owner.Node;
@@ -175,7 +175,7 @@ public class UINode : IUINode
                 foreach (var extension in _initializedExtensions) extension.AfterInitialize(this);
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
-                SetLocalState(InitiallyVisible, InitiallyVisible);
+                SetLocalState(initiallyVisible ?? InitiallyVisible, initiallyVisible ?? InitiallyVisible);
                 Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization));
             }, cancellationToken, allowInitializing: true);
         }

@@ -99,7 +99,7 @@ this.ResumeBinding(nameof(HeroVm.Power));
 
 ## 列表和命令
 
-动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `CollectionTarget`／`CollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，声明 **Manual / Item** 来源。条目可以是基础节点，无需业务 View 类。
+动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `CollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，`Item` 来源由框架自动提供，无需声明资产。条目可以是基础节点，无需业务 View 类。
 
 移动保留条目实例，删除解除绑定并释放条目。普通数组只能一次性展示。布局由项目资源决定，模块不提供虚拟化、排序或对象池。
 
@@ -120,3 +120,24 @@ await ui.DisposeAsync();
 ## 自定义控件属性
 
 实现 `IBindingTargetProvider.GetTargets()`，在程序集中声明 `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`，返回强类型 `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)`。显示绑定可省略 `subscribe`；双向及 View→VM 必须提供通知和解绑。运行时、属性选择器和预览共用定义，查询成员不连接控件事件。
+
+## 命令参数与条目工厂
+
+命令可配置常量或来源路径。来源在点击时读取，不自动转换类型。GUI 常量支持文本、布尔、数字和枚举；取消 Token 由框架管理。
+
+条目映射在创建时借用父 VM 实例，不克隆，也不自动跟随父来源替换。
+
+```csharp
+node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+    new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
+
+var target = new CollectionTarget(node, mount, itemResource,
+    sources: new[] {
+        new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" }
+    });
+node.BindCollection("Inventory.Items", target);
+```
+
+实现 `ICollectionItemFactory.CreateAsync(context, token)` 可按条目选择不同资源。调用 `context.CreateAsync(prefabOrScene, configure, token)` 或 `context.LoadAsync(resourcePath, configure, token)`；配置回调在来源建立后、业务初始化前执行，可调用 `node.CreateViewModel` 创建条目拥有的模型。`context.Item`、`Index`、`Owner`、`IsPreview` 描述创建请求；Index 是创建时索引，不是实时位置。
+
+移动保留实例；删除、替换、Reset 和关闭取消待创建条目，并等待已取得资源释放。初始化完成后才显示。失败直接传播，重试由业务明确发起。自定义布局监听 `target.Changed`，在异步创建完成后重新排布。流程需要等待当前绑定任务时使用 `ui.WhenMvvmIdleAsync()`。

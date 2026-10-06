@@ -8,7 +8,12 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
     [Export] public global::Godot.Collections.Array<ViewModelSourceResource> ViewModels { get; set; } = new();
     [Export] public global::Godot.Collections.Array<ViewBindingResource> Bindings { get; set; } = new();
     [Export] public global::Godot.Collections.Array<Control> Targets { get; set; } = new();
-    public void AddBinding(Control target, ViewBindingResource binding) { Targets.Add(target); Bindings.Add(binding); }
+    [Export] public global::Godot.Collections.Array<global::Godot.Node> ItemFactories { get; set; } = new();
+    public void AddBinding(Control target, ViewBindingResource binding) { EnsureFactories(); Targets.Add(target); Bindings.Add(binding); ItemFactories.Add(null!); }
+    public void EnsureFactories() { if (ItemFactories.Count == 0) for (int i = 0; i < Bindings.Count; i++) ItemFactories.Add(null!); if (ItemFactories.Count != Bindings.Count) throw new InvalidOperationException("Each binding must have a factory reference slot."); }
+    public global::Godot.Node? GetFactory(ViewBindingResource binding) { if (ItemFactories.Count == 0) return null; if (ItemFactories.Count != Bindings.Count) throw new InvalidOperationException("Each binding must have a factory reference slot."); return ItemFactories[Bindings.IndexOf(binding)]; }
+    public CollectionTarget GetCollectionTarget(IUINode node, ViewBindingResource binding, bool preview = false) =>
+        new(node, GetTarget(binding), binding.ItemScene, preview, GetFactory(binding) is { } factory ? (ICollectionItemFactory)factory : null, binding.ItemSources.Select(s => s.ToMapping()).ToArray());
     public Control GetTarget(ViewBindingResource binding)
     {
         if (Targets.Count != Bindings.Count) throw new InvalidOperationException("Each binding must have a native target reference.");
@@ -17,15 +22,16 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
     }
     public IReadOnlyList<ViewModelSource> Sources => ViewModels.Select(s => new ViewModelSource
     { Name = s.Name, Type = s.Template?.GetType() ?? throw new InvalidOperationException("VM asset is required: " + s.Name), Creation = s.Creation, Template = s.Template }).ToArray();
-    public void Apply(UINode node)
+    public void Apply(UINode node) => Apply(node, false);
+    public void Apply(UINode node, bool preview)
     {
         foreach (var binding in Bindings.Where(b => b.Enabled))
         {
             var control = GetTarget(binding);
-            if (binding.Kind == ViewBindingKind.Command) node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget(), binding.GetCommandOptions());
+            if (binding.Kind == ViewBindingKind.Command) { if (preview) continue; node.BindCommand(binding.Source, ((BaseButton)control).ClickTarget(), binding.GetCommandOptions()); }
             else if (binding.Kind == ViewBindingKind.Collection)
-                node.BindCollection(binding.Source, new CollectionTarget(node, control, binding.ItemScene ?? throw new InvalidOperationException("Item scene is required.")), binding.OneTimeCollection);
-            else { var options = binding.GetOptions(); node.Bind(binding.Source, BindingTargets.Property(control, binding.Member, options.Mode), options); }
+                node.BindCollection(binding.Source, GetCollectionTarget(node, binding, preview), binding.OneTimeCollection);
+            else { var options = binding.GetOptions(preview); node.Bind(binding.Source, BindingTargets.Property(control, binding.Member, options.Mode), options); }
         }
     }
 }

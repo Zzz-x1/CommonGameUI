@@ -18,11 +18,7 @@ public sealed class BindingPreview : IAsyncDisposable
         public void Apply(UINode node)
         {
             if (View == null) return;
-            foreach (var b in View.Bindings.Where(b => b.Enabled && b.Kind == ViewBindingKind.Property))
-            {
-                var options = b.GetOptions(true);
-                node.Bind(b.Source, EngineMvvm.BindingTargets.Property(View.GetTarget(b), b.Member), options);
-            }
+            View.Apply(node, true);
         }
     }
     public BindingPreview(MvvmBindings view)
@@ -37,7 +33,7 @@ public sealed class BindingPreview : IAsyncDisposable
             {
                 var control = view.GetTarget(b);
                 if (b.Kind == ViewBindingKind.Collection)
-                { foreach (var child in control.GetChildren().OfType<Control>()) { _children.Add((child, child.Visible)); child.Hide(); } node.BindCollection(b.Source, new EngineMvvm.CollectionTarget(node, control, b.ItemScene!), b.OneTimeCollection); }
+                { foreach (var child in control.GetChildren().OfType<Control>()) { _children.Add((child, child.Visible)); child.Hide(); } node.BindCollection(b.Source, view.GetCollectionTarget(node, b, true), b.OneTimeCollection); }
                 else
                 { var options = b.GetOptions(true); var target = EngineMvvm.BindingTargets.Property(control, b.Member); _values.Add((target, target.Read())); node.Bind(b.Source, target, options); }
             }

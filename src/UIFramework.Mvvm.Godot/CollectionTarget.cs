@@ -1,35 +1,37 @@
 using Godot;
 using UIFramework.Godot;
+using CoreNode = global::UIFramework.UINode;
 namespace UIFramework.Mvvm.Godot;
-public sealed class CollectionTarget : ICollectionTarget
+public sealed class CollectionTarget : CollectionTargetBase
 {
-    private readonly IUINode _owner; private readonly Control _mount; private readonly PackedScene _template;
-    private readonly List<(Control Control, UINode Node)> _items = new();
-    private int _id;
+    private readonly IUINode _owner; private readonly Control _mount; private readonly PackedScene? _template;
+    private readonly bool _preview; private readonly ICollectionItemFactory? _factory;
+    private readonly IReadOnlyList<CollectionSourceMapping> _sources; private int _id;
     private readonly string _name = "Items_" + Guid.NewGuid().ToString("N");
-    public CollectionTarget(IUINode owner, Control mount, PackedScene template) { _owner = owner; _mount = mount; _template = template; }
-    public void Insert(int index, object item)
+    public CollectionTarget(IUINode owner, Control mount, PackedScene? template, bool preview = false,
+        ICollectionItemFactory? factory = null, IReadOnlyList<CollectionSourceMapping>? sources = null) : base(owner)
+    { _owner = owner; _mount = mount; _template = template; _preview = preview; _factory = factory; _sources = sources ?? Array.Empty<CollectionSourceMapping>(); if (template == null && factory == null) throw new ArgumentException("An item resource or factory is required."); }
+    protected override global::UIFramework.Mvvm.CollectionItemContext CreateContext(object item, int index) =>
+        new NativeItemContext(_owner, item, index, _preview, _mount, _sources, _name + "_" + _id++);
+    protected override Task<IUINode> CreateItemAsync(global::UIFramework.Mvvm.CollectionItemContext context, CancellationToken token) =>
+        _factory == null ? context.CreateAsync(_template!, cancellationToken: token) : _factory.CreateAsync(context, token);
+    protected override void Place(IUINode node, int index) { var control = ((UIElement)node.Element!).Control; _mount.MoveChild(control, index); }
+    protected override void Detach(IUINode node) { var control = ((UIElement)node.Element!).Control; control.Hide(); control.GetParent().RemoveChild(control); }
+}
+internal sealed class NativeItemContext : global::UIFramework.Mvvm.CollectionItemContext
+{
+    internal NativeItemContext(IUINode owner, object item, int index, bool preview, Control mount,
+        IReadOnlyList<CollectionSourceMapping> sources, string name) : base(owner, item, index, preview, new UIElement(mount), sources, name) { }
+    internal Task<IUINode> CreateAsync(PackedScene scene, Action<IUINode>? configure, CancellationToken token)
     {
-        var control = _template.Instantiate<Control>(); _mount.AddChild(control);
-        var node = new ItemNode(item); var attach = node.AttachToAsync(_owner, _name + "_" + _id++, control);
-        if (!attach.IsCompleted) throw new InvalidOperationException("List item initialization must be synchronous."); attach.GetAwaiter().GetResult();
-        index = index == int.MaxValue ? _items.Count : index; _items.Insert(index, (control, node)); _mount.MoveChild(control, index);
+        token.ThrowIfCancellationRequested(); var control = scene.Instantiate<Control>(); control.Hide(); ((UIElement)Mount).Control.AddChild(control);
+        return AttachAsync(new UIElement(control, owned: true), configure, token);
     }
-    public void Remove(int index)
-    {
-        var item = _items[index]; _items.RemoveAt(index);
-        if (GodotObject.IsInstanceValid(item.Control)) item.Control.GetParent().RemoveChild(item.Control);
-        _owner.ObserveMvvmTask(Release());
-        async Task Release()
-        {
-            try { await item.Node.DisposeAsync(); }
-            finally { if (GodotObject.IsInstanceValid(item.Control)) item.Control.QueueFree(); }
-        }
-    }
-    public void Move(int oldIndex, int newIndex) { var item = _items[oldIndex]; _items.RemoveAt(oldIndex); _items.Insert(newIndex, item); _mount.MoveChild(item.Control, newIndex); }
-    public void Clear() { for (int i = _items.Count - 1; i >= 0; i--) Remove(i); }
-    public void Dispose() => Clear();
-    private sealed class ItemNode(object vm) : UINode
-    { protected override bool InitiallyVisible => true;
-        protected override Task OnInitializeAsync(CancellationToken token) { this.SetViewModel("Item", vm); return Task.CompletedTask; } }
+    protected override IUINode ResolveNode(IUIElement element) =>
+        !IsPreview && ((UIElement)element).Control is IUINode node ? node : new CoreNode();
+}
+public static class CollectionItemExtensions
+{
+    public static Task<IUINode> CreateAsync(this global::UIFramework.Mvvm.CollectionItemContext context, PackedScene scene,
+        Action<IUINode>? configure = null, CancellationToken cancellationToken = default) => ((NativeItemContext)context).CreateAsync(scene, configure, cancellationToken);
 }

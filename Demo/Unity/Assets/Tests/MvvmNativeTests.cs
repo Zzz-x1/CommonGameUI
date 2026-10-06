@@ -30,6 +30,24 @@ namespace StarCourt.UnityDemo.Tests
     public sealed class MvvmNativeTests
     {
         [UnityTest] public IEnumerator AssetCloneBindingsAndNodeCleanup() => Wait(Run());
+        [UnityTest] public IEnumerator NativeCollectionRowsInitializeAsynchronously() => Wait(CollectionRun());
+        private sealed class TestLog : IUILog { public readonly List<Exception> Errors = new List<Exception>(); public void Error(Exception error, string context) => Errors.Add(error); }
+        private static async Task CollectionRun()
+        {
+            var events = new GameObject("Events", typeof(EventSystem)); var canvas = new GameObject("Canvas", typeof(Canvas));
+            var log = new TestLog(); var ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>(), logger: log);
+            var root = new GameObject("Root", typeof(RectTransform)); root.transform.SetParent(canvas.transform, false);
+            var owner = new UINode(); await owner.AttachToAsync(ui.Root, "Root", (RectTransform)root.transform);
+            var player = new ClientShopVm(); owner.SetViewModel("Player", player);
+            var template = new GameObject("Row", typeof(RectTransform), typeof(CollectionRowNode)); template.SetActive(false);
+            var target = new CollectionTarget(owner, (RectTransform)root.transform, template, sources: new[] { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } });
+            owner.BindCollection("Player.Items", target); var first = new ClientInventoryItemVm { Id = 1 }; var second = new ClientInventoryItemVm { Id = 2 };
+            player.Items.Add(first); player.Items.Add(second); player.Items.Move(0, 1); await ui.WhenMvvmIdleAsync();
+            var row = root.transform.GetChild(0).GetComponent<CollectionRowNode>(); Assert.That(row.ItemAtInitialize, Is.SameAs(second)); Assert.That(row.PlayerAtInitialize, Is.SameAs(player)); Assert.That(row.State, Is.EqualTo(NodeState.Ready));
+            player.Items.RemoveAt(0); await ui.WhenMvvmIdleAsync(); Assert.That(root.transform.childCount, Is.EqualTo(1));
+            player.Items.Add(second); await owner.DisposeAsync(); Assert.That(root.transform.childCount, Is.EqualTo(0)); await ui.DisposeAsync(); Assert.That(log.Errors.TrueForAll(error => error is OperationCanceledException), Is.True);
+            UnityEngine.Object.Destroy(template); UnityEngine.Object.Destroy(root); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events);
+        }
         private static IEnumerator Wait(Task task) { while (!task.IsCompleted) yield return null; task.GetAwaiter().GetResult(); }
         private static async Task Run()
         {

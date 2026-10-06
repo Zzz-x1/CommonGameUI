@@ -155,7 +155,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
         try { await DrainTasksAsync(); } catch (Exception error) { Failure(ref first, error); }
         foreach (var owned in _owned.AsEnumerable().Reverse())
             try { await Release(owned.Value, owned.Assets); } catch (Exception error) { Report(error, "MVVM shared VM release"); Failure(ref first, error); }
-        _owned.Clear(); _shared.Clear(); _commands.Clear(); _releases.Clear();
+        _owned.Clear(); _shared.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal static void Failure(ref Exception? first, Exception error)
@@ -193,6 +193,8 @@ public sealed class MvvmNodeExtension : IUINodeExtension
         var configuration = _configuration?.Invoke(node);
         var scope = new BindingScope(node, _runtime, _assets); MvvmExtensions.Scopes.Add(node, scope);
         if (configuration != null) scope.Configure(configuration);
+        if (MvvmExtensions.Initializers.TryGetValue(node, out var initialize))
+        { MvvmExtensions.Initializers.Remove(node); initialize(node.Owner); }
     }
     public void AfterInitialize(UINode node) => MvvmExtensions.Scope(node).ApplyConfiguration();
     public ValueTask DisposeAsync(UINode node) => MvvmExtensions.Scope(node).DisposeAsync();
@@ -200,6 +202,7 @@ public sealed class MvvmNodeExtension : IUINodeExtension
 public static class MvvmExtensions
 {
     internal static readonly ConditionalWeakTable<UINode, BindingScope> Scopes = new();
+    internal static readonly ConditionalWeakTable<UINode, Action<IUINode>> Initializers = new();
     internal static BindingScope Scope(UINode node) => Scopes.TryGetValue(node, out var scope) ? scope : throw new InvalidOperationException("MVVM was not installed when this node was created.");
     public static MvvmRuntime GetMvvm(this UIContext ui) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module must be installed before creating the context.")).Runtime;
     public static void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,

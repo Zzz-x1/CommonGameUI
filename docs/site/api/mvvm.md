@@ -95,3 +95,25 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 `ViewBindingData`／`ViewBindingResource.GetOptions(bool preview = false)` 校验转换配置，预览只更新显示。Unity 来源使用 `ViewModelSourceData.Template`；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
 
 相关：[入门](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
+
+## 目标扩展与集合创建
+
+```csharp
+BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
+    string member, Func<TTarget, TValue> read, Action<TTarget, TValue> write,
+    Func<TTarget, Action, Action>? subscribe = null) where TTarget : class;
+IReadOnlyList<BindingTargetDefinition> BindingTargetRegistry.Members(Type targetType);
+BindingTargetDefinition BindingTargetRegistry.Find(Type targetType, string member);
+IBindingTarget BindingTargetDefinition.CreateTarget(object target,
+    BindingMode mode = BindingMode.OneWay);
+IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
+    CommandBindingOptions options);
+Task<IUINode> ICollectionItemFactory.CreateAsync(CollectionItemContext context,
+    CancellationToken cancellationToken);
+Task<IUINode> CollectionItemContext.LoadAsync(string resource,
+    Action<IUINode>? configure = null, CancellationToken cancellationToken = default);
+```
+
+`BindingTargetDefinition` 提供 TargetType、Member、ValueType、Observable。提供者实现 `GetTargets()` 并使用程序集 `BindingTargetProvider` 标记；Subscribe 返回解绑函数。`CommandBindingOptions` 包含 Mode（None/Constant/SourcePath）、ConstantValue、ConstantText、ParameterPath；设置 ParameterPath 自动选择 SourcePath。无业务参数的命令其 `MvvmMember.ParameterType` 为 null。
+
+两端 CollectionTarget 构造增加可选 preview、factory、sources 参数。`CollectionItemContext.CreateAsync` 为引擎扩展，接收 GameObject／PackedScene、配置回调与取消 Token。工厂须返回该 context 创建的节点。内置目标实现 IAsyncDisposable；自定义 ICollectionTarget 可实现它以等待清理。`Changed` 通知布局更新。

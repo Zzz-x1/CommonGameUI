@@ -44,6 +44,20 @@ public partial class MvvmVerification : global::Godot.Node
         template.Other = null; var packed = new PackedScene(); Check(packed.Pack(view) == Error.Ok, "Pack view"); var path = "user://mvvm-config-verification.tscn"; Check(ResourceSaver.Save(packed, path) == Error.Ok, "Save configuration");
         using var saved = ResourceLoader.Load<PackedScene>(path, cacheMode: ResourceLoader.CacheMode.Ignore); var restored = saved.Instantiate<Control>(); var restoredConfig = restored.GetNode<MvvmBindings>("MvvmBindings");
         Check(restoredConfig.ViewModels.Count == 1 && restoredConfig.Bindings.Count == 3, "Configuration was not serialized"); restored.Free(); DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
-        view.QueueFree(); template.Dispose();
+        view.QueueFree(); template.Dispose(); await VerifyCollectionAsync();
     }
+    private async Task VerifyCollectionAsync()
+    {
+        var mount = new Control { Name = "Items" }; AddChild(mount); var ui = EngineUI.UI.Create(this);
+        var owner = new UINode(); await owner.AttachToAsync(ui.Root, "Items", mount);
+        var player = new ClientShopVm(); owner.SetViewModel("Player", player);
+        var template = new CollectionRowNode(); var scene = new PackedScene(); Check(scene.Pack(template) == Error.Ok, "Pack native row"); template.Free();
+        var target = new EngineMvvm.CollectionTarget(owner, mount, scene, sources: new[] { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } });
+        owner.BindCollection("Player.Equipment", target); var first = new ClientInventoryItemVm { Id = 1 }; var second = new ClientInventoryItemVm { Id = 2 };
+        player.Equipment.Add(first); player.Equipment.Add(second); player.Equipment.Move(0, 1); await ui.WhenMvvmIdleAsync();
+        var row = mount.GetChild<CollectionRowNode>(0); Check(ReferenceEquals(row.ItemAtInitialize, second), "Native row keeps pending move order"); Check(ReferenceEquals(row.PlayerAtInitialize, player), "Additional source arrives before initialization"); Check(row.State == NodeState.Ready, "Async row initialized");
+        player.Equipment.RemoveAt(0); await ui.WhenMvvmIdleAsync(); Check(mount.GetChildCount() == 1, "Native row removal cleanup");
+        player.Equipment.Add(second); await owner.DisposeAsync(); Check(mount.GetChildCount() == 0, "Close cancels pending native row"); await ui.DisposeAsync(); scene.Dispose(); mount.QueueFree();
+    }
+
 }

@@ -17,12 +17,14 @@ public partial class ViewBindingResource : Resource
     [Export] public string NullValue { get; set; } = "";
     [Export] public PackedScene? ItemScene { get; set; }
     [Export] public bool OneTimeCollection { get; set; }
+    [Export] public global::Godot.Collections.Array<CollectionSourceMappingResource> ItemSources { get; set; } = new();
+    [Export] public bool ParameterIsNull { get; set; }
     [Export] public CommandParameterMode ParameterMode { get; set; }
     [Export] public string ParameterConstant { get; set; } = "";
     [Export] public string ParameterPath { get; set; } = "";
     public CommandBindingOptions GetCommandOptions() => ParameterMode == CommandParameterMode.SourcePath
         ? new CommandBindingOptions { ParameterPath = ParameterPath }
-        : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant ? ParameterConstant : null };
+        : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant && !ParameterIsNull ? ParameterConstant : null };
     public BindingOptions GetOptions(bool preview = false)
     {
         var options = Converters.Configure(Converter, ConvertBack, Mode, ConverterInput, ConverterConstant, HasNullValue, NullValue);

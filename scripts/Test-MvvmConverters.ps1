@@ -9,7 +9,11 @@ $taskUnityProject = Join-Path $taskWorkspace 'artifacts/unity-converter-tests'
 $taskChecks = Join-Path $taskUnityProject 'Assets/ConverterTests'
 New-Item -ItemType Directory -Force $taskChecks, (Join-Path $taskUnityProject 'Packages'), (Join-Path $taskUnityProject 'ProjectSettings') | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $taskWorkspace 'tests/UIFramework.Mvvm.Unity.Tests') -Filter '*.cs' | Copy-Item -Destination $taskChecks
-@{ name = 'NativeMvvm.EditorChecks'; references = @('UIFramework.Unity','UIFramework.Mvvm.Unity','UIFramework.Mvvm.Unity.Editor','Unity.ugui'); includePlatforms = @('Editor') } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskChecks 'Checks.asmdef') -Encoding utf8
+$taskFixtures = Join-Path $taskUnityProject 'Assets/ConverterRuntime'
+New-Item -ItemType Directory -Force $taskFixtures | Out-Null
+Move-Item -LiteralPath (Join-Path $taskChecks 'TargetPresentation.cs') -Destination (Join-Path $taskFixtures 'TargetPresentation.cs') -Force
+@{ name = 'NativeMvvm.Fixtures'; references = @('UIFramework.Unity','UIFramework.Mvvm.Unity','Unity.ugui') } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskFixtures 'Fixtures.asmdef') -Encoding utf8
+@{ name = 'NativeMvvm.EditorChecks'; references = @('UIFramework.Unity','UIFramework.Mvvm.Unity','UIFramework.Mvvm.Unity.Editor','Unity.ugui','NativeMvvm.Fixtures'); includePlatforms = @('Editor') } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskChecks 'Checks.asmdef') -Encoding utf8
 @{ dependencies = @{ 'com.ui-framework.unity' = 'file:../../../src/UIFramework.Unity'; 'com.ui-framework.mvvm.unity' = 'file:../../../src/UIFramework.Mvvm.Unity'; 'com.unity.ugui' = '2.0.0' } } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskUnityProject 'Packages/manifest.json') -Encoding utf8
 Copy-Item -LiteralPath (Join-Path $taskWorkspace 'Demo/Unity/ProjectSettings/ProjectVersion.txt') -Destination (Join-Path $taskUnityProject 'ProjectSettings/ProjectVersion.txt')
 $taskUnityResult = Join-Path $taskUnityProject 'converter-checks.txt'

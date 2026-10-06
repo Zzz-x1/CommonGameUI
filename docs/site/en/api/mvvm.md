@@ -95,3 +95,25 @@ Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTar
 `ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Sources use `ViewModelSourceData.Template` in Unity and `ViewModelSourceResource.Template` in Godot, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
 
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
+
+## Extensible targets and collection creation
+
+```csharp
+BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
+    string member, Func<TTarget, TValue> read, Action<TTarget, TValue> write,
+    Func<TTarget, Action, Action>? subscribe = null) where TTarget : class;
+IReadOnlyList<BindingTargetDefinition> BindingTargetRegistry.Members(Type targetType);
+BindingTargetDefinition BindingTargetRegistry.Find(Type targetType, string member);
+IBindingTarget BindingTargetDefinition.CreateTarget(object target,
+    BindingMode mode = BindingMode.OneWay);
+IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
+    CommandBindingOptions options);
+Task<IUINode> ICollectionItemFactory.CreateAsync(CollectionItemContext context,
+    CancellationToken cancellationToken);
+Task<IUINode> CollectionItemContext.LoadAsync(string resource,
+    Action<IUINode>? configure = null, CancellationToken cancellationToken = default);
+```
+
+`BindingTargetDefinition` exposes TargetType, Member, ValueType and Observable. Providers implement `GetTargets()` and are declared with the assembly attribute `BindingTargetProvider`. Subscribe returns a disconnect action. `CommandBindingOptions` exposes Mode (None/Constant/SourcePath), ConstantValue, ConstantText and ParameterPath; assigning ParameterPath selects SourcePath. `MvvmMember.ParameterType` is null for commands without a business argument.
+
+Both engine CollectionTarget constructors add optional preview, factory and sources arguments. `CollectionItemContext.CreateAsync` is an engine extension accepting GameObject or PackedScene, the configure callback and token. Factory returns the node created by that context. Built-in targets implement IAsyncDisposable; custom ICollectionTarget implementations may do so for awaited cleanup. `Changed` signals layout changes.

@@ -120,3 +120,24 @@ Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [L
 ## Custom control properties
 
 Implement `IBindingTargetProvider.GetTargets()` and mark the assembly with `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`. Return strongly typed `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)` definitions. `subscribe` is optional for display bindings; TwoWay and View→VM require it. Runtime, the property picker and preview use the same definitions. Member discovery does not subscribe to control events.
+
+## Command parameters and item factories
+
+A command binding can use a typed constant or a source path. The source is read when clicked, without implicit conversion. GUI constants support text, boolean, numbers and enums. CancellationToken remains framework-managed.
+
+Item mappings borrow parent VM instances at creation time; they do not clone or follow replacement of the parent source.
+
+```csharp
+node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+    new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
+
+var target = new CollectionTarget(node, mount, itemResource,
+    sources: new[] {
+        new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" }
+    });
+node.BindCollection("Inventory.Items", target);
+```
+
+Implement `ICollectionItemFactory.CreateAsync(context, token)` to select different item resources. Call `context.CreateAsync(prefabOrScene, configure, token)` or `context.LoadAsync(resourcePath, configure, token)`; the configure callback runs after sources exist and before business initialization. Use `node.CreateViewModel` there for item-owned models. `context.Item`, `Index`, `Owner` and `IsPreview` describe creation; Index is the original index, not a live position.
+
+Moving preserves instances. Removal, replacement, Reset and closure cancel pending creation and wait for acquired resources to be released. Initialization completes before display. Errors propagate; retry is an explicit business action. Use `target.Changed` to update custom layouts after asynchronous creation. Await `ui.WhenMvvmIdleAsync()` when a flow needs all current binding tasks to finish.

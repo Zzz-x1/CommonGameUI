@@ -1920,3 +1920,19 @@ Unity 的 MvvmBindings 继续保存组件引用与数据列表，所有 GUI 配�
 属性目标由程序集 BindingTargetProvider 标记的 IBindingTargetProvider 显式提供强类型 BindingTargetDefinition。运行时与编辑器共用 BindingTargetRegistry，发现成员不创建绑定、不订阅事件；基类定义适用于派生组件，同成员优先最具体定义，重复／歧义直接报错。双向及 View→VM 要求目标声明通知。Unity 增加 enabled／color／alpha，Godot 增加 Modulate／SelfModulate；其他自定义属性显式注册，不反射调用业务成员。Unity ILPostProcessor 保留提供者和方法，沿用 IL2CPP 强类型调用。
 
 阶段一：MVVM 54 项通过，包含无订阅发现、派生定义优先、通知解绑及不可观察目标拒绝双向。两端 GUI 与预览已迁移注册表；原生编辑器和 IL2CPP 验证在本轮后续集成阶段集中执行，尚未计为通过。
+
+命令配置增加 None／Constant／SourcePath。固定参数 API 保留，CommandBindingOptions 提供动态来源，点击时读取最新值并严格校验类型；序列化常量按命令类型解析，不保存类型字符串。MvvmMember.ParameterType 对外明确命令业务参数；Weaver 既有 Type 已生成业务参数并排除 CancellationToken，无需重复生成。两端 GUI 显示参数类型并检查常量／来源类型，预览不执行命令。阶段二 MVVM 56 项通过。
+
+集合由 CollectionTargetBase 同步维护逻辑槽位、异步创建和释放实例。ICollectionItemFactory 使用 CollectionItemContext.CreateAsync／LoadAsync 创建一个条目，默认从资源取得原生业务脚本，没有脚本时使用 Core 结构节点。Item 默认注入；GUI 父来源→条目来源映射借用父实例，创建时取值，不隐式克隆或跟随父来源替换。自建条目 VM 可在配置回调中通过 CreateViewModel 创建并由节点拥有。映射名称唯一，Item 为保留来源。运行时工厂可选择不同资源；GUI 使用原生工厂组件／节点引用，不保存类型名。预览运行相同工厂并提供 IsPreview，默认只初始化展示用结构节点及属性／集合绑定，不执行业务脚本初始化或命令。
+
+MVVM 内部增加条目初始化回调，在来源创建后、业务初始化前执行。Core AttachAsync 新增可选 initiallyVisible，集合传入 true，让原生脚本与结构条目一致地在准备完成后显示，不直接操作 Core 内部状态。绑定目标如支持 IAsyncDisposable，关闭先解除集合订阅，再等待目标及条目任务；其他同步目标保持 IDisposable。移动保留实例，删除／替换／Reset／关闭立即取消对应槽位，晚到资源只释放。预期的条目取消在清理成功后结束其内部任务；业务失败或取消伴随清理失败仍记录并传播原始异常，不自动重试。Core 的取消日志继续保留。
+
+两端商店迁移到动态商品列表、共享 Player／Shop 来源、点击时读取 Item.Id 的参数命令及异步资源准备。金币影响商品颜色，原有确认、扣款和奖励流程保留。原生列表不再 new 引擎 UINode。项目布局监听 CollectionTarget.Changed，确保异步条目就绪后布局更新。I-01 Addressables 继续实现 IUIResourceLoader；I-02 正常取消日志由注入 IUILog 决定；I-03／I-04 业务状态和导航由项目管理；I-05 生命周期通知保持只读；I-06 资产打包依赖由资源加载器／项目作用域保活，不因模板跨页面引用自动扩展寿命。
+
+命令常量可显式选择 null，仅允许可接收空值的类型；None 只适用于无业务参数命令。新增循环资产容器测试验证 Godot 独立复制的容器在释放时清空并释放，不触及原资产；只记录 Remap 创建的副本，失败时不清空尚未复制的原资产容器。Runtime 与集合目标完成清理后移除任务引用，避免完成任务继续持有条目图。
+
+验证结果：核心／生成器 165、MVVM 61、Godot 客户端 140、原生 MVVM／条目 22 项通过。Unity 31 项既有回归通过，新增异步原生条目专项及资产绑定专项 2 项通过。两端原生编辑器验证自定义强类型成员、预览恢复与原资产不变、命令常量 GUI、来源映射、Prefab／场景保存重开、Undo 与 Prefab Override。WebGL IL2CPP 高裁剪构建并在 Chromium 通过 26 项，涵盖自定义提供者、结构体目标、enabled、动态参数与异步列表移动／Reset。双语文档及链接检查通过。
+
+未解决项如实保留：Godot 完整客户端退出本轮报告 6 个 ObjectDB 实例；新增类型化 Resource 集合的隔离检查退出还报告 ConverterVm.cs 的 1 个 CSharpScript 资源引用。容器清理与原资产完整性断言通过，但退出警告尚未完全定位，不能宣称无残留资源。没有通过 GC、业务异常捕获或降级掩盖。
+
+集合取消回调、布局回调或分离实例失败时仍安排所有条目的清理，并传播原始首个错误；增加取消回调抛错仍释放迟到显示实例的回归。

@@ -37,8 +37,10 @@ namespace UIFramework.Mvvm.Unity
 
 namespace UIFramework.Mvvm.Unity
 {
+    [UnityEngine.Scripting.Preserve]
     public sealed class BuiltinBindingTargets : IBindingTargetProvider
     {
+        [UnityEngine.Scripting.Preserve]
         public System.Collections.Generic.IEnumerable<BindingTargetDefinition> GetTargets()
         {
             yield return BindingTargetDefinition.Create<Text, string>("text", t => t.text, (t,v) => t.text = v);

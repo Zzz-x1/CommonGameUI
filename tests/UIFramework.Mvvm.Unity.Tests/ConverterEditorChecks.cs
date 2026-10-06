@@ -1,3 +1,4 @@
+using Button = UnityEngine.UI.Button;
 using System;
 using System.IO;
 using System.Linq;
@@ -56,6 +57,27 @@ namespace NativeMvvm.Tests
             Check(PrefabUtility.HasPrefabInstanceAnyOverrides(instance, false), "serialized converter did not create Prefab Override");
             Undo.PerformUndo(); Check(instanceView.Bindings[0].ConverterConstant == "125", "Prefab Override Undo failed");
             UnityEngine.Object.DestroyImmediate(instance);
+            var presentation = root.AddComponent<TargetPresentation>();
+            view.Bindings.Add(new ViewBindingData { Target = presentation, Member = "Delay", Source = "Player.Gold", Converter = "IntToFloat" });
+            var buy = new GameObject("Buy", typeof(RectTransform), typeof(Button)); buy.transform.SetParent(root.transform, false);
+            view.Bindings.Add(new ViewBindingData { Kind = ViewBindingKind.Command, Target = buy.GetComponent<Button>(), Source = "Player.Purchase", ParameterMode = CommandParameterMode.Constant, ParameterConstant = "2" });
+            MvvmEditorWindow.Inspect(view, presentation);
+            Check(window.rootVisualElement.Query<DropdownField>().ToList().Single(f => f.label == "目标属性").choices.Contains("Delay"), "custom target is absent from GUI");
+            MvvmEditorWindow.Inspect(view, buy.GetComponent<Button>());
+            Check(window.rootVisualElement.Query<TextField>().ToList().Single(f => f.label == "参数常量").value == "2", "command parameter GUI");
+            var items = new GameObject("Items", typeof(RectTransform)); items.transform.SetParent(root.transform, false);
+            var item = new GameObject("ItemTemplate", typeof(RectTransform), typeof(Text), typeof(MvvmBindings)); item.SetActive(false);
+            item.GetComponent<MvvmBindings>().Bindings.Add(new ViewBindingData { Target = item.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
+            vm.Items.Add(vm);
+            view.Bindings.Add(new ViewBindingData { Kind = ViewBindingKind.Collection, Target = items.GetComponent<RectTransform>(), Source = "Player.Items", ItemPrefab = item, OneTimeCollection = true, ItemSources = new System.Collections.Generic.List<CollectionSourceMapping> { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } } });
+            using (var preview = new BindingPreview(view))
+            { Check(presentation.Delay == 10, "custom target preview"); Check(items.transform.childCount == 1 && items.transform.GetChild(0).GetComponent<Text>().text == "10", "mapped item preview"); buy.GetComponent<Button>().onClick.Invoke(); Check(vm.Gold == 10, "preview executed parameter command"); }
+            Check(presentation.Delay == 7 && items.transform.childCount == 0, "custom target / item preview restore");
+            PrefabUtility.SaveAsPrefabAsset(root, "Assets/ConverterChecks/Extended.prefab");
+            var extended = PrefabUtility.LoadPrefabContents("Assets/ConverterChecks/Extended.prefab");
+            Check(extended.GetComponent<MvvmBindings>().Bindings.Last().ItemSources.Single().ItemSource == "Player", "mapped sources Prefab reload");
+            Check(extended.GetComponent<MvvmBindings>().Bindings.Single(b => b.Kind == ViewBindingKind.Command).ParameterConstant == "2", "command constant Prefab reload");
+            PrefabUtility.UnloadPrefabContents(extended); vm.Items.Clear(); UnityEngine.Object.DestroyImmediate(item);
             window.Close(); UnityEngine.Object.DestroyImmediate(root);
             File.WriteAllText("converter-checks.txt", "Passed: GUI constant configuration, preview, restoration, source asset, Prefab reload, target reference, Undo");
         }

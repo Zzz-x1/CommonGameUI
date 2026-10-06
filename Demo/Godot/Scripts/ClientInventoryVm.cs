@@ -35,16 +35,17 @@ public class ClientInventoryItemVm
     [Command] public Task Select() => Open();
 }
 // The project owns its four-column layout; the module owns instances and bindings.
-internal sealed class InventoryGridTarget : ICollectionTarget
+internal sealed class InventoryGridTarget : ICollectionTarget, IAsyncDisposable
 {
     private readonly EngineMvvm.CollectionTarget _items;
     private readonly Control _mount;
-    public InventoryGridTarget(IUINode owner, Control mount, PackedScene row) { _mount = mount; _items = new(owner, mount, row); }
+    public InventoryGridTarget(IUINode owner, Control mount, PackedScene row) { _mount = mount; _items = new(owner, mount, row); _items.Changed += Arrange; }
     public void Insert(int index, object item) { _items.Insert(index, item); Arrange(); }
     public void Remove(int index) { _items.Remove(index); Arrange(); }
     public void Move(int oldIndex, int newIndex) { _items.Move(oldIndex, newIndex); Arrange(); }
     public void Clear() => _items.Clear();
     public void Dispose() => _items.Dispose();
+    public ValueTask DisposeAsync() => _items.DisposeAsync();
     private void Arrange()
     {
         var rows = _mount.GetChildren().Cast<Control>().ToArray();

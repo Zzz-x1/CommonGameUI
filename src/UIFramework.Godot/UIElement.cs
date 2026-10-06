@@ -77,7 +77,8 @@ public sealed class UIElement : IUIElement, IUIResourceNodeProvider
         {
             // Remove the disposed display from sibling ordering immediately. QueueFree alone
             // leaves a stale child until frame end while the next transition captures indices.
-            Control.GetParent().RemoveChild(Control);
+            var parent = Control.GetParent();
+            if (parent != null) parent.RemoveChild(Control);
             Control.QueueFree();
         }
         _disposed = true;

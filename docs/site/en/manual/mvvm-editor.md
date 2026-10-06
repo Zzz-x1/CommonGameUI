@@ -53,3 +53,13 @@ Unity stores configuration in the component and saves it with the Prefab / scene
 Preview does not save the scene. Stop preview before editing configuration so display values remain separate from authored values.
 
 Related: [Setup and ownership](mvvm.md) · [API](../api/mvvm.md)
+
+## Commands and collections
+
+For commands, choose None, Constant or SourcePath; the editor shows the business parameter type and checks compatibility. Commands without a business parameter have no parameter fields.
+
+For collections, select an item resource and add parent-to-item source mappings. An optional factory references a Unity component or Godot node implementing `ICollectionItemFactory`. Factories also receive `IsPreview`: provide presentation-only preparation there. Preview never executes commands and restores controls when stopped. Item is supplied automatically.
+
+Custom control members registered through `IBindingTargetProvider` appear in the property picker and work in preview without a separate resolver.
+
+Godot factory node scripts need `[Tool]` for editor preview. When changing a command to one without a business parameter, explicitly clear any old parameter configuration using the editor action.

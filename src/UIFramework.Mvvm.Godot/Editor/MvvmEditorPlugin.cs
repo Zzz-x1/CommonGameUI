@@ -68,7 +68,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
         if (_view == null) throw new InvalidOperationException("先在界面根节点添加 MvvmBindings。");
         var view = _view;
         var binding = new ViewBindingResource { Member = member.Length == 0 ? DefaultMember(control) : member };
-        Change("Add View Binding", () => view.AddBinding(control, binding), () => { var index = view.Bindings.IndexOf(binding); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); });
+        Change("Add View Binding", () => view.AddBinding(control, binding), () => { var index = view.Bindings.IndexOf(binding); view.ItemFactories.RemoveAt(index); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); });
         _editorDock.MakeVisible();
     }
     private static string DefaultMember(Control control) => control is BaseButton ? "ButtonPressed" : control is global::Godot.Range ? "Value" : "Text";
@@ -78,7 +78,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
         Change("Add Viewmodel", () => view.ViewModels.Add(source), () => view.ViewModels.Remove(source));
     }
     private void AddBinding(string path = "")
-    { RequireView(); var view = _view!; var b = new ViewBindingResource { Source = path }; Change("Add View Binding", () => view.AddBinding(null!, b), () => { var index = view.Bindings.IndexOf(b); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }); }
+    { RequireView(); var view = _view!; var b = new ViewBindingResource { Source = path }; Change("Add View Binding", () => view.AddBinding(null!, b), () => { var index = view.Bindings.IndexOf(b); view.ItemFactories.RemoveAt(index); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }); }
     private void RequireView() { if (_view == null) throw new InvalidOperationException("选择界面上的 MvvmBindings。"); }
     private void Change(string label, Action perform, Action reverse)
     {
@@ -104,7 +104,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
     {
         var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = view.Bindings.IndexOf(binding); var target = view.Targets[index]; Change("Delete Binding", () => { view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }, () => { view.Targets.Insert(index, target); view.Bindings.Insert(index, binding); }); }
+        { view.EnsureFactories(); var index = view.Bindings.IndexOf(binding); var factory = view.ItemFactories[index]; var target = view.Targets[index]; Change("Delete Binding", () => { view.ItemFactories.RemoveAt(index); view.Targets.RemoveAt(index); view.Bindings.RemoveAt(index); }, () => { view.ItemFactories.Insert(index, factory); view.Targets.Insert(index, target); view.Bindings.Insert(index, binding); }); }
         else if (_sources.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewModelSourceResource source)
         { var index = view.ViewModels.IndexOf(source); Change("Delete Viewmodel", () => view.ViewModels.Remove(source), () => view.ViewModels.Insert(index, source)); }
     }
@@ -112,7 +112,7 @@ public partial class MvvmEditorPlugin : EditorPlugin
     {
         var view = _view!;
         if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is ViewBindingResource binding)
-        { var index = view.Bindings.IndexOf(binding); var target = view.Targets[index]; var next = index + offset; if (next < 0 || next >= view.Bindings.Count) return; Change("Reorder Binding", () => { view.Targets.RemoveAt(index); view.Targets.Insert(next, target); view.Bindings.RemoveAt(index); view.Bindings.Insert(next, binding); }, () => { view.Targets.RemoveAt(next); view.Targets.Insert(index, target); view.Bindings.RemoveAt(next); view.Bindings.Insert(index, binding); }); }
+        { view.EnsureFactories(); var index = view.Bindings.IndexOf(binding); var factory = view.ItemFactories[index]; var target = view.Targets[index]; var next = index + offset; if (next < 0 || next >= view.Bindings.Count) return; Change("Reorder Binding", () => { view.Targets.RemoveAt(index); view.Targets.Insert(next, target); view.ItemFactories.RemoveAt(index); view.ItemFactories.Insert(next, factory); view.Bindings.RemoveAt(index); view.Bindings.Insert(next, binding); }, () => { view.Targets.RemoveAt(next); view.ItemFactories.RemoveAt(next); view.ItemFactories.Insert(index, factory); view.Targets.Insert(index, target); view.Bindings.RemoveAt(next); view.Bindings.Insert(index, binding); }); }
     }
     private void ClearDetails() { foreach (var n in _details.GetChildren()) { _details.RemoveChild(n); n.QueueFree(); } }
     private void SourceDetails()
@@ -164,17 +164,35 @@ public partial class MvvmEditorPlugin : EditorPlugin
                 Type? vmType = source?.Template?.GetType(); foreach (var part in path.Skip(1).Take(path.Length - 2)) vmType = vmType?.GetProperty(part)?.PropertyType;
                 var command = vmType?.GetMethods().SingleOrDefault(m => m.Name == path.Last() && m.IsDefined(typeof(CommandAttribute), true));
                 var parameter = command?.GetParameters().SingleOrDefault(p => p.ParameterType != typeof(CancellationToken));
+                if (command != null && parameter == null && b.ParameterMode != CommandParameterMode.None)
+                { _details.AddChild(new Label { Text = "此命令没有业务参数，请清除旧参数配置。" }); Button(_details, "清除参数配置", () => Edit(b.ParameterMode, CommandParameterMode.None, value => b.ParameterMode = value)); }
                 if (parameter != null)
                 {
                     _details.AddChild(new Label { Text = "命令参数：" + parameter.ParameterType.Name });
                     Choice("参数方式", b.ParameterMode, v => Edit(b.ParameterMode, v, value => b.ParameterMode = value));
-                    if (b.ParameterMode == CommandParameterMode.Constant) Text("参数常量", b.ParameterConstant, v => Edit(b.ParameterConstant, v, value => b.ParameterConstant = value));
+                    if (b.ParameterMode == CommandParameterMode.Constant) { var isNull = new CheckButton { Text = "传入 null", ButtonPressed = b.ParameterIsNull }; isNull.Toggled += v => Edit(b.ParameterIsNull, v, value => b.ParameterIsNull = value); _details.AddChild(isNull); if (!b.ParameterIsNull) Text("参数常量", b.ParameterConstant, v => Edit(b.ParameterConstant, v, value => b.ParameterConstant = value)); }
                     if (b.ParameterMode == CommandParameterMode.SourcePath) Text("参数来源", b.ParameterPath, v => Edit(b.ParameterPath, v, value => b.ParameterPath = value));
-                    try { if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType)); else if (b.ParameterMode == CommandParameterMode.None) CommandParameters.Validate(parameter.ParameterType, null); else if (!parameter.ParameterType.IsAssignableFrom(SourceType(b.ParameterPath) ?? throw new MissingMemberException(b.ParameterPath))) throw new InvalidCastException("参数来源类型不匹配"); }
+                    try { if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, b.ParameterIsNull ? null : CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType)); else if (b.ParameterMode == CommandParameterMode.None) throw new ArgumentException("命令需要业务参数"); else if (!parameter.ParameterType.IsAssignableFrom(SourceType(b.ParameterPath) ?? throw new MissingMemberException(b.ParameterPath))) throw new InvalidCastException("参数来源类型不匹配"); }
                     catch (Exception error) { _details.AddChild(new Label { Text = error.Message }); }
                 }
             }
-            if (b.Kind == ViewBindingKind.Collection) Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
+            if (b.Kind == ViewBindingKind.Collection)
+            {
+                Asset("条目场景", b.ItemScene, "PackedScene", v => Edit(b.ItemScene, (PackedScene?)v, value => b.ItemScene = value));
+                var factories = SceneNodes(EditorInterface.Singleton.GetEditedSceneRoot()).Where(n => n is ICollectionItemFactory).ToArray();
+                var factoryPicker = new OptionButton(); factoryPicker.AddItem("无自定义工厂"); foreach (var factory in factories) factoryPicker.AddItem(factory.Name);
+                var original = _view.GetFactory(b); factoryPicker.Selected = Array.IndexOf(factories, original) + 1;
+                factoryPicker.ItemSelected += index => Edit(original, index == 0 ? null : factories[index - 1], value => { _view.EnsureFactories(); _view.ItemFactories[_view.Bindings.IndexOf(b)] = value!; });
+                _details.AddChild(new Label { Text = "条目工厂节点" }); _details.AddChild(factoryPicker);
+                foreach (var mapping in b.ItemSources.ToArray())
+                {
+                    Text("父来源", mapping.ParentSource, v => Edit(mapping.ParentSource, v, value => mapping.ParentSource = value));
+                    Text("条目来源", mapping.ItemSource, v => Edit(mapping.ItemSource, v, value => mapping.ItemSource = value));
+                    Button(_details, "移除来源映射", () => { var index = b.ItemSources.IndexOf(mapping); Change("Remove Item Source", () => b.ItemSources.RemoveAt(index), () => b.ItemSources.Insert(index, mapping)); });
+                }
+                Button(_details, "添加来源映射", () => { var mapping = new CollectionSourceMappingResource(); Change("Add Item Source", () => b.ItemSources.Add(mapping), () => b.ItemSources.Remove(mapping)); });
+                var once = new CheckButton { Text = "一次性展示", ButtonPressed = b.OneTimeCollection }; once.Toggled += v => Edit(b.OneTimeCollection, v, value => b.OneTimeCollection = value); _details.AddChild(once);
+            }
             return;
         }
         if (b.Mode is BindingMode.OneWay or BindingMode.OneTime) Choice("转换器输入", b.ConverterInput, v => Edit(b.ConverterInput, v, value => b.ConverterInput = value));
@@ -201,6 +219,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
         picker.ItemSelected += selected => { if (selected > 0) Edit(original, controls[selected - 1], value => view.Targets[index] = value); };
         _details.AddChild(new Label { Text = "目标控件引用" }); _details.AddChild(picker);
     }
+    private static IEnumerable<global::Godot.Node> SceneNodes(global::Godot.Node node)
+    { yield return node; foreach (var child in node.GetChildren()) foreach (var nested in SceneNodes(child)) yield return nested; }
     private static IEnumerable<Control> Controls(global::Godot.Node node)
     { if (node is Control control) yield return control; foreach (var child in node.GetChildren()) foreach (var nested in Controls(child)) yield return nested; }
     private static IEnumerable<Resource> ViewModelAssetsInProject()

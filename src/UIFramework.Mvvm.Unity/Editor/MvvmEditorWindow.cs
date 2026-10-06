@@ -141,16 +141,21 @@ namespace UIFramework.Mvvm.EditorUnity
                 foreach (var part in parts.Skip(1).Take(parts.Length - 2)) vmType = vmType?.GetProperty(part)?.PropertyType;
                 var command = vmType?.GetMethods().SingleOrDefault(m => m.Name == parts.Last() && m.IsDefined(typeof(CommandAttribute), true));
                 var parameter = command?.GetParameters().SingleOrDefault(p => p.ParameterType != typeof(System.Threading.CancellationToken));
+                if (command != null && parameter == null && b.ParameterMode != CommandParameterMode.None)
+                {
+                    _details.Add(new HelpBox("此命令没有业务参数，请清除旧参数配置。", HelpBoxMessageType.Error));
+                    _details.Add(new UnityEngine.UIElements.Button(() => { Binding(b, "ParameterMode", p => p.intValue = (int)CommandParameterMode.None); BindingDetails(); }) { text = "清除参数配置" });
+                }
                 if (parameter != null)
                 {
                     _details.Add(new Label("命令参数：" + parameter.ParameterType.Name));
                     Choice("参数方式", b.ParameterMode, v => { Binding(b, "ParameterMode", p => p.intValue = (int)v); BindingDetails(); });
-                    if (b.ParameterMode == CommandParameterMode.Constant) Text("参数常量", b.ParameterConstant, v => Binding(b, "ParameterConstant", p => p.stringValue = v));
+                    if (b.ParameterMode == CommandParameterMode.Constant) { Toggle("传入 null", b.ParameterIsNull, v => { Binding(b, "ParameterIsNull", p => p.boolValue = v); BindingDetails(); }); if (!b.ParameterIsNull) Text("参数常量", b.ParameterConstant, v => Binding(b, "ParameterConstant", p => p.stringValue = v)); }
                     if (b.ParameterMode == CommandParameterMode.SourcePath) Text("参数来源", b.ParameterPath, v => Binding(b, "ParameterPath", p => p.stringValue = v));
                     try
                     {
-                        if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType));
-                        else if (b.ParameterMode == CommandParameterMode.None) CommandParameters.Validate(parameter.ParameterType, null);
+                        if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, b.ParameterIsNull ? null : CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType));
+                        else if (b.ParameterMode == CommandParameterMode.None) throw new ArgumentException("命令需要业务参数");
                         else { var path = b.ParameterPath.Split('.'); var ps = _view.ViewModels.Single(v => v.Name == path[0]); var pt = ps.Template.GetType(); foreach (var part in path.Skip(1)) pt = pt.GetProperty(part)?.PropertyType ?? throw new MissingMemberException(pt.FullName, part); if (!parameter.ParameterType.IsAssignableFrom(pt)) throw new InvalidCastException("参数来源类型不匹配"); }
                     }
                     catch (Exception error) { _details.Add(new HelpBox(error.Message, HelpBoxMessageType.Error)); }
@@ -172,7 +177,15 @@ namespace UIFramework.Mvvm.EditorUnity
                 if (b.Mode == BindingMode.TwoWay) Converter("反向转换", b.ConvertBack, b, true, v => Binding(b, "ConvertBack", property => property.stringValue = v));
                 Toggle("显式空值显示", b.HasNullValue, v => Binding(b, "HasNullValue", property => property.boolValue = v)); Text("空值内容", b.NullValue, v => Binding(b, "NullValue", property => property.stringValue = v));
             }
-            if (b.Kind == ViewBindingKind.Collection) { Object("条目 Prefab", typeof(GameObject), b.ItemPrefab, false, v => Binding(b, "ItemPrefab", property => property.objectReferenceValue = v)); Toggle("一次性展示", b.OneTimeCollection, v => Binding(b, "OneTimeCollection", property => property.boolValue = v)); }
+            if (b.Kind == ViewBindingKind.Collection)
+            {
+                Object("条目 Prefab", typeof(GameObject), b.ItemPrefab, false, v => Binding(b, "ItemPrefab", property => property.objectReferenceValue = v));
+                Object("条目工厂", typeof(Component), b.ItemFactory, true, v => Binding(b, "ItemFactory", property => property.objectReferenceValue = v));
+                if (b.ItemFactory && !(b.ItemFactory is ICollectionItemFactory)) _details.Add(new HelpBox("工厂组件必须实现 ICollectionItemFactory", HelpBoxMessageType.Error));
+                var serialized = new SerializedObject(_view); var row = serialized.FindProperty("Bindings").GetArrayElementAtIndex(_view.Bindings.IndexOf(b));
+                var sources = new PropertyField(row.FindPropertyRelative("ItemSources"), "父来源 → 条目来源"); sources.Bind(serialized); _details.Add(sources);
+                Toggle("一次性展示", b.OneTimeCollection, v => Binding(b, "OneTimeCollection", property => property.boolValue = v));
+            }
             Toggle("启用", b.Enabled, v => Binding(b, "Enabled", property => property.boolValue = v));
             _details.Add(new HelpBox("来源格式：数据源.成员，支持嵌套路径。双向绑定初始以 VM 为准。", HelpBoxMessageType.Info));
         }

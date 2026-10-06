@@ -13,6 +13,8 @@ using UIFramework.Unity;
 using UIFramework.Mvvm;
 using UIFramework.Mvvm.Unity;
 
+[assembly: BindingTargetProvider(typeof(MvvmWebSample.SampleTargets))]
+
 namespace MvvmWebSample
 {
     [ViewModel] public class PlayerVm : IDisposable
@@ -22,6 +24,7 @@ namespace MvvmWebSample
         [FieldNotify] public PlayerVm Selected { get; set; }
         [FieldNotify] public ObservableCollection<PlayerVm> Items { get; set; } = new ObservableCollection<PlayerVm>();
         [Command(CanExecute = nameof(CanBuy))] public void Buy() => Gold -= 10;
+        [Command] public void Spend(int amount) => Gold -= amount;
         public Func<Task> CloseView { get; set; }
         public int Disposals { get; private set; }
         public void Dispose() => Disposals++;
@@ -31,6 +34,24 @@ namespace MvvmWebSample
     [ViewModel] public sealed class PlayerAsset : ScriptableObject
     { [SerializeField] private int gold; [FieldNotify] public int Gold { get => gold; set => gold = value; } }
     public static class TextConversions { [Converter] public static string Gold(int value) => "Gold " + value; }
+    public sealed class SamplePresentation { public float Delay; public bool Visible; public int Count; public Vector2 Request; }
+    public sealed class SampleTargets : IBindingTargetProvider
+    {
+        public System.Collections.Generic.IEnumerable<BindingTargetDefinition> GetTargets()
+        {
+            yield return BindingTargetDefinition.Create<SamplePresentation, float>("Delay", t => t.Delay, (t,v) => t.Delay = v);
+            yield return BindingTargetDefinition.Create<SamplePresentation, bool>("Visible", t => t.Visible, (t,v) => t.Visible = v);
+            yield return BindingTargetDefinition.Create<SamplePresentation, int>("Count", t => t.Count, (t,v) => t.Count = v);
+            yield return BindingTargetDefinition.Create<SamplePresentation, Vector2>("Request", t => t.Request, (t,v) => t.Request = v);
+        }
+    }
+    internal sealed class ItemFactory : ICollectionItemFactory
+    {
+        private readonly GameObject _template;
+        public ItemFactory(GameObject template) => _template = template;
+        public async Task<IUINode> CreateAsync(CollectionItemContext context, CancellationToken token)
+        { await Task.Yield(); return await context.CreateAsync(_template, cancellationToken: token); }
+    }
     internal sealed class Views : IUIResourceLoader, IUIResource
     {
         public EngineUI.UIHost Host;
@@ -71,6 +92,22 @@ namespace MvvmWebSample
             var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.Gold = 42; var clone = runtime.GetSharedViewModel(asset); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetSharedViewModel(asset)), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
             var described = ((IMvvmObject)(object)vm).Describe(); Check(Array.Exists(described, p => p.Name == "Gold" && p.Observable), "Generated metadata");
             await ((IMvvmObject)(object)vm).Execute("Wait", null, default); Check(true, "Async command");
+            var presentation = new SamplePresentation();
+            var definitions = BindingTargetRegistry.Members(typeof(SamplePresentation));
+            Check(definitions.Count == 4, "Preserved custom target provider");
+            using (var target = BindingTargetRegistry.Find(typeof(SamplePresentation), "Request").CreateTarget(presentation)) { target.Write(new Vector2(3, 4)); Check(presentation.Request == new Vector2(3, 4), "Strong typed struct target"); }
+            using (var enabled = BindingTargets.Property(label, "enabled")) { enabled.Write(false); Check(!label.enabled, "Inherited Behaviour enabled target"); enabled.Write(true); }
+            var spend = new GameObject("Spend", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
+            node.BindCommand("Player.Spend", spend.ClickTarget(), new CommandBindingOptions { Mode = CommandParameterMode.Constant, ConstantText = "5" }); vm.Gold = 40; spend.onClick.Invoke(); Check(vm.Gold == 35, "Configured constant command parameter");
+            var dynamicSpend = new GameObject("DynamicSpend", typeof(RectTransform), typeof(Button)).GetComponent<Button>(); vm.Selected = new PlayerVm { Gold = 2 };
+            node.BindCommand("Player.Spend", dynamicSpend.ClickTarget(), new CommandBindingOptions { ParameterPath = "Player.Selected.Gold" }); vm.Selected = new PlayerVm { Gold = 3 }; dynamicSpend.onClick.Invoke(); Check(vm.Gold == 32, "Latest nested command parameter");
+            var listMount = new GameObject("List", typeof(RectTransform)); listMount.transform.SetParent(canvas.transform);
+            var itemTemplate = new GameObject("Item", typeof(RectTransform), typeof(Text), typeof(MvvmBindings)); itemTemplate.SetActive(false);
+            itemTemplate.GetComponent<MvvmBindings>().Bindings.Add(new ViewBindingData { Target = itemTemplate.GetComponent<Text>(), Source = "Item.Gold", Converter = "FormatNumber" });
+            var list = new CollectionTarget(node, (RectTransform)listMount.transform, itemTemplate, factory: new ItemFactory(itemTemplate), sources: new[] { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } });
+            node.BindCollection("Player.Items", list); vm.Items.Add(new PlayerVm { Gold = 11 }); vm.Items.Add(new PlayerVm { Gold = 22 }); vm.Items.Move(0, 1); await runtime.WhenIdleAsync();
+            Check(listMount.transform.childCount == 2 && listMount.transform.GetChild(0).GetComponent<Text>().text == "22", "Async items preserve logical move order");
+            vm.Items.Clear(); await runtime.WhenIdleAsync(); Check(listMount.transform.childCount == 0, "Async collection reset releases displays"); UnityEngine.Object.Destroy(itemTemplate);
             var mount = new GameObject("Dialogs", typeof(RectTransform)); mount.transform.SetParent(canvas.transform); ui.Register<Confirm>("Dialog");
             var dialogs = await ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", (RectTransform)mount.transform);
             var answer = dialogs.ShowDialogAsync<Confirm, bool>(playAnimation: false); ((Confirm)dialogs.Current).Complete(true);

@@ -86,7 +86,7 @@ namespace UIFramework.Unity
             {
                 Rect.gameObject.SetActive(false);
                 Rect.SetParent(null, false);
-                UnityEngine.Object.Destroy(Rect.gameObject);
+                if (Application.isPlaying) UnityEngine.Object.Destroy(Rect.gameObject); else UnityEngine.Object.DestroyImmediate(Rect.gameObject);
             }
             _disposed = true;
             return default;

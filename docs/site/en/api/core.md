@@ -78,7 +78,7 @@ event Action<TransitionState>? TransitionChanged;
 Func<CancellationToken, Task>? DismissRequested { get; set; }
 void AddLifecycle(INodeLifecycle handler)
 void RemoveLifecycle(INodeLifecycle handler)
-Task AttachAsync(IUINode parent, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null)
+Task AttachAsync(IUINode parent, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null, bool? initiallyVisible = null)
 IUINode GetChild(string name)
 ValueTask DisposeAsync()
 // UINode<TArgs>:

@@ -32,11 +32,7 @@ namespace UIFramework.Mvvm.EditorUnity
             public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = s.Creation == ViewModelCreation.Manual ? ViewModelCreation.Manual : ViewModelCreation.CreateInstance, Template = s.Template }).ToArray();
             public void Apply(UINode node)
             {
-                foreach (var binding in View.Bindings.Where(b => b.Enabled && b.Kind == ViewBindingKind.Property))
-                {
-                    var options = binding.GetOptions(true);
-                    node.Bind(binding.Source, EngineMvvm.BindingTargets.Property(binding.Target, binding.Member), options);
-                }
+                View.Apply(node, true);
             }
         }
         public BindingPreview(MvvmBindings view)
@@ -56,7 +52,7 @@ namespace UIFramework.Mvvm.EditorUnity
                     if (b.Kind == ViewBindingKind.Collection)
                     {
                         foreach (Transform child in b.Target.transform) { _children.Add((child.gameObject, child.gameObject.activeSelf)); child.gameObject.SetActive(false); }
-                        node.BindCollection(b.Source, new EngineMvvm.CollectionTarget(node, (RectTransform)b.Target.transform, b.ItemPrefab, true), b.OneTimeCollection);
+                        node.BindCollection(b.Source, view.GetCollectionTarget(node, b, true), b.OneTimeCollection);
                     }
                     else
                     {
