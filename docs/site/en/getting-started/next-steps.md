@@ -4,8 +4,10 @@
 
 | Need | Read |
 | --- | --- |
+| Choose a container by visibility, history and input needs | [Container selection](../manual/concepts.md#choose-by-the-flow) |
 | Preserve filters and scroll when hiding inventory | [Panel instances](../manual/panels.md) |
 | Restore inventory after closing details | [Page history](../manual/stacks.md) |
+| Modal menu with one current window and stepwise Back | [Modal + Stack](../manual/modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack) |
 | Author all settings categories in one resource | [Embedded tabs](../manual/tabs.md) |
 | Wait for confirmation before purchasing | [Result dialogs](../manual/modals-and-dialogs.md) |
 | Refresh on return and pause decoration on deactivation | [Lifecycle](../manual/lifecycle.md) |

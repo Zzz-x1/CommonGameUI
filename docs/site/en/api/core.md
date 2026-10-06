@@ -136,7 +136,7 @@ IUITransition? ChildTransition { get; set; }
 
 ### `PanelContainerNode`
 
-Independent windows; hide retains, close disposes.
+Independent windows; hide retains and close disposes. No return history. See the [Panel guide](../manual/panels.md) for scenarios and code.
 
 ```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
@@ -148,7 +148,7 @@ Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cance
 
 ### `StackContainerNode`
 
-Page history; return restores retained instances.
+One current window with history; covered windows are hidden and Back restores their instances. Popping the last item leaves an empty stack. See the [Stack guide](../manual/stacks.md).
 
 ```csharp
 IReadOnlyList<IUINode> History { get; }
@@ -160,7 +160,7 @@ Task PopToAsync(IUINode target, bool playAnimation = true, CancellationToken can
 
 ### `TabContainerNode`
 
-Bind embedded pages and select one.
+Bind embedded pages and select one without recording switching history. See the [Tab guide](../manual/tabs.md) for resource structure and code.
 
 ```csharp
 IReadOnlyDictionary<string, IUINode> Items { get; }
@@ -174,7 +174,7 @@ Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = 
 
 ### `ModalContainerNode`
 
-Nested modals; only the top receives input.
+Layered modals; lower windows remain visible and only the top receives input. See the [Modal guide](../manual/modals-and-dialogs.md) for single-window menu history and result waiting.
 
 ```csharp
 IUINode? Current { get; }

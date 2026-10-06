@@ -136,7 +136,7 @@ IUITransition? ChildTransition { get; set; }
 
 ### `PanelContainerNode`
 
-独立窗口；隐藏保留，关闭销毁。
+独立窗口；隐藏保留，关闭销毁；没有返回历史。场景与代码见 [Panel 指南](../manual/panels.md)。
 
 ```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
@@ -148,7 +148,7 @@ Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cance
 
 ### `StackContainerNode`
 
-页面历史；返回恢复原实例。
+单窗口历史；隐藏被覆盖窗口，返回恢复原实例；最后一项可 Pop 至空栈。场景与代码见 [Stack 指南](../manual/stacks.md)。
 
 ```csharp
 IReadOnlyList<IUINode> History { get; }
@@ -160,7 +160,7 @@ Task PopToAsync(IUINode target, bool playAnimation = true, CancellationToken can
 
 ### `TabContainerNode`
 
-绑定内嵌页面并选择显示项。
+绑定内嵌页面并选择显示项，不记录切换历史。资源结构与代码见 [Tab 指南](../manual/tabs.md)。
 
 ```csharp
 IReadOnlyDictionary<string, IUINode> Items { get; }
@@ -174,7 +174,7 @@ Task HideAsync(bool playAnimation = true, CancellationToken cancellationToken = 
 
 ### `ModalContainerNode`
 
-嵌套弹窗；只有顶层接受输入。
+叠层弹窗；下层保持可见，只有顶层接受输入。单窗口多级菜单与结果等待见 [Modal 指南](../manual/modals-and-dialogs.md)。
 
 ```csharp
 IUINode? Current { get; }

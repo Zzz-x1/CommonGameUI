@@ -10,7 +10,9 @@ This return policy belongs to the project. Containers own their input locks; the
 async Task BackAsync()
 {
     if (modals.Current is ConfirmView confirm) confirm.Complete(false);
-    else if (modals.Current is UINode modal) await modals.CloseAsync(modal);
+    else if (modals.Current is SettingsFlowWindow flow && flow.Pages.History.Count > 1)
+        await flow.Pages.PopAsync();
+    else if (modals.Current is { } modal) await modals.CloseAsync(modal);
     else if (compareWindows.Count > 0)
     {
         var window = compareWindows[^1];
@@ -27,6 +29,7 @@ async Task BackAsync()
 
 - Submit only when the current layer is interactive; wait during initialization/transitions.
 - Maintain compareWindows and remove closed references. Cancel confirmation through a business answer.
+- If the current Modal hosts a menu history, pop its internal Stack first and close the Modal at the first window. SettingsFlowWindow is shown in [Modal + Stack](modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
 - Input gates preserve business Disabled/interactable state; focus restores to valid visible usable controls.
 - Configure keyboard navigation in the engine. Tutorials show complete input/task handling.
 

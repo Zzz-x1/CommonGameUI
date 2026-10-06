@@ -2,16 +2,19 @@
 
 以下代码放在项目异步业务方法中，容器已初始化，View、模型和实例列表由项目定义。
 
-## 设置→画质→返回
+## 设置→画质→高级画质→逐级返回
+
+一个 Modal 外壳承载一个 Stack，各窗口是独立资源。SettingsFlowWindow 的完整初始化脚本见 [Modal + Stack](../manual/modals-and-dialogs.md#单窗口多级菜单modal--stack)。
 
 ```csharp
-var settings = await modals.OpenAsync<SettingsView>();
-var graphics = await modals.OpenAsync<GraphicsView>();
-await modals.CloseAsync(graphics);
-// settings remains the same instance.
+var window = await modals.OpenAsync<SettingsFlowWindow>();
+await window.Pages.PushAsync<GraphicsWindow>();
+await window.Pages.PushAsync<AdvancedGraphicsWindow>();
+await window.Pages.PopAsync(); // AdvancedGraphics → Graphics
+await window.Pages.PopAsync(); // Graphics → Settings
 ```
 
-关闭 graphics 后，原 settings 实例恢复交互。分类切换仍使用 Settings 内的 Tab。
+稳定状态每次只显示当前窗口；Pop 每次回退一层，恢复原实例。回到设置后再次返回，项目关闭外层 Modal。设置窗口中的音量／画面平级分类仍使用 Tab，不加入多级窗口历史。
 
 ## 大厅→背包→详情→回大厅
 

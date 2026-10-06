@@ -2,16 +2,19 @@
 
 Put these snippets in project async methods with initialized containers. Views, models and instance lists belong to your project.
 
-## Settings→graphics→back
+## Settings→graphics→advanced graphics→stepwise Back
+
+One Modal shell hosts a Stack, with a separate resource for each window. The complete SettingsFlowWindow initialization script is in [Modal + Stack](../manual/modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
 
 ```csharp
-var settings = await modals.OpenAsync<SettingsView>();
-var graphics = await modals.OpenAsync<GraphicsView>();
-await modals.CloseAsync(graphics);
-// settings remains the same instance.
+var window = await modals.OpenAsync<SettingsFlowWindow>();
+await window.Pages.PushAsync<GraphicsWindow>();
+await window.Pages.PushAsync<AdvancedGraphicsWindow>();
+await window.Pages.PopAsync(); // AdvancedGraphics → Graphics
+await window.Pages.PopAsync(); // Graphics → Settings
 ```
 
-Closing graphics restores the original settings instance. Categories still use the embedded Tab in Settings.
+Only the current window is visible in a stable state. Each Pop steps back one level and restores the original instance. Back again from settings closes the outer Modal through project code. Audio/graphics categories inside Settings still use Tab and do not join the menu history.
 
 ## Lobby→inventory→details→home
 

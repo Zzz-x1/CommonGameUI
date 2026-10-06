@@ -10,7 +10,9 @@ Esc 先处理顶层弹窗，再关对比窗，再返回页面，最后确认退�
 async Task BackAsync()
 {
     if (modals.Current is ConfirmView confirm) confirm.Complete(false);
-    else if (modals.Current is UINode modal) await modals.CloseAsync(modal);
+    else if (modals.Current is SettingsFlowWindow flow && flow.Pages.History.Count > 1)
+        await flow.Pages.PopAsync();
+    else if (modals.Current is { } modal) await modals.CloseAsync(modal);
     else if (compareWindows.Count > 0)
     {
         var window = compareWindows[^1];
@@ -27,6 +29,7 @@ async Task BackAsync()
 
 - 只在当前层 IsInteractive 时提交操作；初始化和转场期间等待。
 - compareWindows 由项目维护，关闭后移除引用。确认弹窗用业务答案表达取消。
+- 当前 Modal 包含多级菜单时，先返回其内部 Stack；首页再关闭 Modal。SettingsFlowWindow 见 [Modal + Stack](modals-and-dialogs.md#单窗口多级菜单modal--stack)。
 - 输入门保留按钮业务 Disabled／interactable 状态；焦点只恢复到有效、可见、可用的控件。
 - 键盘导航由引擎配置，完整输入与任务观察见教程。
 

@@ -4,8 +4,10 @@
 
 | 需求 | 建议阅读 |
 | --- | --- |
+| 根据显隐、历史与输入需求选择容器 | [容器选择](../manual/concepts.md#按流程选择容器) |
 | 背包隐藏后保留筛选与滚动位置 | [窗口实例](../manual/panels.md) |
 | 详情关闭恢复原背包 | [页面历史](../manual/stacks.md) |
+| 带遮罩的多级菜单，每次显示一个窗口、逐级返回 | [Modal + Stack](../manual/modals-and-dialogs.md#单窗口多级菜单modal--stack) |
 | 设置所有分类一起保存于资源 | [内嵌 Tab](../manual/tabs.md) |
 | 等待确认再购买 | [结果弹窗](../manual/modals-and-dialogs.md) |
 | 页面恢复时刷新模型、停用时暂停装饰 | [生命周期](../manual/lifecycle.md) |
