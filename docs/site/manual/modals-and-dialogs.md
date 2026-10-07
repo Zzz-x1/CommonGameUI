@@ -9,13 +9,27 @@
 弹窗资源放窗口内容，遮罩由容器创建，不在每个弹窗里重复制作。modals 为已挂载的 `ModalContainerNode`；`Observe` 是项目的异步任务观察入口。
 
 ```csharp
-modals.ConfigureBackdrop(Backdrops.Dim(Observe), ModalBackdropMode.Shared);
+ui.DefaultBackdropFactory = Backdrops.Dim(Observe, duration: .2);
+
+// Most Modal containers inherit this configuration automatically.
 var details = await modals.OpenAsync<ProductDetailsView>();
 var confirm = await modals.OpenAsync<PurchaseConfirmView>();
 await modals.CloseAsync(confirm);
 ```
 
 确认框默认关闭并销毁；KeepAlive 时缓存，原商品详情仍是同一个实例。`Shared` 共用一张遮罩，放在当前弹窗下；`PerModal` 每个弹窗创建一张，允许背景逐层加深。两种配置都不会自动隐藏下层窗口。
+
+### 覆盖或禁用
+
+`Backdrops` 使用对应引擎的命名空间。Factory 同时定义外观和动画，默认配置仅属于当前 Context；新容器自动继承，默认使用 Shared。需要覆盖、禁用或恢复默认时，在没有打开窗口且没有执行操作的容器上配置：
+
+```csharp
+modals.ConfigureBackdrop(Backdrops.Dim(Observe, duration: .35), ModalBackdropMode.PerModal);
+modals.DisableBackdrop();
+modals.UseDefaultBackdrop(ModalBackdropMode.Shared);
+```
+
+明确禁用时不创建遮罩；否则优先使用容器覆盖，再使用 Context 默认。默认为 null 时不创建。每次打开开始时确定默认配置，修改只影响后续打开时新建的遮罩；已有 Shared 遮罩保留到最后一层关闭。流程中途首次创建的 Shared 遮罩也会服务仍存在的下层窗口。
 
 ### 动画时序
 

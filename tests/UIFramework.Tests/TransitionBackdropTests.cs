@@ -49,6 +49,68 @@ public class TransitionBackdropTests
         }
     }
 
+    [Fact] public async Task ContextDefaultIsInheritedAndCanBeOverriddenDisabledAndRestored()
+    {
+        await using var ui = Create(); var global = new Factory(); var local = new Factory();
+        ui.DefaultBackdropFactory = global; ui.Register(() => new CounterView());
+        var modals = await Attach<ModalContainerNode>(ui.Root);
+        var first = await modals.OpenAsync<CounterView>(); Assert.Same(global.Displays[0], modals.CurrentBackdrop);
+        await modals.CloseAsync(first);
+        modals.ConfigureBackdrop(local, ModalBackdropMode.PerModal);
+        var second = await modals.OpenAsync<CounterView>(); Assert.Same(local.Displays[0], modals.CurrentBackdrop);
+        await modals.CloseAsync(second);
+        modals.DisableBackdrop(); var without = await modals.OpenAsync<CounterView>(); Assert.Null(modals.CurrentBackdrop);
+        await modals.CloseAsync(without);
+        modals.UseDefaultBackdrop(ModalBackdropMode.PerModal);
+        var restored = await modals.OpenAsync<CounterView>(); Assert.Equal(ModalBackdropMode.PerModal, modals.BackdropMode);
+        Assert.Same(global.Displays[1], modals.CurrentBackdrop); await modals.CloseAsync(restored);
+        Assert.All(global.Displays.Concat(local.Displays), display => Assert.Equal(1, display.Disposals));
+    }
+
+    [Fact] public async Task DefaultDoesNotCrossContextsAndNullCreatesNoBackdrop()
+    {
+        await using var first = Create(); await using var second = Create();
+        var factory = new Factory(); first.DefaultBackdropFactory = factory;
+        first.Register(() => new CounterView()); second.Register(() => new CounterView());
+        var a = await Attach<ModalContainerNode>(first.Root); var b = await Attach<ModalContainerNode>(second.Root);
+        await a.OpenAsync<CounterView>(); await b.OpenAsync<CounterView>();
+        Assert.NotNull(a.CurrentBackdrop); Assert.Null(b.CurrentBackdrop); Assert.Single(factory.Displays);
+    }
+
+    [Fact] public async Task ChangingDefaultRetainsExistingSharedBackdropUntilLastClose()
+    {
+        await using var ui = Create(); var old = new Factory(); var next = new Factory();
+        ui.DefaultBackdropFactory = old; ui.Register(() => new CounterView());
+        var modals = await Attach<ModalContainerNode>(ui.Root); var a = await modals.OpenAsync<CounterView>();
+        var shared = modals.CurrentBackdrop; ui.DefaultBackdropFactory = null;
+        var b = await modals.OpenAsync<CounterView>(); Assert.Same(shared, modals.CurrentBackdrop);
+        ui.DefaultBackdropFactory = next; await modals.CloseAsync(b); Assert.Same(shared, modals.CurrentBackdrop);
+        Assert.Empty(next.Displays); await modals.CloseAsync(a); Assert.Equal(1, old.Displays[0].Disposals);
+        await modals.OpenAsync<CounterView>(); Assert.Same(next.Displays[0], modals.CurrentBackdrop);
+    }
+
+    [Fact] public async Task AddingDefaultDuringUnshadedFlowSharesAndReleasesNewBackdrop()
+    {
+        await using var ui = Create(); ui.Register(() => new CounterView());
+        var modals = await Attach<ModalContainerNode>(ui.Root); var lower = await modals.OpenAsync<CounterView>();
+        Assert.Null(modals.CurrentBackdrop); var factory = new Factory(); ui.DefaultBackdropFactory = factory;
+        var upper = await modals.OpenAsync<CounterView>(); var shared = modals.CurrentBackdrop;
+        await modals.CloseAsync(upper); Assert.Same(shared, modals.CurrentBackdrop); Assert.True(factory.Displays[0].Visible);
+        await modals.CloseAsync(lower); Assert.Equal(1, factory.Displays[0].Disposals); Assert.Null(modals.CurrentBackdrop);
+    }
+
+    [Fact] public async Task PerModalUsesNewDefaultOnlyForNewDisplaysAndFailureIsNotReplaced()
+    {
+        await using var ui = Create(); ui.Register(() => new CounterView()); var first = new Factory(); var second = new Factory();
+        ui.DefaultBackdropFactory = first; var modals = await Attach<ModalContainerNode>(ui.Root); modals.UseDefaultBackdrop(ModalBackdropMode.PerModal);
+        var a = await modals.OpenAsync<CounterView>(); ui.DefaultBackdropFactory = second;
+        var b = await modals.OpenAsync<CounterView>(); Assert.Same(second.Displays[0], modals.CurrentBackdrop);
+        await modals.CloseAsync(b); Assert.Same(first.Displays[0], modals.CurrentBackdrop);
+        var error = new IOException("default backdrop"); ui.DefaultBackdropFactory = new Factory { Failure = error };
+        Assert.Same(error, await Assert.ThrowsAsync<IOException>(() => modals.OpenAsync<CounterView>()));
+        Assert.Same(a, modals.Current); Assert.Same(first.Displays[0], modals.CurrentBackdrop);
+    }
+
     private sealed class EnterPreparation(Task gate) : NodeLifecycle
     {
         public override Task EnteringAsync(LifecycleContext context, CancellationToken token) => gate.WaitAsync(token);
@@ -352,7 +414,10 @@ public class TransitionBackdropTests
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory);
         var recipe = new Recipe(); var gate = new TaskCompletionSource<bool>(); recipe.Play = (_, t) => gate.Task.WaitAsync(t); modals.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView());
         var pending = modals.OpenAsync<CounterView>(); Assert.Throws<InvalidOperationException>(() => modals.ConfigureBackdrop(new Factory()));
-        gate.SetResult(true); var node = await pending; Assert.Throws<InvalidOperationException>(() => modals.ConfigureBackdrop(new Factory())); await modals.CloseAsync(node);
+        Assert.Throws<InvalidOperationException>(() => modals.DisableBackdrop()); Assert.Throws<InvalidOperationException>(() => modals.UseDefaultBackdrop());
+        gate.SetResult(true); var node = await pending; Assert.Throws<InvalidOperationException>(() => modals.ConfigureBackdrop(new Factory()));
+        Assert.Throws<InvalidOperationException>(() => modals.DisableBackdrop()); Assert.Throws<InvalidOperationException>(() => modals.UseDefaultBackdrop());
+        await modals.CloseAsync(node);
     }
     [Fact] public async Task ParentInputLocksAlsoGateBackdropRequests()
     {

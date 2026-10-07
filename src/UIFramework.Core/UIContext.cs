@@ -62,6 +62,22 @@ public sealed class UIContext : IAsyncDisposable
         }
     }
 
+    private IUIBackdropFactory? _defaultBackdropFactory;
+    public IUIBackdropFactory? DefaultBackdropFactory
+    {
+        get => _defaultBackdropFactory;
+        set
+        {
+            try
+            {
+                Host.VerifyAccess(); VerifyMutation();
+                if (Root.State != NodeState.Ready) throw new ObjectDisposedException(nameof(UIContext));
+                _defaultBackdropFactory = value;
+            }
+            catch (Exception ex) { Report(ex, "Configure default backdrop"); throw; }
+        }
+    }
+
     private int _notificationDepth;
     internal void VerifyMutation()
     {

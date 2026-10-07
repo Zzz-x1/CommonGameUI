@@ -14,6 +14,7 @@ IUIResourceLoader Loader { get; }
 IUILog Log { get; }
 IUINode? InputOwner { get; } // Set by the framework.
 IUITransition DefaultTransition { get; set; }
+IUIBackdropFactory? DefaultBackdropFactory { get; set; } // default null.
 void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
 void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
 Task ClearCacheAsync(CancellationToken cancellationToken = default)
@@ -188,6 +189,8 @@ IUINode? Current { get; }
 ModalBackdropMode BackdropMode { get; }
 IUIBackdrop? CurrentBackdrop { get; }
 void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
+void DisableBackdrop()
+void UseDefaultBackdrop(ModalBackdropMode mode = ModalBackdropMode.Shared)
 Task<bool> RequestDismissAsync(CancellationToken token = default)
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
 Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)

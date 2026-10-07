@@ -9,13 +9,27 @@ Use [Stack](stacks.md) for one current window with stepwise history. Combine one
 Put window content in the resource. The container creates the backdrop; do not recreate it inside each window. modals is a mounted `ModalContainerNode`; `Observe` is the project's asynchronous task observer.
 
 ```csharp
-modals.ConfigureBackdrop(Backdrops.Dim(Observe), ModalBackdropMode.Shared);
+ui.DefaultBackdropFactory = Backdrops.Dim(Observe, duration: .2);
+
+// Most Modal containers inherit this configuration automatically.
 var details = await modals.OpenAsync<ProductDetailsView>();
 var confirm = await modals.OpenAsync<PurchaseConfirmView>();
 await modals.CloseAsync(confirm);
 ```
 
 Confirmation is destroyed by default or cached with KeepAlive; product details retain the same instance. `Shared` reuses one backdrop beneath the current modal. `PerModal` creates a backdrop per window, allowing the background to become darker at each level. Neither mode automatically hides lower windows.
+
+### Override or disable
+
+`Backdrops` comes from your engine namespace. The Factory defines appearance and animation together; the default is scoped to this Context. New containers inherit it, using Shared mode. To override, disable, or restore defaults, configure an empty, idle container:
+
+```csharp
+modals.ConfigureBackdrop(Backdrops.Dim(Observe, duration: .35), ModalBackdropMode.PerModal);
+modals.DisableBackdrop();
+modals.UseDefaultBackdrop(ModalBackdropMode.Shared);
+```
+
+Disable explicitly prevents a backdrop; otherwise the container override takes precedence over the Context default. A null default creates no backdrop. Defaults are captured when an opening starts; updates affect new opening requests only: an existing Shared backdrop remains until the last modal closes. A Shared backdrop first created midway through a flow also serves its remaining lower modals.
 
 ### Animation timing
 

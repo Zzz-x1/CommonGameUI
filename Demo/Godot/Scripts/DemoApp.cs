@@ -59,7 +59,7 @@ public partial class DemoApp : Control
         _shells = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Client", GetNode<Control>("ShellMount"));
         Floating = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Comparison", GetNode<Control>("FloatingMount"));
         Modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", GetNode<Control>("ModalMount"));
-        Modals.ConfigureBackdrop(EngineUI.Backdrops.Dim(Track), ModalBackdropMode.Shared);
+        _ui.DefaultBackdropFactory = EngineUI.Backdrops.Dim(Track, duration: .2);
         _login = await _shells.OpenAsync<LoginView>();
         await RunDevelopmentAsync();
     }

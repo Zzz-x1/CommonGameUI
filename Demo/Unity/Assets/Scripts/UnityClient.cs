@@ -71,7 +71,7 @@ namespace StarCourt.UnityDemo
             Pages.ChildTransition = ClientTransitions.Page();
             Windows.ChildTransition = EngineUI.Transitions.ScaleFade();
             Modals.ChildTransition = EngineUI.Transitions.ScaleFade(targetPath: "Panel");
-            Modals.ConfigureBackdrop(EngineUI.Backdrops.Dim(Track), ModalBackdropMode.Shared);
+            UI.DefaultBackdropFactory = EngineUI.Backdrops.Dim(Track, duration: .2);
             foreach (var button in Navigation.GetComponentsInChildren<Button>(true))
             {
                 var route = button.name;

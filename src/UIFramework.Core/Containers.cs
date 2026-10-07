@@ -459,6 +459,7 @@ public class ModalContainerNode : ContainerNode
     private readonly Dictionary<UINode, ModalRecord> _records = new();
     private readonly Dictionary<UINode, IUIBackdrop> _backdrops = new();
     private IUIBackdropFactory? _backdropFactory;
+    private bool _backdropDisabled;
     private IUIBackdrop? _sharedBackdrop;
     private bool _backdropLocked;
     private bool _dismissPending;
@@ -470,14 +471,24 @@ public class ModalContainerNode : ContainerNode
 
     public void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
     {
+        if (factory == null)
+        {
+            var failure = new ArgumentNullException(nameof(factory));
+            ReportFailure(failure, "Configure modal backdrop"); throw failure;
+        }
+        ConfigureBackdropCore(factory, false, mode);
+    }
+    public void DisableBackdrop() => ConfigureBackdropCore(null, true, BackdropMode);
+    public void UseDefaultBackdrop(ModalBackdropMode mode = ModalBackdropMode.Shared) => ConfigureBackdropCore(null, false, mode);
+    private void ConfigureBackdropCore(IUIBackdropFactory? factory, bool disabled, ModalBackdropMode mode)
+    {
         try
         {
-            if (factory == null) throw new ArgumentNullException(nameof(factory));
             if (!Enum.IsDefined(typeof(ModalBackdropMode), mode)) throw new ArgumentOutOfRangeException(nameof(mode));
             if (State != NodeState.Detached) { Context.Host.VerifyAccess(); Context.VerifyMutation(); }
             if (_modals.Count != 0 || _backdropLocked || State is NodeState.Disposing or NodeState.Disposed)
                 throw new InvalidOperationException("Configure backdrops before opening modals.");
-            _backdropFactory = factory; BackdropMode = mode;
+            _backdropFactory = factory; _backdropDisabled = disabled; BackdropMode = mode;
         }
         catch (Exception ex) { ReportFailure(ex, "Configure modal backdrop"); throw; }
     }
@@ -541,6 +552,7 @@ public class ModalContainerNode : ContainerNode
             if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
                 throw new InvalidOperationException("Independent modal containers cannot own input simultaneously.");
             var previous = CurrentNode;
+            var backdropFactory = _backdropDisabled ? null : _backdropFactory ?? Context.DefaultBackdropFactory;
             var node = await AcquireAsync<T>(args, ct);
             var enter = Describe(node, LifecycleReason.Open, previous, node);
             IUIBackdrop? backdrop = null;
@@ -548,12 +560,12 @@ public class ModalContainerNode : ContainerNode
             object? priorOrder = null;
             try
             {
-                if (_backdropFactory != null)
+                backdrop = BackdropMode == ModalBackdropMode.Shared ? _sharedBackdrop : null;
+                if (backdrop != null || backdropFactory != null)
                 {
-                    backdrop = BackdropMode == ModalBackdropMode.Shared ? _sharedBackdrop : null;
                     if (backdrop == null)
                     {
-                        backdrop = await _backdropFactory.CreateAsync(Element, () => RequestDismissAsync(), ct)
+                        backdrop = await backdropFactory!.CreateAsync(Element, () => RequestDismissAsync(), ct)
                             ?? throw new InvalidOperationException("Backdrop factory returned null.");
                         createdBackdrop = true;
                         backdrop.SetInteractive(false);
@@ -582,8 +594,12 @@ public class ModalContainerNode : ContainerNode
             _modals.Add(node); _records.Add(node, new ModalRecord(focus));
             if (backdrop != null)
             {
-                _backdrops.Add(node, backdrop);
-                if (BackdropMode == ModalBackdropMode.Shared) _sharedBackdrop = backdrop;
+                if (BackdropMode == ModalBackdropMode.Shared)
+                {
+                    _sharedBackdrop = backdrop;
+                    foreach (var modal in _modals) _backdrops[modal] = backdrop;
+                }
+                else _backdrops.Add(node, backdrop);
             }
             Context.SetInputOwner(node);
             try { CompleteChange(enter, null, null, node, enter, () => Context.Host.Focus(node.Element)); }
