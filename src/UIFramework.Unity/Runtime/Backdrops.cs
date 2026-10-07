@@ -34,6 +34,7 @@ namespace UIFramework.Unity
                     rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one; rect.offsetMin = rect.offsetMax = Vector2.zero;
                     go.GetComponent<Image>().color = _color;
                     var button = go.GetComponent<Button>();
+                    button.transition = Selectable.Transition.None;
                     button.navigation = new Navigation { mode = Navigation.Mode.None };
                     button.onClick.AddListener(() => _observe(requestDismiss()));
                     go.SetActive(false);

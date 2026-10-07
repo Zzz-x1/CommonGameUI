@@ -1654,6 +1654,8 @@ UnityUIHost 提供主线程检查、帧等待、EventSystem 焦点快照和日�
 
 CanvasGroup 门控不覆盖 Button.interactable 等业务限制。锁定时让子 CanvasGroup 不忽略父级门控，恢复时采用原资源设定。空结构挂载不创建可射线命中的 Image，不能挡住标题按钮；实际模态遮罩负责屏蔽下层输入。运行期间新增跨越已有输入快照的控件不属于本 Demo 工作流。
 
+Unity 遮罩颜色（2026-10-07）：ModalBackdrop 的 Button 仅用于点击关闭请求，显式设置 `Selectable.Transition.None`，避免默认 Color Tint 在悬停／按下／禁用状态下修改 Image 的渲染颜色。遮罩颜色由配置的 Image.color 决定，淡入／淡出只修改 CanvasGroup.alpha。本次小改动仅核对源码与差异，未构建或运行原生验证。
+
 ### 14.2 使用 API
 
 ```csharp
