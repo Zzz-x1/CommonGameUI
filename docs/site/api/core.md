@@ -128,7 +128,7 @@ protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? ente
 
 ## 容器与结果弹窗
 
-Panel Single 保留隐藏项，Stack 保留历史；Close／Pop 默认销毁，KeepAlive 缓存。Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收更早实例。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
+Panel Single 保留隐藏项，Stack 保留历史；Close／Pop 默认销毁，KeepAlive 缓存。Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收同容器存活实例，当前目标正常完成。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
 
 ### `ContainerNode : UINode`
 

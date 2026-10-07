@@ -47,6 +47,7 @@ internal static class TransitionFlow
                 try { action(); }
                 catch (Exception ex)
                 {
+                    container.BlockOperations(primary ?? ex);
                     context.Report(ex, "Restore transition presentation");
                     if (failure == null) failure = ex; else if (!ReferenceEquals(ex, failure)) UIFailure.AddSecondary(failure, ex);
                 }

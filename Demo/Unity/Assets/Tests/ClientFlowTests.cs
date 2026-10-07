@@ -43,6 +43,21 @@ namespace StarCourt.UnityDemo.Tests
             UnityEngine.Object.Destroy(_root); yield return null;
             File.Delete(Path.Combine(Application.persistentDataPath, _save));
         }
+        [UnityTest] public IEnumerator QueuedNativeWindows() => Await(QueuedNativeWindowsAsync());
+        private async Task QueuedNativeWindowsAsync()
+        {
+            await _app.EnterAsync();
+            var first = _app.Windows.OpenAsync<CompareView>(new CompareArgs(0, 0));
+            var second = _app.Windows.OpenAsync<CompareView>(new CompareArgs(1, 1));
+            Assert.That(second.IsCompleted, Is.False);
+            var windows = await Task.WhenAll(first, second);
+            var close = _app.Windows.CloseAsync(windows[0]);
+            var duplicate = _app.Windows.CloseAsync(windows[0]);
+            var closeOther = _app.Windows.CloseAsync(windows[1]);
+            await Task.WhenAll(close, duplicate, closeOther);
+            Assert.That(_app.Windows.Children, Is.Empty);
+            Assert.That(windows.All(window => window.State == NodeState.Disposed), Is.True);
+        }
         private async Task Frame() => await ((EngineUI.UIHost)_app.UI.Host).NextFrameAsync();
         private async Task Click(IUINode node, string path) => await Click(node.GetControl<Button>(path));
         private async Task Click(Button button)

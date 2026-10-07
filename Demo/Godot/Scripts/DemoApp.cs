@@ -277,11 +277,8 @@ public partial class DemoApp : Control
             DisplayServer.WindowSetMode(Store.State.Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
     }
 
-    public async Task CloseComparisonsAsync()
-    {
-        foreach (var node in Floating.Children.ToArray().Reverse())
-            await Floating.CloseAsync(node);
-    }
+    public Task CloseComparisonsAsync() =>
+        Task.WhenAll(Floating.Children.Reverse().Select(node => Floating.CloseAsync(node)));
 
     public Task RewardAsync(string text, params RewardEntry[] rewards) => Modals.OpenAsync<RewardView>(new PresentationArgs(text, Rewards: rewards));
     public Task ModalAsync(ModalArgs args) => Modals.OpenAsync<ClientModalView>(args);

@@ -116,7 +116,7 @@ namespace StarCourt.UnityDemo
             if (route == "Settings") { await Modals.OpenAsync<SettingsView>(); return; }
             if (Windows.Children.Count > 0)
             {
-                foreach (var window in Windows.Children.Reverse().ToArray()) await Windows.CloseAsync(window);
+                await Task.WhenAll(Windows.Children.Reverse().Select(window => Windows.CloseAsync(window)));
                 ((ItemView)Pages.Current).RefreshComparison();
             }
             if (route == "Home") { if (!ReferenceEquals(Pages.Current, Home)) await Pages.PopToAsync(Home); return; }
@@ -150,7 +150,7 @@ namespace StarCourt.UnityDemo
         {
             if (Modals.Current != null) { await Modals.RequestDismissAsync(); return; }
             if (Windows.Children.Count > 0)
-            { foreach (var window in Windows.Children.Reverse().ToArray()) await Windows.CloseAsync(window); ((ItemView)Pages.Current).RefreshComparison(); return; }
+            { await Task.WhenAll(Windows.Children.Reverse().Select(window => Windows.CloseAsync(window))); ((ItemView)Pages.Current).RefreshComparison(); return; }
             if (!ReferenceEquals(Pages.Current, Home) && !(Pages.Current is LoginView)) { await Pages.PopAsync(); return; }
             if (ReferenceEquals(Pages.Current, Home) && await AskAsync("返回标题？本地档案已保存。"))
             { await Pages.PopAsync(); Navigation.SetActive(false); }

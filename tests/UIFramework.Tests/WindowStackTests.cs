@@ -96,11 +96,11 @@ public class WindowStackTests
         var outer = await Attach<PanelContainerNode>(ui.Root); var parent = await outer.OpenAsync<CounterView>();
         var inner = await Attach<PanelContainerNode>(parent); var child = await inner.OpenAsync<ArgumentView>("child");
         await outer.HideAsync(parent); Assert.False(child.IsVisible);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => inner.ShowAsync(child));
+        await inner.ShowAsync(child);
         await inner.HideAsync(child); await outer.ShowAsync(parent); Assert.False(child.IsVisible);
         await inner.ShowAsync(child); Assert.True(child.IsVisible);
         await Assert.ThrowsAsync<InvalidOperationException>(() => outer.HideAsync(child));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => inner.ShowAsync(child));
+        await inner.ShowAsync(child);
         await inner.CloseAsync(child);
         await Assert.ThrowsAsync<InvalidOperationException>(() => inner.HideAsync(child));
     }
@@ -126,7 +126,9 @@ public class WindowStackTests
         using var cancellation = new CancellationTokenSource();
         var pending = panels.OpenAsync<CounterView>(cancellationToken: cancellation.Token);
         Assert.False(panels.TryGet<CounterView>(out _));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => panels.OpenAsync<CounterView>());
+        using var queuedCancellation = new CancellationTokenSource();
+        var queued = panels.OpenAsync<CounterView>(cancellationToken: queuedCancellation.Token); Assert.False(queued.IsCompleted);
+        queuedCancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued);
         cancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Equal(NodeState.Disposed, n.State); Assert.False(panels.TryGet<CounterView>(out _));
     }
@@ -205,7 +207,7 @@ public class WindowStackTests
         await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var foreign = await Attach<CounterView>(ui.Root);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PopToAsync(b));
+        await stack.PopToAsync(b);
         await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PopToAsync(foreign));
         await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PopToAsync(new UINode()));
         await Assert.ThrowsAsync<ArgumentNullException>(() => stack.PopToAsync(null!));

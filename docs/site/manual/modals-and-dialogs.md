@@ -125,7 +125,7 @@ ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 
 ## 行为与边界
 
 - `OpenAsync` 每次创建并叠加新弹窗；没有“自动隐藏上一层”的选项。
-- `CloseAsync` 只关闭当前顶层；`CloseToAsync` 目标必须是同一容器中存活的更早实例。
+- `CloseAsync` 只关闭当前顶层；`CloseToAsync` 目标必须是同一容器中存活的实例；当前目标正常完成。
 - 下层窗口保留显示和状态，但不接受输入；恢复时不重播进入生命周期和动画。
 - `Complete` 只能在可交互时调用一次。未回答就外部关闭会取消等待任务，不自动返回 false。
 - 遮罩点击关闭通过 `DismissRequested` 配置；Esc 和项目返回入口由项目处理。
@@ -134,3 +134,5 @@ ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 
 [容器选择](concepts.md#按流程选择容器) · [Stack 历史](stacks.md) · [输入与焦点](input-and-focus.md) · [异步关闭](async-and-errors.md)
 
 KeepAlive 支持[关闭后缓存](resources.md#关闭后缓存)；遮罩仍按原规则释放，Dialog 每次打开使用独立结果会话。
+
+同一次打开的重复 `CloseAsync` 共享关闭任务，首个请求决定动画与执行取消；后续取消只停止自己的等待。已正常关闭的实例再次 Close 成功，关闭失败仍传播原错误。`ShowDialogAsync` 等待答案期间不占容器队列，其他弹窗可以正常打开。详见[操作协调](async-and-errors.md)。

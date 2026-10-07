@@ -35,7 +35,7 @@ SwitchAsync("Graphics") hides Audio and shows Graphics, retaining both instances
 
 - Bind does not load or clone resources; categories need no custom View.
 - Switch retains unselected pages; Hide clears selection but retains all instances.
-- Duplicate/missing names or switching to Current fails; buttons may avoid submitting an unchanged choice.
+- Duplicate bound names and missing switch targets fail. Switching to Current or hiding without a selection completes without replaying notifications or animation.
 - If selectors are outside Body, disable them and Close together during switching.
 - Switch does not add history. Returning to previously visited categories needs project-owned history, or a Stack-based flow.
 

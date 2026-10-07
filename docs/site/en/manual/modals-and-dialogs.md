@@ -125,7 +125,7 @@ ShowDialogAsync returns the answer after the confirmation window closes and clea
 ## Behavior and boundaries
 
 - `OpenAsync` creates and layers a new modal each time; there is no automatic hide-previous-layer option.
-- `CloseAsync` closes only the current top. `CloseToAsync` requires a live earlier instance in the same container.
+- `CloseAsync` closes only the current top. `CloseToAsync` requires a live instance in the same container; the current target completes without changes.
 - Lower windows retain their display and state but receive no input. Restoration does not replay entry lifecycle or animation.
 - `Complete` is allowed once while interactive. Closing an unanswered dialog cancels its waiter rather than returning false.
 - Configure `DismissRequested` for backdrop dismissal. The project handles Esc and its Back action.
@@ -134,3 +134,5 @@ ShowDialogAsync returns the answer after the confirmation window closes and clea
 [Container selection](concepts.md#choose-by-the-flow) · [Stack history](stacks.md) · [Input and focus](input-and-focus.md) · [Async shutdown](async-and-errors.md)
 
 KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching); backdrops still follow normal release rules, and each Dialog opening uses its own result session.
+
+Duplicate `CloseAsync` calls for one opening share execution. The first request owns animation and execution cancellation; later cancellation stops only that caller’s wait. Closing an already successfully closed instance succeeds; failed closure preserves the original error. `ShowDialogAsync` does not hold the container queue while waiting for an answer. See [operation coordination](async-and-errors.md).

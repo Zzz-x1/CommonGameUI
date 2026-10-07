@@ -78,7 +78,7 @@ public class ContainerReturnTests
         var modals = await Attach<ModalContainerNode>(ui); var other = await Attach<ModalContainerNode>(ui);
         var target = await modals.OpenAsync<CounterView>(); var top = await modals.OpenAsync<CounterView>();
         await Assert.ThrowsAsync<ArgumentNullException>(() => modals.CloseToAsync(null!));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => modals.CloseToAsync(top));
+        await modals.CloseToAsync(top);
         await Assert.ThrowsAsync<InvalidOperationException>(() => modals.CloseToAsync(other));
         await Assert.ThrowsAsync<InvalidOperationException>(() => other.CloseToAsync(target));
         Assert.Same(top, modals.Current); Assert.Equal(2, modals.Children.Count); Assert.True(top.IsInteractive);
@@ -93,7 +93,9 @@ public class ContainerReturnTests
         var closing = modals.CloseToAsync(target, cancellationToken: cancellation.Token);
         await gate.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.False(middle.IsVisible); Assert.True(target.IsVisible); Assert.False(middle.IsActive);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => modals.CloseAsync(top));
+        using var queuedCancellation = new CancellationTokenSource();
+        var queuedClose = modals.CloseAsync(top, cancellationToken: queuedCancellation.Token); Assert.False(queuedClose.IsCompleted);
+        queuedCancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queuedClose);
         cancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => closing);
         Assert.Same(top, modals.Current); Assert.Same(top, ui.InputOwner); Assert.True(top.IsVisible && top.IsInteractive);
         Assert.Equal(3, modals.Children.Count); Assert.Equal(NodeState.Ready, middle.State); Assert.True(backdrops.Created[0].Visible);
@@ -193,7 +195,7 @@ public class ContainerReturnTests
         Assert.Null(tabs.Current); Assert.Null(tabs.CurrentName); Assert.False(first.IsVisible); Assert.False(first.IsActive);
         Assert.Equal(NodeState.Ready, first.State); Assert.Equal(0, display.Disposals); Assert.Equal(2, tabs.Items.Count);
         Assert.Equal(LifecycleReason.Hide, first.TransitionState!.Context.Reason); Assert.Null(first.TransitionState.Context.Target);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tabs.HideAsync());
+        await tabs.HideAsync();
         await tabs.SwitchAsync("Map"); Assert.Same(first, tabs.Current); Assert.Same(display, first.Element);
         Assert.Equal(1, first.Initialized); Assert.Equal(2, first.Entered); Assert.Equal(1, first.Exited);
     }

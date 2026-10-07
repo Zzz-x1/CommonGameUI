@@ -45,7 +45,8 @@ CompareView inherits `UINode<ItemArgs>`; each card receives its own item ID.
 - Open reuses an existing Single instance, showing it if hidden.
 - Hide/Show retain the instance. Close destroys by default; KeepAlive removes the window from the open list and caches it.
 - TryGet includes hidden instances and fails on multiple matches.
-- Repeated Hide/Show or a node from another container fails. The project sets count limits.
+- Hide on a hidden window and Show on a shown window complete without replaying lifecycle or animation. Foreign-container targets still fail; the project sets count limits.
+- Duplicate Close requests for one opening share execution; Close after successful closure succeeds. The first request owns animation and execution cancellation; later cancellation stops only that caller’s wait. A failed close remains a failure.
 - Use [Stack](stacks.md) for automatic hiding and stepwise menu history, and [Modal](modals-and-dialogs.md) for confirmation that blocks background input. Panel does not automatically restore input or focus to a previous window.
 
 [Container selection](concepts.md#choose-by-the-flow) · [Resources](resources.md) · [Recipes](../samples/game-ui-recipes.md)

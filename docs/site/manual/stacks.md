@@ -37,7 +37,7 @@ await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 await pages.PopToAsync(lobby);
 ```
 
-`PopToAsync` 清理目标之上的全部窗口，只恢复原大厅，不逐层显示中间窗口。目标使用具体实例，必须仍在同一栈的更早历史中。
+`PopToAsync` 清理目标之上的全部窗口，只恢复原大厅，不逐层显示中间窗口。目标使用具体实例，必须仍在同一栈的历史中；目标已经是当前窗口时正常完成。
 
 ## 行为与边界
 
@@ -50,7 +50,7 @@ await pages.PopToAsync(lobby);
 | History | 从最早到当前的实例列表，包含当前窗口 |
 
 - 稳定状态只有当前窗口显示；过场动画可能同时显示前后窗口。无需切换动画时，对 Push／Pop 传 `playAnimation: false`。
-- `PopAsync` 可以移除最后一个窗口，此后栈为空；空栈再次 Pop 会报错。多级弹窗的首页返回通常关闭整个流程，见 [Modal 内的 Stack](modals-and-dialogs.md#单窗口多级菜单modal--stack)。
+- `PopAsync` 可以移除最后一个窗口，此后栈为空；空栈再次 Pop 正常完成；连续提交两次 Pop 会依次返回两步，不合并请求。多级弹窗的首页返回通常关闭整个流程，见 [Modal 内的 Stack](modals-and-dialogs.md#单窗口多级菜单modal--stack)。
 - 默认出栈销毁；KeepAlive 启用[关闭后缓存](resources.md#关闭后缓存)，缓存实例不属于历史。
 - Stack 管历史和显隐，不自动创建遮罩或取得模态输入所有权。需要这些能力时组合 Modal。
 

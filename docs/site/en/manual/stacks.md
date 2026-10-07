@@ -37,7 +37,7 @@ await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
 await pages.PopToAsync(lobby);
 ```
 
-`PopToAsync` cleans all windows above the target and restores the original lobby without showing intermediate windows. Pass a concrete instance still in this stack's earlier history.
+`PopToAsync` cleans all windows above the target and restores the original lobby without showing intermediate windows. Pass a concrete instance still in this stack’s history; targeting the current window completes without changes.
 
 ## Behavior and boundaries
 
@@ -50,7 +50,7 @@ await pages.PopToAsync(lobby);
 | History | Instances from the earliest to the current window, including the current one |
 
 - Only the current window is visible in a stable state; transitions may show both windows. Pass `playAnimation: false` to Push/Pop when no switching animation is needed.
-- `PopAsync` can remove the last window, leaving an empty stack. Popping an empty stack fails. Back from the first window of a modal menu usually closes the whole flow; see [Stack inside Modal](modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
+- `PopAsync` can remove the last window, leaving an empty stack. Popping an empty stack succeeds. Two submitted Pop requests return two steps in order; they are not merged. Back from the first window of a modal menu usually closes the whole flow; see [Stack inside Modal](modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
 - Popped windows are destroyed by default; KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching). Cached windows are not history entries.
 - Stack manages history and visibility. It does not create a backdrop or acquire modal input ownership; combine it with Modal for those features.
 

@@ -143,7 +143,7 @@ public class CoreTests
         await stack.PopAsync(); Assert.Same(first, stack.Current); Assert.True(first.IsVisible);
         Assert.Equal(NodeState.Disposed, second.State); Assert.Equal(1, first.Initialized);
         await stack.PopAsync(); Assert.Empty(stack.History);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PopAsync()); await ui.DisposeAsync();
+        await stack.PopAsync(); await ui.DisposeAsync();
     }
 
     [Fact] public async Task IndependentCloseTargetsExactInstance()
@@ -186,12 +186,12 @@ public class CoreTests
         await ui.DisposeAsync();
     }
 
-    [Fact] public async Task ConcurrentOperationThrowsInsteadOfSkipping()
+    [Fact] public async Task ConcurrentOperationsExecuteInOrder()
     {
         var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui);
         host.LoadGate = new TaskCompletionSource<bool>(); var pending = stack.PushAsync<CounterView>();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => stack.PushAsync<CounterView>());
-        host.LoadGate.SetResult(true); await pending; Assert.Single(stack.History); await ui.DisposeAsync();
+        var next = stack.PushAsync<CounterView>(); Assert.False(next.IsCompleted);
+        host.LoadGate.SetResult(true); await Task.WhenAll(pending, next); Assert.Equal(2, stack.History.Count); await ui.DisposeAsync();
     }
 
     [Fact] public async Task DisposingScopeCancelsLoadAndWaitsForCleanup()

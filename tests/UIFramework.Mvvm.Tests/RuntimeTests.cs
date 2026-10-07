@@ -161,6 +161,28 @@ public class RuntimeTests
         Assert.Equal(1, vm.Disposals); Assert.True(runtime.IsDisposed);
         await ui.DisposeAsync();
     }
+    private sealed class QueuedCloseGate : IUITransition, IUITransitionRun
+    {
+        public readonly TaskCompletionSource Finish = new();
+        public IUITransitionRun Create(TransitionContext context) => this;
+        public Task PlayAsync(CancellationToken token) => Finish.Task.WaitAsync(token);
+        public void Restore() { }
+    }
+    [Fact] public async Task CommandCanAwaitSelfCloseQueuedBehindAnotherWindowOperation()
+    {
+        await using var runtime = new MvvmRuntime(new Log()); await using var ui = Context(runtime);
+        ui.Register(() => new UINode(), windowMode: WindowInstanceMode.Multiple);
+        var panels = new PanelContainerNode(); await panels.AttachAsync(ui.Root, "Windows");
+        var blocker = await panels.OpenAsync<UINode>(); var node = await panels.OpenAsync<UINode>();
+        var gate = new QueuedCloseGate(); blocker.Transition = gate;
+        var blocking = panels.HideAsync(blocker); var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        vm.Action = async token => { await panels.CloseAsync(node); Assert.False(token.IsCancellationRequested); Assert.Equal(0, vm.Disposals); };
+        var button = new Click(); node.BindCommand("Dialog.Close", button); button.Press();
+        Assert.Equal(NodeState.Ready, node.State); gate.Finish.SetResult(); await blocking;
+        await runtime.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(NodeState.Disposed, node.State); Assert.Equal(1, vm.Disposals);
+    }
+
     [Fact] public async Task ExternalCloseCancelsCommandAndWaitsBeforeReleasingVm()
     {
         var runtime = new MvvmRuntime(new Log()); var ui = Context(runtime); var node = await Node(ui, "Window");

@@ -10,6 +10,15 @@ public partial class DemoApp
 {
     private async Task RunRetainedPartnerTestsAsync(Action<bool, string> pass)
     {
+        var firstOpen = Floating.OpenAsync<CompareView>(new CompareArgs("eq0", 0));
+        var secondOpen = Floating.OpenAsync<CompareView>(new CompareArgs("eq1", 1));
+        pass(!secondOpen.IsCompleted, "comparison requests queue during native transitions");
+        var comparisons = await Task.WhenAll(firstOpen, secondOpen);
+        var closeFirst = Floating.CloseAsync(comparisons[0]);
+        var duplicateClose = Floating.CloseAsync(comparisons[0]);
+        var closeSecond = Floating.CloseAsync(comparisons[1]);
+        await Task.WhenAll(closeFirst, duplicateClose, closeSecond);
+        pass(Floating.Children.Count == 0 && comparisons.All(node => node.State == NodeState.Disposed), "native comparison closes drain and duplicate close shares execution");
         await OpenAsync("Inventory");
         var inventory = (InventoryView)Shell.Pages.Current!;
         await PressAsync(inventory.GetControl<Button>("Pages/装备/C0"));

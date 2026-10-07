@@ -4,13 +4,17 @@ namespace UIFramework;
 
 public class UINode : IUINode
 {
-    private sealed class OperationFrame
+    internal sealed class OperationFrame
     {
-        public OperationFrame(UINode node, OperationFrame? previous) { Node = node; Previous = previous; }
+        public OperationFrame(UINode node, OperationFrame? previous) { Node = node; Previous = previous; Request = ContainerOperations.ExecutingRequest; }
+        public bool Active = true;
+        public ContainerOperations.Request? Request { get; }
         public UINode Node { get; }
         public OperationFrame? Previous { get; }
     }
     private static readonly AsyncLocal<OperationFrame?> Executing = new();
+    internal static OperationFrame? CurrentOperation => Executing.Value;
+    internal virtual Task WaitForOperationsAsync() => Task.CompletedTask;
     private readonly List<UINode> _children = new();
     private readonly CancellationTokenSource _lifetime = new();
     private int _busy;
@@ -40,6 +44,7 @@ public class UINode : IUINode
     internal NodeCacheMode CacheMode;
     internal bool Cached, CacheReuse;
     internal UINode? SuspendedInputOwner;
+    internal PresentationSession? Presentation;
     public bool IsCached => Cached || (Parent?.IsCached ?? false);
     public Guid Id { get; } = Guid.NewGuid();
     public string Name { get; private set; } = "";
@@ -59,7 +64,7 @@ public class UINode : IUINode
     public int TransitionOrder
     {
         get => _transitionOrder;
-        set { try { _context?.Host.VerifyAccess(); _context?.VerifyMutation(); _transitionOrder = value; }
+        set { try { VerifyConfiguration(); _transitionOrder = value; }
             catch (Exception ex) { ReportFailure(ex, "Configure transition order"); throw; } }
     }
     public TransitionState? TransitionState { get; private set; }
@@ -78,8 +83,14 @@ public class UINode : IUINode
     public IUITransition? Transition
     {
         get => _transition;
-        set { try { _context?.Host.VerifyAccess(); _context?.VerifyMutation(); _transition = value; }
+        set { try { VerifyConfiguration(); _transition = value; }
             catch (Exception ex) { ReportFailure(ex, "Configure transition"); throw; } }
+    }
+    private void VerifyConfiguration()
+    {
+        _context?.Host.VerifyAccess(); _context?.VerifyMutation();
+        if (this is ContainerNode { HasPendingOperations: true })
+            throw new InvalidOperationException("Cannot configure a busy container.");
     }
     public Func<CancellationToken, Task>? DismissRequested { get; set; }
 
@@ -110,7 +121,7 @@ public class UINode : IUINode
         {
             _context?.Host.VerifyAccess();
             _context?.VerifyMutation();
-            if (_busy != 0 || State == NodeState.Initializing || State == NodeState.Disposing || State == NodeState.Disposed)
+            if (_busy != 0 || this is ContainerNode { HasPendingOperations: true } || State == NodeState.Initializing || State == NodeState.Disposing || State == NodeState.Disposed)
                 throw new InvalidOperationException("Cannot change lifecycle behaviors during an operation or after disposal.");
             var index = _handlers.FindIndex(h => ReferenceEquals(h, handler));
             if (index < 0) throw new InvalidOperationException("Lifecycle behavior is not registered.");
@@ -273,6 +284,7 @@ public class UINode : IUINode
     {
         var acquired = false;
         var previousFrame = Executing.Value;
+        OperationFrame? frame = null;
         try
         {
             Context.Host.VerifyAccess();
@@ -284,7 +296,7 @@ public class UINode : IUINode
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
                 throw new InvalidOperationException($"Concurrent or reentrant operation on {Name}: {operation}.");
             acquired = true;
-            Executing.Value = new OperationFrame(this, previousFrame);
+            Executing.Value = frame = new OperationFrame(this, previousFrame);
             _idle = new TaskCompletionSource<bool>();
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Lifetime);
             await action(linked.Token);
@@ -292,7 +304,7 @@ public class UINode : IUINode
         catch (Exception ex) { ReportFailure(ex, $"{operation} {GetType().Name}/{Name} ({Id})"); throw; }
         finally
         {
-            if (acquired) { Executing.Value = previousFrame; Interlocked.Exchange(ref _busy, 0); _idle!.TrySetResult(true); }
+            if (acquired) { frame!.Active = false; Executing.Value = previousFrame; Interlocked.Exchange(ref _busy, 0); _idle!.TrySetResult(true); }
         }
     }
 
@@ -307,7 +319,7 @@ public class UINode : IUINode
         Context.VerifyMutation();
         for (var frame = Executing.Value; frame != null; frame = frame.Previous)
             for (var node = frame.Node; node != null; node = node.Parent)
-                if (ReferenceEquals(node, this))
+                if (frame.Active && ReferenceEquals(node, this))
                 {
                     var failure = new InvalidOperationException("Cannot dispose an active operation's owner from its own lifecycle; await the operation from outside first.");
                     Context.Report(failure, $"Reentrant dispose {Name}");
@@ -326,7 +338,8 @@ public class UINode : IUINode
     private async Task DisposeCoreAsync()
     {
         var previous = Executing.Value;
-        Executing.Value = new OperationFrame(this, previous);
+        var disposalFrame = new OperationFrame(this, previous);
+        Executing.Value = disposalFrame;
         try
         {
             Exception? first = null;
@@ -341,6 +354,7 @@ public class UINode : IUINode
             }
             await Attempt(() => { if (this is IDialogResult dialog) dialog.EndSession(); _lifetime.Cancel(); return Task.CompletedTask; });
             if (_busy != 0 && _idle != null) await _idle.Task;
+            await Attempt(WaitForOperationsAsync);
             if (_transitionParticipants != 0) await _transitionsIdle!.Task;
             await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
             foreach (var child in Enumerable.Reverse(_children.ToArray()))
@@ -367,7 +381,7 @@ public class UINode : IUINode
             _lifetime.Dispose();
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
         }
-        finally { Executing.Value = previous; }
+        finally { disposalFrame.Active = false; Executing.Value = previous; }
     }
 
     internal void ReportFailure(Exception failure, string context)
