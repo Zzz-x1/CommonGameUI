@@ -9,11 +9,6 @@ $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot
 $taskUnityProject = Join-Path $taskWorkspace 'Demo/Unity'
 & (Join-Path $PSScriptRoot 'Prepare-Mvvm.ps1')
-& dotnet build (Join-Path $taskWorkspace 'src/UIFramework.Core/UIFramework.Core.csproj') -c Release --nologo -v quiet
-if ($LASTEXITCODE -ne 0) { throw 'Core build failed.' }
-$taskPluginDirectory = Join-Path $taskWorkspace 'src/UIFramework.Unity/Runtime/Plugins'
-New-Item -ItemType Directory -Force $taskPluginDirectory | Out-Null
-Copy-Item -LiteralPath (Join-Path $taskWorkspace 'src/UIFramework.Core/bin/Release/netstandard2.1/UIFramework.Core.dll') -Destination (Join-Path $taskPluginDirectory 'UIFramework.Core.dll')
 if ($PrepareOnly -or (!$Play -and !$SelfTest -and !$RebuildAssets)) { return }
 
 function Invoke-UnityCommand([string]$Name, [string[]]$CommandArguments = @()) {

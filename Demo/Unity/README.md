@@ -16,6 +16,8 @@ Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 
 然后手动打开 Demo/Unity，运行 Assets/Scenes/Client.unity。首次打开前必须准备核心及 MVVM DLL；本地包位于 src/UIFramework.Unity 和 src/UIFramework.Mvvm.Unity。
 
+修改 Core／MVVM 源码后，再执行 `-PrepareOnly` 同步 Unity 包内的 DLL。仅编译核心测试不会更新 Unity 实际引用的程序集。
+
 可选 Unity CLI 操作：
 
 | 参数 | 操作 |
