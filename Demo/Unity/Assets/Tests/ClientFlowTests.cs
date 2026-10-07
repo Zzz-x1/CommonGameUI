@@ -69,6 +69,69 @@ namespace StarCourt.UnityDemo.Tests
             while (!(_app.Modals.Current is T) || !_app.Modals.Current.IsInteractive)
             { Assert.That(Time.realtimeSinceStartupAsDouble, Is.LessThan(deadline), "Waiting for " + typeof(T).Name); await Frame(); }
         }
+        private sealed class FrameBackdropFactory : IUIBackdropFactory
+        {
+            private readonly IUIBackdropFactory _inner;
+            public ConfirmView Window;
+            public int PlayingFrame;
+            public int Shows, Hides;
+            public FrameBackdropFactory(IUIBackdropFactory inner) => _inner = inner;
+            public async Task<IUIBackdrop> CreateAsync(IUIElement mount, Func<Task> dismiss, System.Threading.CancellationToken token)
+            {
+                var backdrop = await _inner.CreateAsync(mount, dismiss, token);
+                var group = ((EngineUI.UIElement)mount).Rect.Find("ModalBackdrop").GetComponent<CanvasGroup>();
+                return new FrameBackdrop(this, backdrop, group);
+            }
+            private sealed class FrameBackdrop : IUIBackdrop
+            {
+                private readonly FrameBackdropFactory _owner;
+                private readonly IUIBackdrop _inner;
+                private readonly CanvasGroup _group;
+                public FrameBackdrop(FrameBackdropFactory owner, IUIBackdrop inner, CanvasGroup group)
+                { _owner = owner; _inner = inner; _group = group; }
+                private Task Play(bool show, bool animate, System.Threading.CancellationToken token)
+                {
+                    Assert.That(Time.frameCount, Is.EqualTo(_owner.PlayingFrame));
+                    Assert.That(_owner.Window.gameObject.activeInHierarchy, Is.True);
+                    Assert.That(_owner.Window.IsInteractive, Is.False);
+                    var windowAlpha = _owner.Window.GetComponent<CanvasGroup>().alpha;
+                    Assert.That(windowAlpha, Is.EqualTo(show ? 0 : 1).Within(.01), "Window initial pose must precede the first frame wait");
+                    var task = show ? _inner.ShowAsync(animate, token) : _inner.HideAsync(animate, token);
+                    Assert.That(_group.gameObject.activeInHierarchy, Is.True);
+                    Assert.That(_group.alpha, Is.EqualTo(show ? 0 : 1).Within(.01));
+                    Assert.That(Time.frameCount, Is.EqualTo(_owner.PlayingFrame));
+                    if (show) _owner.Shows++; else _owner.Hides++;
+                    return task;
+                }
+                public Task ShowAsync(bool animate, System.Threading.CancellationToken token) => Play(true, animate, token);
+                public Task HideAsync(bool animate, System.Threading.CancellationToken token) => Play(false, animate, token);
+                public void Restore(bool visible) => _inner.Restore(visible);
+                public void SetVisible(bool visible) => _inner.SetVisible(visible);
+                public void SetInteractive(bool interactive) => _inner.SetInteractive(interactive);
+                public void BringToFront() => _inner.BringToFront();
+                public object CaptureOrder() => _inner.CaptureOrder();
+                public void RestoreOrder(object order) => _inner.RestoreOrder(order);
+                public ValueTask DisposeAsync() => _inner.DisposeAsync();
+            }
+        }
+        [UnityTest] public IEnumerator ModalWindowAndBackdropStartInTheSameFrame() => Await(ModalFirstFrame());
+        private async Task ModalFirstFrame()
+        {
+            await using var ui = new UIContext(_app.UI.Host, _app.UI.Loader);
+            var modals = await ui.Root.CreateContainerAsync<ModalContainerNode>("FrameCheck", _app.Modals.GetRoot());
+            var factory = new FrameBackdropFactory(EngineUI.Backdrops.Dim(_app.Track, duration: .12));
+            modals.ConfigureBackdrop(factory);
+            ui.Register<ConfirmView>("UI/Confirm", window =>
+            {
+                factory.Window = window;
+                window.Transition = EngineUI.Transitions.ScaleFade(.12);
+                window.TransitionChanged += state => { if (state.Stage == TransitionStage.Playing) factory.PlayingFrame = Time.frameCount; };
+            });
+            var window = await modals.OpenAsync<ConfirmView>("首帧同步检查");
+            Assert.That(factory.Shows, Is.EqualTo(1)); Assert.That(window.IsInteractive, Is.True);
+            await modals.CloseAsync(window); Assert.That(factory.Hides, Is.EqualTo(1));
+        }
+
         [UnityTest] public IEnumerator PurchaseEquipmentTrainingQuestAndRestart() => Await(PurchaseFlow());
         private async Task PurchaseFlow()
         {

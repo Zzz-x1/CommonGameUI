@@ -85,8 +85,9 @@ namespace UIFramework.Unity
             public async Task PlayAsync(CancellationToken token)
             {
                 var host = (UIHost)_context.Node.Context.Host;
-                await host.NextFrameAsync();
                 token.ThrowIfCancellationRequested();
+                // Activation has already happened; settle layout and write the first pose before yielding.
+                Canvas.ForceUpdateCanvases();
                 var size = _target.rect.size;
                 var start = Time.realtimeSinceStartupAsDouble;
                 float progress;

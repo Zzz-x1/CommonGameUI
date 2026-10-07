@@ -22,6 +22,7 @@
 16. [中英文用户文档](#16-中英文用户文档2026-10-05)
 17. [引擎生命周期绑定](#17-引擎生命周期绑定2026-10-05)
 24. [关闭后实例缓存](#24-关闭后实例缓存2026-10-07已确认)
+25. [Modal 显示与遮罩首帧](#25-modal-显示与遮罩首帧2026-10-07)
 
 ## 阅读约定
 
@@ -1973,3 +1974,11 @@ MVVM 内部增加条目初始化回调，在来源创建后、业务初始化前
 - 两端 Demo 缓存背包、装备详情和确认框。内容更新迁至每次入场，订阅不重复初始化。LRU、容量预算和通用池不添加预留接口。
 
 验证：核心／生成器 193 项、MVVM 69 项通过，包含延后结果在旧 Dialog 关闭并重开后才发布的确定性测试；Godot 4.7.2 .NET headless 客户端 143 项通过，构建无警告、退出无 ObjectDB／资源持有警告。Unity 6000.3.24f1 后台 Play Mode 的 TabsComparisonSettingsAndTeamRestrictions 通过，涵盖缓存身份、Tab 保留、新详情参数及设置确认；首次无图形执行因测试初始化 Game View 失败，改用后台图形模式后通过。两端消费的 Core／MVVM 程序集已更新。中英文 32 对页面的代码／本地链接／锚点检查通过。本轮未做全量 Unity 测试、IL2CPP 导出或三种分辨率视觉审核，未修改外部 Fruit-platter 业务或场景。
+
+## 25. Modal 显示与遮罩首帧（2026-10-07）
+
+Core 在进入准备完成后同步显示窗口，并在同一调用帧启动窗口与新遮罩动画。Unity Simple／Fade／ScaleFade／Slide 原先在 PlayAsync 首行等待 NextFrameAsync，导致窗口已激活、遮罩已启动，但窗口仍保留默认姿态一帧。现在先同步更新 Canvas 布局，在当前帧写入动画起点，再等待后续帧推进。Godot Simple 和 AnimationPlayer、Unity legacy Animation 和 Timeline 原本就先应用起点再等待，不需加入额外延迟。
+
+同帧指 GameObject／Control 显示与动画起点；框架的交互激活、输入所有者与焦点仍在双方动画完成后提交。自定义动画若自行在起点前等待，不由框架隐式修改。
+
+验证：Unity 6000.3.24f1 原生 Play Mode 的 ModalWindowAndBackdropStartInTheSameFrame 单项通过，同时记录窗口 Playing 帧、原生 activeInHierarchy、窗口／遮罩首帧 alpha 及输入未开放状态；打开与关闭均同帧开始。只做此运行问题所需的单项验证和相关源码／差异检查，不重复完整构建或跨引擎回归。

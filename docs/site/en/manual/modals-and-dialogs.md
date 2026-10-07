@@ -23,6 +23,8 @@ After window initialization, backdrop creation and entry preparation, the window
 
 A Shared backdrop remains when a lower modal still uses it, without replaying its fade. `playAnimation: false` disables both window and backdrop animations. A failure cancels the other animation, awaits cleanup, restores state and propagates the original exception.
 
+Window visibility and the initial pose of built-in transitions start in the same frame as the new backdrop. Visibility is separate from interaction: input and focus are committed after both animations finish. Unity simple transitions settle layout synchronously without an initial frame wait; custom animations should also apply their initial pose before the first await.
+
 ## One window with multiple menu levels: Modal + Stack
 
 Settings → graphics → advanced graphics shows only the current content, and each Back restores one history window. Open one Modal for the whole flow. Each menu window uses a separate resource and is pushed into its internal Stack.
