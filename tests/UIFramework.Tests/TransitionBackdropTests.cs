@@ -31,20 +31,146 @@ public class TransitionBackdropTests
     {
         public int Shows, Hides, Restores;
         public Exception? ShowFailure, HideFailure, RestoreFailure;
-        public Task ShowAsync(bool playAnimation, CancellationToken token) { Shows++; token.ThrowIfCancellationRequested(); Visible = true; if (ShowFailure != null) throw ShowFailure; return Task.CompletedTask; }
-        public Task HideAsync(bool playAnimation, CancellationToken token) { Hides++; token.ThrowIfCancellationRequested(); Visible = false; if (HideFailure != null) throw HideFailure; return Task.CompletedTask; }
+        public Func<CancellationToken, Task>? ShowPlay, HidePlay;
+        public Task ShowAsync(bool playAnimation, CancellationToken token) { Shows++; token.ThrowIfCancellationRequested(); Visible = true; if (ShowFailure != null) throw ShowFailure; return ShowPlay?.Invoke(token) ?? Task.CompletedTask; }
+        public Task HideAsync(bool playAnimation, CancellationToken token) { Hides++; token.ThrowIfCancellationRequested(); Visible = false; if (HideFailure != null) throw HideFailure; return HidePlay?.Invoke(token) ?? Task.CompletedTask; }
         public void Restore(bool visible) { Restores++; Visible = visible; if (RestoreFailure != null) throw RestoreFailure; }
     }
     private sealed class Factory : IUIBackdropFactory
     {
         public readonly List<Backdrop> Displays = new();
         public Exception? Failure, ShowFailure;
+        public Action<Backdrop>? Configure;
         public Task<IUIBackdrop> CreateAsync(IUIElement? mount, Func<Task> request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             if (Failure != null) throw Failure;
-            var backdrop = new Backdrop { ShowFailure = ShowFailure }; Displays.Add(backdrop); return Task.FromResult<IUIBackdrop>(backdrop);
+            var backdrop = new Backdrop { ShowFailure = ShowFailure }; Configure?.Invoke(backdrop); Displays.Add(backdrop); return Task.FromResult<IUIBackdrop>(backdrop);
         }
+    }
+
+    private sealed class EnterPreparation(Task gate) : NodeLifecycle
+    {
+        public override Task EnteringAsync(LifecycleContext context, CancellationToken token) => gate.WaitAsync(token);
+    }
+
+    [Fact] public async Task ModalPreparesBeforeBothAnimationsAndCommitsOnlyAfterBothFinish()
+    {
+        await using var ui = Create(); var host = (TestHost)ui.Host; var focus = new object(); host.Focus = focus;
+        var modals = await Attach<ModalContainerNode>(ui.Root);
+        var preparation = new TaskCompletionSource<bool>();
+        var window = new TaskCompletionSource<bool>(); var backdrop = new TaskCompletionSource<bool>();
+        var windowStarted = new TaskCompletionSource<bool>(); var backdropStarted = new TaskCompletionSource<bool>();
+        var view = new CounterView(); view.AddLifecycle(new EnterPreparation(preparation.Task));
+        ui.Register(() => view, "modal");
+        var recipe = new Recipe { Play = (_, token) => { windowStarted.TrySetResult(true); return window.Task.WaitAsync(token); } };
+        modals.ChildTransition = recipe;
+        var factory = new Factory { Configure = display => display.ShowPlay = token =>
+        { backdropStarted.SetResult(true); return backdrop.Task.WaitAsync(token); } };
+        modals.ConfigureBackdrop(factory);
+        var opening = modals.OpenAsync<CounterView>();
+        Assert.Equal(0, Assert.Single(factory.Displays).Shows); Assert.Empty(recipe.Runs);
+        preparation.SetResult(true);
+        await Task.WhenAll(windowStarted.Task, backdropStarted.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Null(modals.Current); Assert.Null(ui.InputOwner); Assert.Same(focus, host.Focus); Assert.False(modals.IsInteractive);
+        window.SetResult(true); Assert.False(opening.IsCompleted);
+        backdrop.SetResult(true); Assert.Same(view, await opening); Assert.Same(view, ui.InputOwner);
+
+        window = new TaskCompletionSource<bool>(); backdrop = new TaskCompletionSource<bool>();
+        var display = factory.Displays[0]; display.HidePlay = token => backdrop.Task.WaitAsync(token);
+        var closing = modals.CloseAsync(view);
+        Assert.True(recipe.Runs.Last().Started); Assert.Equal(1, display.Hides); Assert.False(view.IsInteractive);
+        backdrop.SetResult(true); Assert.False(closing.IsCompleted); Assert.Same(view, modals.Current);
+        Assert.Equal(0, display.Disposals); Assert.Equal(0, host.Loaded.Single().Disposals);
+        window.SetResult(true); await closing;
+        Assert.Null(modals.Current); Assert.Null(ui.InputOwner); Assert.Same(focus, host.Focus);
+        Assert.Equal(1, display.Disposals); Assert.Equal(1, host.Loaded.Single().Disposals);
+    }
+
+    [Theory]
+    [InlineData(true, true)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(false, false)]
+    public async Task ModalAnimationFailureCancelsPartnerAndWaitsForItsCleanup(bool opening, bool backdropFails)
+    {
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root);
+        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), "modal");
+        var view = opening ? null : await modals.OpenAsync<CounterView>();
+        var failure = new IOException("modal animation"); var failed = new TaskCompletionSource<bool>();
+        var canceled = new TaskCompletionSource<bool>(); var cleanup = new TaskCompletionSource<bool>();
+        async Task Partner(CancellationToken token)
+        {
+            try { await Task.Delay(Timeout.Infinite, token); }
+            catch (OperationCanceledException) { canceled.SetResult(true); await cleanup.Task; throw; }
+        }
+        Task BackdropPlay(CancellationToken token) => backdropFails ? failed.Task : Partner(token);
+        modals.ChildTransition = new Recipe { Play = (_, token) => backdropFails ? Partner(token) : failed.Task };
+        if (opening) factory.Configure = display => display.ShowPlay = BackdropPlay;
+        else factory.Displays[0].HidePlay = BackdropPlay;
+        Task operation = opening ? modals.OpenAsync<CounterView>() : modals.CloseAsync(view!);
+        failed.SetException(failure);
+        await canceled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(operation.IsCompleted);
+        var display = Assert.Single(factory.Displays);
+        Assert.Equal(0, display.Disposals); Assert.Equal(0, ((TestHost)ui.Host).Loaded.Single().Disposals);
+        cleanup.SetResult(true);
+        Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => operation));
+        Assert.Single(((TestHost)ui.Log).Errors, error => ReferenceEquals(error, failure));
+        if (opening)
+        {
+            Assert.Empty(modals.Children); Assert.Null(ui.InputOwner); Assert.Equal(1, display.Disposals);
+        }
+        else
+        {
+            Assert.Same(view, modals.Current); Assert.Same(view, ui.InputOwner);
+            Assert.True(view!.IsInteractive); Assert.True(display.Visible); Assert.True(display.Interactive);
+            Assert.Equal(0, display.Disposals);
+        }
+        Assert.True(modals.IsInteractive);
+    }
+
+    [Theory] [InlineData(true)] [InlineData(false)]
+    public async Task ModalCancellationStopsBothAnimationsAndRestoresInput(bool opening)
+    {
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root);
+        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        var view = opening ? null : await modals.OpenAsync<CounterView>();
+        int stopped = 0;
+        async Task Play(CancellationToken token)
+        {
+            try { await Task.Delay(Timeout.Infinite, token); }
+            finally { Interlocked.Increment(ref stopped); }
+        }
+        modals.ChildTransition = new Recipe { Play = (_, token) => Play(token) };
+        if (opening) factory.Configure = display => display.ShowPlay = Play;
+        else factory.Displays[0].HidePlay = Play;
+        using var cancellation = new CancellationTokenSource();
+        Task operation = opening ? modals.OpenAsync<CounterView>(cancellationToken: cancellation.Token)
+            : modals.CloseAsync(view!, cancellationToken: cancellation.Token);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(2, stopped); Assert.True(modals.IsInteractive);
+        if (opening) { Assert.Null(modals.Current); Assert.Null(ui.InputOwner); Assert.Equal(1, factory.Displays[0].Disposals); }
+        else { Assert.Same(view, modals.Current); Assert.True(view!.IsInteractive); Assert.True(factory.Displays[0].Visible); }
+    }
+
+    [Fact] public async Task DisposingModalContainerStopsWindowAndBackdropBeforeReleasingThem()
+    {
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root);
+        int stopped = 0;
+        async Task Play(CancellationToken token)
+        {
+            try { await Task.Delay(Timeout.Infinite, token); }
+            finally { Interlocked.Increment(ref stopped); }
+        }
+        var factory = new Factory { Configure = display => display.ShowPlay = Play };
+        modals.ConfigureBackdrop(factory); modals.ChildTransition = new Recipe { Play = (_, token) => Play(token) };
+        ui.Register<CounterView>(() => new CounterView(), "modal");
+        var opening = modals.OpenAsync<CounterView>();
+        await modals.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening);
+        Assert.Equal(2, stopped); Assert.Equal(1, factory.Displays.Single().Disposals);
+        Assert.Equal(1, ((TestHost)ui.Host).Loaded.Single().Disposals);
+        Assert.Null(ui.InputOwner); Assert.True(ui.Root.IsInteractive);
     }
 
     [Fact] public async Task RecipePrecedenceIsNodeThenDirectContainerThenContext()
@@ -134,7 +260,9 @@ public class TransitionBackdropTests
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory, mode); ui.Register<CounterView>(() => new CounterView());
         var a = await modals.OpenAsync<CounterView>(); var first = modals.CurrentBackdrop; var b = await modals.OpenAsync<CounterView>();
         Assert.Equal(count, factory.Displays.Count); Assert.Equal(mode == ModalBackdropMode.Shared, ReferenceEquals(first, modals.CurrentBackdrop));
+        Assert.All(factory.Displays, display => Assert.Equal(1, display.Shows));
         await modals.CloseAsync(b); Assert.Same(first, modals.CurrentBackdrop); Assert.True(a.IsInteractive);
+        Assert.Equal(mode == ModalBackdropMode.Shared ? 0 : 1, factory.Displays.Sum(display => display.Hides));
         Assert.Equal(mode == ModalBackdropMode.Shared ? 0 : 1, factory.Displays.Sum(d => d.Disposals));
         await modals.CloseAsync(a); Assert.Null(modals.CurrentBackdrop); Assert.All(factory.Displays, d => Assert.Equal(1, d.Disposals));
     }

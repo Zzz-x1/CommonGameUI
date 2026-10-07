@@ -17,6 +17,12 @@ await modals.CloseAsync(confirm);
 
 Confirmation is closed and disposed; product details retain the same instance. `Shared` reuses one backdrop beneath the current modal. `PerModal` creates a backdrop per window, allowing the background to become darker at each level. Neither mode automatically hides lower windows.
 
+### Animation timing
+
+After window initialization, backdrop creation and entry preparation, the window and new backdrop play their entry animations together. On close, the window and any backdrop being removed also animate together. The operation waits for both before committing input/focus or disposing resources.
+
+A Shared backdrop remains when a lower modal still uses it, without replaying its fade. `playAnimation: false` disables both window and backdrop animations. A failure cancels the other animation, awaits cleanup, restores state and propagates the original exception.
+
 ## One window with multiple menu levels: Modal + Stack
 
 Settings → graphics → advanced graphics shows only the current content, and each Back restores one history window. Open one Modal for the whole flow. Each menu window uses a separate resource and is pushed into its internal Stack.

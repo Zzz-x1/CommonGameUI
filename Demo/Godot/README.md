@@ -52,6 +52,8 @@ Godot 4.7.2 .NET / .NET 10 的纯 UI 客户端，包含本地业务与存档。
 
 设置→演出开启完整模式；长演出可跳过。Lobby、Training、Reward 等场景中的 AnimationPlayer 轨道可在编辑器预览。动画只控制表现，跳过不重复提交业务。
 
+设置／确认等模态窗口与新遮罩同时入场；关闭最后一层时窗口与遮罩同时退出，两者结束后才恢复输入。嵌套窗口复用的 Shared 遮罩不重复播放。
+
 ## 代码与资源
 
 - Scenes/Client：界面与内嵌页面；Themes/Client.tres：样式。

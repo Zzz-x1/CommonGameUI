@@ -462,13 +462,13 @@ public class ModalContainerNode : ContainerNode
                             ?? throw new InvalidOperationException("Backdrop factory returned null.");
                         createdBackdrop = true;
                         backdrop.SetInteractive(false);
-                        await backdrop.ShowAsync(playAnimation, ct);
                     }
                     else priorOrder = backdrop.CaptureOrder();
                     backdrop.BringToFront();
                     node.Element?.BringToFront();
                 }
-                await PrepareChangeAsync(null, enter, ct, playAnimation);
+                await TransitionFlow.PrepareAsync(this, null, enter, TransitionDirection.None, playAnimation, ct,
+                    createdBackdrop ? token => backdrop!.ShowAsync(playAnimation, token) : null);
                 node.Element?.BringToFront();
                 ct.ThrowIfCancellationRequested();
                 if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
@@ -540,9 +540,9 @@ public class ModalContainerNode : ContainerNode
                 // Reveal the final destination behind the exiting top, not an intermediate modal.
                 foreach (var node in removed.Skip(1)) node.StageVisibility(false);
                 UpdateBackdropInput();
-                await PrepareChangeAsync(exit, null, token, playAnimation);
-                if (CurrentBackdrop is { } backdrop && (BackdropMode == ModalBackdropMode.PerModal || target == null))
-                    await backdrop.HideAsync(playAnimation, token);
+                var backdrop = BackdropMode == ModalBackdropMode.PerModal || target == null ? CurrentBackdrop : null;
+                await TransitionFlow.PrepareAsync(this, exit, null, TransitionDirection.None, playAnimation, token,
+                    backdrop == null ? null : ct => backdrop.HideAsync(playAnimation, ct));
                 token.ThrowIfCancellationRequested();
             }
             catch (Exception ex)

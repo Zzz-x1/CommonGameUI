@@ -5,7 +5,8 @@ namespace UIFramework;
 internal static class TransitionFlow
 {
     internal static async Task PrepareAsync(ContainerNode container, LifecycleContext? exit,
-        LifecycleContext? enter, TransitionDirection direction, bool playAnimation, CancellationToken token)
+        LifecycleContext? enter, TransitionDirection direction, bool playAnimation, CancellationToken token,
+        Func<CancellationToken, Task>? accompanyingAnimation = null)
     {
         var context = container.Context;
         // Freeze recipes before business preparation; execution state is created afterwards.
@@ -73,6 +74,8 @@ internal static class TransitionFlow
             {
                 enter?.Node.Node.StageVisibility(true);
                 exit?.Node.Node.StageVisibility(false);
+                if (accompanyingAnimation != null) await accompanyingAnimation(token);
+                token.ThrowIfCancellationRequested();
                 Finish(TransitionStage.Completed, null);
                 return;
             }
@@ -109,9 +112,9 @@ internal static class TransitionFlow
 
             using var cancel = CancellationTokenSource.CreateLinkedTokenSource(items.Select(item => item.Node.Lifetime).Append(token).ToArray());
             Exception? first = null;
-            async Task Play(IUITransitionRun run)
+            async Task Play(Func<CancellationToken, Task> play)
             {
-                try { await run.PlayAsync(cancel.Token); }
+                try { await play(cancel.Token); }
                 catch (Exception ex)
                 {
                     context.Report(ex, "Play transition");
@@ -123,7 +126,9 @@ internal static class TransitionFlow
                 }
             }
             // Play observes synchronous throws as well as every asynchronous failure.
-            await Task.WhenAll(runs.Select(Play));
+            var playback = runs.Select(run => Play(run.PlayAsync)).ToList();
+            if (accompanyingAnimation != null) playback.Add(Play(accompanyingAnimation));
+            await Task.WhenAll(playback);
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
             cancel.Token.ThrowIfCancellationRequested();
             exit?.Node.Node.StageVisibility(false);
