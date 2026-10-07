@@ -11,7 +11,9 @@ public class ClientItemVm : IDisposable
     [FieldNotify] public string Count { get; set; } = "";
     [FieldNotify] public Texture2D Icon { get; set; } = null!;
     public void Initialize(ClientStore store, string id)
-    { _store = store; _id = id; var item = Catalog.Item(id); Name = item.Name; Description = item.Description; Icon = GD.Load<Texture2D>($"res://Assets/Items/{item.Icon}.svg"); _store.Changed += Refresh; Refresh(); }
+    { _store = store; SelectItem(id); _store.Changed += Refresh; }
+    public void SelectItem(string id)
+    { _id = id; var item = Catalog.Item(id); Name = item.Name; Description = item.Description; Icon = GD.Load<Texture2D>($"res://Assets/Items/{item.Icon}.svg"); Refresh(); }
     private void Refresh() { var item = Catalog.Item(_id); Count = $"持有 {_store.State.Inventory[_id]}  ·  {(item.Power > 0 ? $"属性 +{item.Power}" : "培养材料")}"; }
     public void Dispose() => _store.Changed -= Refresh;
 }

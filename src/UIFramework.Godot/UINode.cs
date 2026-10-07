@@ -32,6 +32,7 @@ public abstract partial class UINode : Control, IUINode
     public IUIElement? Element => Node.Element;
     public NodeState State => Node.State;
     public bool HasEntered => Node.HasEntered;
+    public bool IsCached => Node.IsCached;
     public bool IsUIVisible => Node.IsVisible;
     bool IUINode.IsVisible => Node.IsVisible;
     public bool IsActive => Node.IsActive;

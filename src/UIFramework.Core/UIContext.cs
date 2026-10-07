@@ -8,11 +8,12 @@ public sealed class UIContext : IAsyncDisposable
         if (_synchronization != null) _synchronization.Post(_ => action(), null);
         else ThreadPool.QueueUserWorkItem(_ => action());
     }
-    private sealed class Registration(Func<IUINode>? factory, string? resource, WindowInstanceMode windowMode, Action<IUINode>? configure)
+    private sealed class Registration(Func<IUINode>? factory, string? resource, WindowInstanceMode windowMode, Action<IUINode>? configure, NodeCacheMode cacheMode)
     {
         public Func<IUINode>? Factory { get; } = factory;
         public string? Resource { get; } = resource;
         public WindowInstanceMode WindowMode { get; } = windowMode;
+        public NodeCacheMode CacheMode { get; } = cacheMode;
         public Action<IUINode>? Configure { get; } = configure;
     }
     private readonly Dictionary<Type, Registration> _registrations = new();
@@ -140,16 +141,16 @@ public sealed class UIContext : IAsyncDisposable
         Root.SetInputLocked(_modalInputBlocks != 0);
     }
 
-    public void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : class, IUINode =>
-        RegisterCore<T>(null, resource, windowMode, configure);
+    public void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode =>
+        RegisterCore<T>(null, resource, windowMode, configure, cacheMode);
 
-    public void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null) where T : class, IUINode
+    public void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
     {
         if (factory == null) throw new ArgumentNullException(nameof(factory));
-        RegisterCore(factory, resource, windowMode, configure);
+        RegisterCore(factory, resource, windowMode, configure, cacheMode);
     }
 
-    private void RegisterCore<T>(Func<T>? factory, string? resource, WindowInstanceMode windowMode, Action<T>? configure) where T : class, IUINode
+    private void RegisterCore<T>(Func<T>? factory, string? resource, WindowInstanceMode windowMode, Action<T>? configure, NodeCacheMode cacheMode) where T : class, IUINode
     {
         try
         {
@@ -158,8 +159,9 @@ public sealed class UIContext : IAsyncDisposable
             if (_registrations.ContainsKey(typeof(T))) throw new InvalidOperationException($"Node {typeof(T).FullName} is already registered.");
             if (factory == null && string.IsNullOrWhiteSpace(resource)) throw new ArgumentException("A native node requires a resource.", nameof(resource));
             if (windowMode != WindowInstanceMode.Single && windowMode != WindowInstanceMode.Multiple) throw new ArgumentOutOfRangeException(nameof(windowMode));
+            if (!Enum.IsDefined(typeof(NodeCacheMode), cacheMode)) throw new ArgumentOutOfRangeException(nameof(cacheMode));
             _registrations.Add(typeof(T), new Registration(factory == null ? null : () => factory(), resource, windowMode,
-                configure == null ? null : owner => configure((T)owner)));
+                configure == null ? null : owner => configure((T)owner), cacheMode));
         }
         catch (Exception ex) { Report(ex, $"Register {typeof(T).FullName}"); throw; }
     }
@@ -167,6 +169,28 @@ public sealed class UIContext : IAsyncDisposable
     internal WindowInstanceMode GetWindowMode<T>() where T : class, IUINode =>
         _registrations.TryGetValue(typeof(T), out var registration) ? registration.WindowMode :
             throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
+
+    public async Task ClearCacheAsync(CancellationToken cancellationToken = default)
+    {
+        Host.VerifyAccess(); VerifyMutation();
+        if (Root.State != NodeState.Ready) throw new ObjectDisposedException(nameof(UIContext));
+        var containers = new List<ContainerNode>();
+        void Collect(UINode node)
+        {
+            foreach (var child in node.ChildrenCore.ToArray()) Collect(child);
+            if (node is ContainerNode container) containers.Add(container);
+        }
+        Collect(Root);
+        Exception? first = null;
+        foreach (var container in containers)
+        {
+            if (first != null && cancellationToken.IsCancellationRequested) break;
+            cancellationToken.ThrowIfCancellationRequested();
+            try { await container.ClearContextCacheAsync(cancellationToken); }
+            catch (Exception ex) { Report(ex, "Clear context cache"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex); }
+        }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
 
     public async Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
     {
@@ -216,6 +240,7 @@ public sealed class UIContext : IAsyncDisposable
             if (!ReferenceEquals(node.Owner, owner) || node.State != NodeState.Detached)
                 throw new InvalidOperationException("Creation must provide a fresh, detached node with the same business identity.");
             if (registration.Factory == null) node.SetParameters(args);
+            node.RegisteredType = typeof(T); node.CacheMode = registration.CacheMode;
             node.ResourceLease = lease;
             token.ThrowIfCancellationRequested();
             await node.AttachAsync(parent, typeof(T).Name, element, token, () => registration.Configure?.Invoke(owner));

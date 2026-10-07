@@ -10,7 +10,7 @@ using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo
 {
-[UIResource("res://Scenes/Client/ItemDetails.tscn")]
+[UIResource("res://Scenes/Client/ItemDetails.tscn", CacheMode = NodeCacheMode.KeepAlive)]
 public partial class ItemDetailsView : EngineUI.UINode<string>
 {
     private DemoApp App => DemoApp.Instance;
@@ -26,6 +26,13 @@ public partial class ItemDetailsView : EngineUI.UINode<string>
         this.Bind("Item.Description", Root.GetNode<Label>("Description").TextTarget());
         this.Bind("Item.Count", Root.GetNode<Label>("Count").TextTarget());
         this.Bind("Item.Icon", EngineMvvm.BindingTargets.Property(Root.GetNode<TextureRect>("Icon"), "Texture"));
+        Refresh();
+        return Task.CompletedTask;
+    }
+
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
+    {
+        this.GetViewModel<ClientItemVm>("Item").SelectItem(Parameters);
         Refresh();
         return Task.CompletedTask;
     }

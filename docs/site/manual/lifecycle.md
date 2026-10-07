@@ -89,3 +89,5 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - AddLifecycle 在挂载前注册；空闲时可移除通知，已初始化行为仍需最终清理。
 
 [阶段签名](../api/core.md) · [错误与提交](async-and-errors.md)
+
+KeepAlive 关闭只退出和失活，初始化不重复，Lifetime 保留。重开时更新参数，`IsCacheReuse` 为 true；最终释放才执行 Dispose。见[关闭后缓存](resources.md#关闭后缓存)。

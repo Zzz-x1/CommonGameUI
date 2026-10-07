@@ -3,4 +3,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <Description>Renderer-independent hierarchical UI management.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="UIFramework.Mvvm" />
+  </ItemGroup>
 </Project>

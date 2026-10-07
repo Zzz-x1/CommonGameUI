@@ -27,6 +27,7 @@ public sealed class NativeIdentityTests
     public IUIElement? Element => Node.Element;
     public NodeState State => Node.State;
     public bool HasEntered => Node.HasEntered;
+    public bool IsCached => Node.IsCached;
     public bool IsVisible => Node.IsVisible;
     public bool IsActive => Node.IsActive;
     public bool IsInteractive => Node.IsInteractive;

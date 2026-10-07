@@ -36,6 +36,11 @@ public class UINode : IUINode
     internal IReadOnlyList<UINode> ChildrenCore => _children;
 
     public bool HasEntered { get; internal set; }
+    internal Type? RegisteredType;
+    internal NodeCacheMode CacheMode;
+    internal bool Cached, CacheReuse;
+    internal UINode? SuspendedInputOwner;
+    public bool IsCached => Cached || (Parent?.IsCached ?? false);
     public Guid Id { get; } = Guid.NewGuid();
     public string Name { get; private set; } = "";
     public UINode? Parent { get; private set; }
@@ -130,7 +135,11 @@ public class UINode : IUINode
     }
 
     /// <summary>Bind an existing display or attach a logical node. Does not load or clone a resource.</summary>
-    public async Task AttachAsync(IUINode owner, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null, bool? initiallyVisible = null)
+    public Task AttachAsync(IUINode owner, string name, IUIElement? element = null, CancellationToken cancellationToken = default, Action? configure = null, bool? initiallyVisible = null) =>
+        AttachCoreAsync(owner, name, element, cancellationToken, configure, initiallyVisible, false);
+    internal Task AttachRetainedAsync(IUINode owner, string name, IUIElement element, CancellationToken token, bool initiallyVisible) =>
+        AttachCoreAsync(owner, name, element, token, null, initiallyVisible, true);
+    private async Task AttachCoreAsync(IUINode owner, string name, IUIElement? element, CancellationToken cancellationToken, Action? configure, bool? initiallyVisible, bool allowCached)
     {
         if (owner == null) throw new ArgumentNullException(nameof(owner));
         var parent = owner.Node;
@@ -142,6 +151,7 @@ public class UINode : IUINode
         }
         try
         {
+            if (parent.IsCached && !allowCached) throw new InvalidOperationException("Cannot attach to a cached node.");
             if (parent.State != NodeState.Ready && parent.State != NodeState.Initializing)
                 throw new InvalidOperationException("Parent is not attached to an available UI context.");
             _context = parent.Context;
@@ -149,6 +159,7 @@ public class UINode : IUINode
             Context.VerifyMutation();
             cancellationToken.ThrowIfCancellationRequested();
             if (State != NodeState.Detached) throw new InvalidOperationException("Node is already attached or disposed.");
+            if (parent.IsCached && !allowCached) throw new InvalidOperationException("Cannot attach to a cached node.");
             if (parent.State != NodeState.Ready && parent.State != NodeState.Initializing)
                 throw new InvalidOperationException("Parent is not available.");
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A node name is required.", nameof(name));
@@ -177,7 +188,7 @@ public class UINode : IUINode
                 State = NodeState.Ready;
                 SetLocalState(initiallyVisible ?? InitiallyVisible, initiallyVisible ?? InitiallyVisible);
                 Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization));
-            }, cancellationToken, allowInitializing: true);
+            }, cancellationToken, allowInitializing: true, allowCached: allowCached);
         }
         catch (Exception ex)
         {
@@ -258,7 +269,7 @@ public class UINode : IUINode
     protected virtual void OnApplyState() { }
 
     protected async Task RunAsync(string operation, Func<CancellationToken, Task> action,
-        CancellationToken cancellationToken = default, bool allowInitializing = false)
+        CancellationToken cancellationToken = default, bool allowInitializing = false, bool allowCached = false)
     {
         var acquired = false;
         var previousFrame = Executing.Value;
@@ -266,6 +277,7 @@ public class UINode : IUINode
         {
             Context.Host.VerifyAccess();
             Context.VerifyMutation();
+            if (IsCached && !allowCached) throw new InvalidOperationException("Cannot operate on a cached node.");
             if (State != NodeState.Ready && !(allowInitializing && State == NodeState.Initializing))
                 throw new InvalidOperationException($"Node {Name} is {State}.");
             cancellationToken.ThrowIfCancellationRequested();
@@ -327,7 +339,7 @@ public class UINode : IUINode
                     if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
                 }
             }
-            await Attempt(() => { _lifetime.Cancel(); return Task.CompletedTask; });
+            await Attempt(() => { if (this is IDialogResult dialog) dialog.EndSession(); _lifetime.Cancel(); return Task.CompletedTask; });
             if (_busy != 0 && _idle != null) await _idle.Task;
             if (_transitionParticipants != 0) await _transitionsIdle!.Task;
             await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
@@ -350,6 +362,7 @@ public class UINode : IUINode
                 return Task.CompletedTask;
             });
             if (formerParent != null) await Attempt(() => formerParent.OnChildRemovedAsync(this));
+            Cached = CacheReuse = false; SuspendedInputOwner = null;
             State = NodeState.Disposed;
             _lifetime.Dispose();
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();

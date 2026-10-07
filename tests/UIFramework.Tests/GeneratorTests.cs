@@ -14,7 +14,7 @@ public class GeneratorTests
             using UIFramework;
             using UIFramework.Generated;
             namespace Game;
-            [UIResource("res://example.tscn", WindowMode = WindowInstanceMode.Multiple)]
+            [UIResource("res://example.tscn", WindowMode = WindowInstanceMode.Multiple, CacheMode = NodeCacheMode.KeepAlive)]
             public class ExampleView : UINode<string> { }
             [UIResource("res://dashboard.tscn")]
             public class DashboardView : UINode { }
@@ -63,6 +63,8 @@ public class GeneratorTests
         Assert.Contains("PushExampleViewAsync", generated);
         Assert.Contains("string args", generated);
         Assert.Contains("WindowInstanceMode)1", generated);
+        Assert.Contains("NodeCacheMode)1", generated);
+        Assert.Contains("NodeCacheMode)0", generated);
         Assert.Contains("WindowInstanceMode)0", generated);
         Assert.Contains("OpenAsync<global::Game.DashboardView>(null, playAnimation, cancellationToken)", generated);
         Assert.Contains("OpenAsync<global::Game.ExampleView>(null, playAnimation, cancellationToken)", generated);

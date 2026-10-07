@@ -11,7 +11,9 @@ namespace HierarchyDemo
 {
 public partial class ConfirmView : EngineUI.DialogNode<bool>
 {
-    public string Message { get; set; } = "";
+    public string Message { get; private set; } = "";
+    protected override void OnSetParameters(object? args) => Message = args is string message
+        ? message : throw new ArgumentException("Confirmation requires a message.", nameof(args));
     private Control Root => ((EngineUI.UIElement)Element!).Control;
 
     protected override Task OnInitializeAsync(CancellationToken token)
@@ -20,7 +22,6 @@ public partial class ConfirmView : EngineUI.DialogNode<bool>
         foreach (var page in Root.GetNode<Control>("Center/Pages").GetChildren().Cast<Control>())
             page.Visible = page.Name == "Text";
         Root.GetNode<Label>("Center/Title").Text = "请确认";
-        Root.GetNode<Label>("Center/Pages/Text/Body").Text = Message;
         Root.GetNode<Button>("Center/Confirm").Pressed += Yes;
         Root.GetNode<Button>("Center/Cancel").Pressed += No;
         Root.GetNode<Button>("Center/Close").Pressed += No;
@@ -29,6 +30,12 @@ public partial class ConfirmView : EngineUI.DialogNode<bool>
             Complete(false);
             return Task.CompletedTask;
         };
+        return Task.CompletedTask;
+    }
+
+    protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
+    {
+        Root.GetNode<Label>("Center/Pages/Text/Body").Text = Message;
         return Task.CompletedTask;
     }
 

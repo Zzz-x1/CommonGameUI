@@ -89,3 +89,5 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - Register AddLifecycle before attach. Idle removal stops notifications; initialized behavior still needs disposal.
 
 [Signatures](../api/core.md) · [Errors and commit](async-and-errors.md)
+
+KeepAlive close exits and deactivates without repeating initialization or canceling Lifetime. Reopening updates arguments and sets `IsCacheReuse` to true; final release runs Dispose. See [closed-instance caching](resources.md#closed-instance-caching).

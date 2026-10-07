@@ -26,7 +26,6 @@ public partial class DemoApp : Control
     public bool Busy { get; private set; }
     public Action? SkipCinematic { get; private set; }
 
-    internal string Confirmation = "";
     private bool _exiting;
     public override void _Ready()
     {
@@ -55,7 +54,7 @@ public partial class DemoApp : Control
         await new PlayerSubscriptionLifetime(this).AttachAsync(_ui.Root, "PlayerSubscriptionLifetime");
         _ui.BindLifetime(this);
         _ui.RegisterGeneratedUI();
-        _ui.Register<ConfirmView>("res://Scenes/Client/Confirm.tscn", view => view.Message = Confirmation);
+        _ui.Register<ConfirmView>("res://Scenes/Client/Confirm.tscn", cacheMode: NodeCacheMode.KeepAlive);
         _ui.DefaultTransition = EngineUI.Transitions.Fade(.18);
         _shells = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Client", GetNode<Control>("ShellMount"));
         Floating = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Comparison", GetNode<Control>("FloatingMount"));
@@ -198,11 +197,7 @@ public partial class DemoApp : Control
         }
     }
 
-    public async Task<bool> AskAsync(string message)
-    {
-        Confirmation = message;
-        return await Modals.ShowDialogAsync<ConfirmView, bool>();
-    }
+    public Task<bool> AskAsync(string message) => Modals.ShowDialogAsync<ConfirmView, bool>(message);
 
     public async Task ShutdownAsync()
     {

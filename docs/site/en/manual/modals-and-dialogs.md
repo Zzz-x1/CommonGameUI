@@ -15,7 +15,7 @@ var confirm = await modals.OpenAsync<PurchaseConfirmView>();
 await modals.CloseAsync(confirm);
 ```
 
-Confirmation is closed and disposed; product details retain the same instance. `Shared` reuses one backdrop beneath the current modal. `PerModal` creates a backdrop per window, allowing the background to become darker at each level. Neither mode automatically hides lower windows.
+Confirmation is destroyed by default or cached with KeepAlive; product details retain the same instance. `Shared` reuses one backdrop beneath the current modal. `PerModal` creates a backdrop per window, allowing the background to become darker at each level. Neither mode automatically hides lower windows.
 
 ### Animation timing
 
@@ -116,3 +116,5 @@ ShowDialogAsync returns the answer after the confirmation window closes and clea
 - Independent Modal containers cannot own input simultaneously. Put related modals in the same container.
 
 [Container selection](concepts.md#choose-by-the-flow) · [Stack history](stacks.md) · [Input and focus](input-and-focus.md) · [Async shutdown](async-and-errors.md)
+
+KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching); backdrops still follow normal release rules, and each Dialog opening uses its own result session.

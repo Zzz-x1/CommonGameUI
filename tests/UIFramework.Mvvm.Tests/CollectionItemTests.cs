@@ -48,6 +48,24 @@ public sealed class CollectionItemTests
     private static async Task<T> Container<T>(UIContext ui) where T : ContainerNode, new()
     { var container = new T(); await container.AttachAsync(ui.Root, typeof(T).Name, new Element()); return container; }
 
+    [Fact] public async Task CachedCollectionContinuesUpdatingAndKeepsItsVm()
+    {
+        await using var ui = new UIContext(new Host(), new Loader());
+        var windows = await Container<PanelContainerNode>(ui); var vm = new CollectionVm();
+        vm.Items.Add(new ParameterVm()); Target target = null!;
+        var view = new Window { Initialize = node =>
+        { node.SetViewModel("Player", vm); target = new Target(node); node.BindCollection("Player.Items", target); } };
+        ui.Register(() => view, cacheMode: NodeCacheMode.KeepAlive);
+        await windows.OpenAsync<Window>(); var first = target.Ordered[0]; await windows.CloseAsync(view);
+        vm.Items.Add(new ParameterVm()); await ui.WhenMvvmIdleAsync();
+        Assert.Equal(2, target.Ordered.Count); Assert.Same(first, target.Ordered[0]);
+        Assert.All(target.Ordered, item => { Assert.True(item.IsCached); Assert.False(item.IsVisible); });
+        Assert.Same(view, await windows.OpenAsync<Window>()); Assert.Same(vm, view.GetViewModel<CollectionVm>("Player"));
+        Assert.All(target.Ordered, item => Assert.True(item.IsVisible));
+        await windows.CloseAsync(view); await windows.ClearCacheAsync();
+        Assert.All(target.Contexts, context => Assert.Equal(1, context.Display.Releases));
+    }
+
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task InitialCollectionsDelayWindowDisplayForCodeAndConfigurationBindings(bool configured)
     {

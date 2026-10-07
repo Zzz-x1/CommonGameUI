@@ -31,6 +31,6 @@ In Godot, import `UIFramework` and `UIFramework.Godot`; pageMount is a `Control`
 - Containers are Nodes and may be children of other nodes. Call their operations directly.
 - Register business types with `ui.Register<T>(resource)` before opening resources. Binding existing Tab controls needs no resource registration.
 - Root is structural. The project defines container names, mounts, layout and drawing order.
-- Disposing a container or closing its owning window cleans the subtree. Await asynchronous operations and observe their errors in project code.
+- Disposing a container or its owning window cleans the subtree; KeepAlive close retains it. See [closed-instance caching](resources.md#closed-instance-caching). Await asynchronous operations and observe their errors in project code.
 
 [Hierarchy](hierarchy.md) · [API](../api/core.md)

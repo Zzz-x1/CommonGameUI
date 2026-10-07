@@ -9,7 +9,8 @@ namespace StarCourt.UnityDemo
         private int _id;
         [FieldNotify] public string Name { get; set; } = "";
         [FieldNotify] public string Description { get; set; } = "";
-        public void Initialize(ClientStore store, int id) { _store = store; _id = id; Name = ClientStore.Items[id]; _store.Changed += Refresh; Refresh(); }
+        public void Initialize(ClientStore store, int id) { _store = store; SelectItem(id); _store.Changed += Refresh; }
+        public void SelectItem(int id) { _id = id; Name = ClientStore.Items[id]; Refresh(); }
         private void Refresh() => Description = "攻击 +" + (80 + _id * 15) + "\n\n持有 " + _store.State.Inventory[_id] + " 份\n\n装备可在角色档案中更换。";
         public void Dispose() => _store.Changed -= Refresh;
     }

@@ -24,7 +24,7 @@ namespace Game.UI
         public string ItemId { get; }
         public ItemArgs(string itemId) { ItemId = itemId; }
     }
-    [UIResource("res://Inventory.tscn")]
+    [UIResource("res://Inventory.tscn", CacheMode = NodeCacheMode.KeepAlive)]
     public partial class InventoryView : EngineUI.UINode { }
     [UIResource("res://Compare.tscn", WindowMode = WindowInstanceMode.Multiple)]
     public partial class CompareView : EngineUI.UINode<ItemArgs> { }

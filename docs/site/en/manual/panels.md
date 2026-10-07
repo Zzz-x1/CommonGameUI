@@ -26,7 +26,7 @@ bool exists = windows.TryGet<InventoryView>(out var existing);
 await windows.CloseAsync(inventory);
 ```
 
-same, existing and inventory are the same instance. Hide retains node/control state; Open or Show restores visibility. Close disposes it and the next Open creates another. Replace resource strings with Godot res:// paths or Unity Resources paths.
+same, existing and inventory are the same instance. Hide retains node/control state; Open or Show restores visibility. By default Close disposes it and the next Open creates another; KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching). Replace resource strings with Godot res:// paths or Unity Resources paths.
 
 ## Open multiple instances together
 
@@ -43,7 +43,7 @@ CompareView inherits `UINode<ItemArgs>`; each card receives its own item ID.
 ## Behavior and boundaries
 
 - Open reuses an existing Single instance, showing it if hidden.
-- Hide/Show retain the instance. Close disposes it; the next Open creates another.
+- Hide/Show retain the instance. Close destroys by default; KeepAlive removes the window from the open list and caches it.
 - TryGet includes hidden instances and fails on multiple matches.
 - Repeated Hide/Show or a node from another container fails. The project sets count limits.
 - Use [Stack](stacks.md) for automatic hiding and stepwise menu history, and [Modal](modals-and-dialogs.md) for confirmation that blocks background input. Panel does not automatically restore input or focus to a previous window.

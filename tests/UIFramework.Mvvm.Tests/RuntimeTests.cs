@@ -71,6 +71,20 @@ public class RuntimeTests
     private static ViewModelSource Source(string name, ViewModelCreation mode, object? template = null) => new() { Name = name, Type = typeof(OwnedVm), Creation = mode, Template = template };
     private static async Task<UINode> Node(UIContext ui, string name) { var node = new UINode(); await node.AttachAsync(ui.Root, name); return node; }
 
+    [Fact] public async Task CommandMayCloseItsCachedWindowWithoutDisposingTheModel()
+    {
+        await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime);
+        ui.Register(() => new UINode(), cacheMode: NodeCacheMode.KeepAlive);
+        var windows = new PanelContainerNode(); await windows.AttachAsync(ui.Root, "Windows");
+        var node = await windows.OpenAsync<UINode>(); var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        vm.Action = token => windows.CloseAsync(node, cancellationToken: token);
+        var click = new Click(); node.BindCommand("Dialog.Close", click); click.Press();
+        await runtime.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.True(node.IsCached); Assert.Equal(0, vm.Disposals);
+        Assert.Same(node, await windows.OpenAsync<UINode>()); Assert.Same(vm, node.GetViewModel<ClosingVm>("Dialog"));
+        click.Press(); await runtime.WhenIdleAsync(); await windows.ClearCacheAsync(); Assert.Equal(1, vm.Disposals);
+    }
+
     [Fact] public async Task PrivateAssetGraphCopiesAndReleasesCyclesOnce()
     {
         await using var runtime = new MvvmRuntime(); var assets = new Assets(); var template = new OwnedVm { Gold = 100 }; template.Other = template; template.Items.Add(template);

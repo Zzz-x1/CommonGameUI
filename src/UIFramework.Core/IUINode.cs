@@ -12,6 +12,7 @@ public interface IUINode : IAsyncDisposable
     IUIElement? Element { get; }
     NodeState State { get; }
     bool HasEntered { get; }
+    bool IsCached { get; }
     bool IsVisible { get; }
     bool IsActive { get; }
     bool IsInteractive { get; }

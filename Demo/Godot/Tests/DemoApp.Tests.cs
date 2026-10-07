@@ -134,10 +134,12 @@ public partial class DemoApp
         var inventory = (InventoryView)Shell.Pages.Current!;
         await inventory.SelectTabAsync("材料");
         await BackAsync();
-        await Shell.Pages.PushAsync<InventoryView>();
+        var reusedInventory = await Shell.Pages.PushAsync<InventoryView>();
+        Pass(ReferenceEquals(inventory, reusedInventory) && inventory.Tabs.CurrentName == "材料", "closed inventory preserves embedded tab");
         await OpenAsync("Home");
         await OpenAsync("Inventory");
         inventory = (InventoryView)Shell.Pages.Current!;
+        await inventory.SelectTabAsync("装备");
         await PressAsync(inventory.GetRoot().GetNode<Button>("Pages/装备/C0"));
         var item = (ItemDetailsView)Shell.Pages.Current!;
         Pass(!inventory.IsInteractive && item.IsInteractive, "partner activation");
@@ -150,6 +152,10 @@ public partial class DemoApp
         Pass(Floating.Children.Count == 0, "comparison back priority");
         await Shell.Pages.PopAsync();
         Pass(ReferenceEquals(Shell.Pages.Current, inventory), "original inventory returned");
+        Pass(item.IsCached, "closed item leaves history and enters cache");
+        var reusedItem = await Shell.Pages.PushAsync<ItemDetailsView>("eq1");
+        Pass(ReferenceEquals(item, reusedItem) && reusedItem.GetViewModel<ClientItemVm>("Item").Name == Catalog.Item("eq1").Name, "cached item applies new parameters and refreshes VM");
+        await Shell.Pages.PopAsync();
         await OpenAsync("Shop");
         await ModalAsync(new ModalArgs("Shop", 0));
         var detail = (ClientModalView)Modals.Current!;

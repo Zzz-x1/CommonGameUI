@@ -50,7 +50,7 @@ public abstract class CollectionItemContext : IAsyncDisposable
             foreach (var source in _sources) node.SetViewModel(source.ItemSource, Owner.GetViewModel<object>(source.ParentSource));
             configure?.Invoke(node);
         });
-        await CreatedNode.Node.AttachAsync(Owner, _name, element, cancellationToken, initiallyVisible: true);
+        await CreatedNode.Node.AttachRetainedAsync(Owner, _name, element, cancellationToken, initiallyVisible: true);
         return CreatedNode;
     }
     public ValueTask DisposeAsync() { _dispose ??= CloseAsync(); return new ValueTask(_dispose); }

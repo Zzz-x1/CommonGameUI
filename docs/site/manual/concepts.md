@@ -31,6 +31,6 @@ Godot 引入 `UIFramework` 和 `UIFramework.Godot`，pageMount 为 `Control`；U
 - 容器本身也是 Node，可以作为其他节点的子节点；操作直接调用容器 API。
 - 打开资源前用 `ui.Register<T>(resource)` 注册业务类型。Tab 绑定已有控件时无需资源注册。
 - Root 只提供结构；项目决定容器名称、挂载、布局和绘制顺序。
-- 销毁容器或关闭其所属窗口时清理子树。异步操作需要等待，并由项目观察错误。
+- 销毁容器或所属窗口时清理子树；KeepAlive 关闭保留整个子树，见[关闭后缓存](resources.md#关闭后缓存)。异步操作需要等待，并由项目观察错误。
 
 [层级](hierarchy.md) · [API](../api/core.md)

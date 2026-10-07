@@ -26,7 +26,7 @@ bool exists = windows.TryGet<InventoryView>(out var existing);
 await windows.CloseAsync(inventory);
 ```
 
-same、existing 和 inventory 是同一个实例。Hide 保留节点与控件状态，Open 或 Show 恢复显示；Close 销毁实例，下次 Open 重新创建。资源字符串替换为 Godot 的 res:// 路径或 Unity 的 Resources 路径。
+same、existing 和 inventory 是同一个实例。Hide 保留节点与控件状态，Open 或 Show 恢复显示；默认 Close 销毁实例，下次 Open 重新创建；配置 KeepAlive 则[关闭后缓存](resources.md#关闭后缓存)。资源字符串替换为 Godot 的 res:// 路径或 Unity 的 Resources 路径。
 
 ## 同时打开多个实例
 
@@ -43,7 +43,7 @@ CompareView 继承 `UINode<ItemArgs>`，每张卡接收自己的装备 ID。
 ## 行为与边界
 
 - Open：单实例已有时复用，隐藏时恢复。
-- Hide／Show：保留实例并切换显隐。Close：销毁，下次 Open 新建。
+- Hide／Show：保留实例并切换显隐。Close：默认销毁；KeepAlive 退出窗口列表并缓存。
 - TryGet 包含隐藏项；多个匹配实例会报歧义。
 - 重复 Hide／Show 或传入其他容器的节点报错。窗口数量上限由项目控制。
 - 多级菜单的自动隐藏和逐级返回使用 [Stack](stacks.md)；阻挡背景输入的确认窗口使用 [Modal](modals-and-dialogs.md)。Panel 不自动恢复“上一个窗口”的输入或焦点。

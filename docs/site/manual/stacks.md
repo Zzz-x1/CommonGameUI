@@ -44,14 +44,14 @@ await pages.PopToAsync(lobby);
 | 操作／查询 | 行为 |
 | --- | --- |
 | PushAsync&lt;T&gt; | 新建窗口，完成切换后隐藏原窗口并加入历史 |
-| PopAsync | 移除并销毁当前窗口，恢复前一个实例 |
-| PopToAsync(target) | 销毁目标之上的窗口，直接恢复目标实例 |
+| PopAsync | 移除当前窗口，按注册策略销毁或缓存，恢复前一个实例 |
+| PopToAsync(target) | 关闭目标之上的窗口，按注册策略销毁或缓存，直接恢复目标实例 |
 | Current | 当前窗口；空栈时为 null |
 | History | 从最早到当前的实例列表，包含当前窗口 |
 
 - 稳定状态只有当前窗口显示；过场动画可能同时显示前后窗口。无需切换动画时，对 Push／Pop 传 `playAnimation: false`。
 - `PopAsync` 可以移除最后一个窗口，此后栈为空；空栈再次 Pop 会报错。多级弹窗的首页返回通常关闭整个流程，见 [Modal 内的 Stack](modals-and-dialogs.md#单窗口多级菜单modal--stack)。
-- 已返回并销毁的窗口不会缓存；再次 Push 创建新实例。
+- 默认出栈销毁；KeepAlive 启用[关闭后缓存](resources.md#关闭后缓存)，缓存实例不属于历史。
 - Stack 管历史和显隐，不自动创建遮罩或取得模态输入所有权。需要这些能力时组合 Modal。
 
 [容器选择](concepts.md#按流程选择容器) · [生命周期](lifecycle.md) · [返回与焦点](input-and-focus.md)

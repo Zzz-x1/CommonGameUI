@@ -61,7 +61,7 @@ var player = ui.GetSharedViewModel(playerAsset);
 this.SetViewModel("Player", player);
 ```
 
-最后一行提供的是借用引用；共享克隆仍由 Runtime 持有。原始资产用于初始值，运行时不修改它。隐藏节点保留绑定及 VM，关闭解除绑定并释放独立 VM。
+最后一行提供的是借用引用；共享克隆仍由 Runtime 持有。原始资产用于初始值，运行时不修改它。隐藏和 KeepAlive 缓存均保留绑定及 VM；销毁解除绑定并释放独立 VM。见[关闭后缓存](resources.md#关闭后缓存)。
 
 多个 Context 需要共享资产克隆时，在创建节点前调用 `second.ShareMvvm(first)`。最后一个 Context 关闭时自动释放共享 Runtime；无需创建、初始化或释放 Runtime。
 
@@ -105,7 +105,7 @@ this.ResumeBinding(nameof(HeroVm.Power));
 
 命令支持 `void`、`Task`，最多一个业务参数，异步命令可接收 `CancellationToken`。不支持 `async void`。`CanExecute` 和执行状态控制按钮，Runtime 持续观察同一个任务。业务先保存，再展示奖励；取消确认时不提交。
 
-命令可以等待关闭自己的窗口或祖先节点。关闭时解除绑定，VM 保留到命令结束再释放；外部关闭仍取消并等待命令。`ui.WhenMvvmIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。
+命令可以等待关闭自己的窗口或祖先节点。销毁时解除绑定，VM 保留到命令结束再释放；外部销毁仍取消并等待命令。`ui.WhenMvvmIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。
 
 退出前等待清理：
 
@@ -142,6 +142,6 @@ node.BindCollection("Inventory.Items", target);
 
 在 `OnInitializeAsync` 中绑定／填充集合，或通过 GUI 配置初始集合时，框架自动等待初始条目的资源、初始化、嵌套集合及布局回调完成，再进入窗口入场流程。`BindCollection` 仍是同步配置 API，用户无需手动等待 Runtime。
 
-窗口显示后的增删、替换或重新绑定继续异步增量更新，不重新阻塞窗口。移动保留实例；删除、Reset 和关闭取消待创建条目，并等待已取得资源释放。初始化失败阻止窗口显示，清理其他条目后传播原异常。自定义布局监听 `target.Changed`；异步目标继承 `CollectionTargetBase`，即可参与相同的等待与释放流程。
+窗口显示后的增删、替换或重新绑定继续异步增量更新，不重新阻塞窗口。移动保留实例；删除、Reset 和销毁取消待创建条目，并等待已取得资源释放。初始化失败阻止窗口显示，清理其他条目后传播原异常。自定义布局监听 `target.Changed`；异步目标继承 `CollectionTargetBase`，即可参与相同的等待与释放流程。
 
 `ui.WhenMvvmIdleAsync()` 等待整个 Runtime 的任务，包括命令和延迟释放，适用于流程外的统一等待；不要用它代替窗口初始化等待。

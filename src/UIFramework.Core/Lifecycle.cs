@@ -6,14 +6,17 @@ public enum LifecycleReason { Initialization, Open, Show, Hide, Push, Covered, S
 public sealed class LifecycleContext
 {
     public LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source = null, IUINode? target = null)
-    { Node = node.Node.Owner; Container = container; Reason = reason; Source = source?.Node.Owner; Target = target?.Node.Owner; IsFirstEnter = !node.HasEntered; }
+        : this(node, container, reason, source, target, node.Node.CacheReuse) { }
+    private LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source, IUINode? target, bool isCacheReuse)
+    { Node = node.Node.Owner; Container = container; Reason = reason; Source = source?.Node.Owner; Target = target?.Node.Owner; IsFirstEnter = !node.HasEntered; IsCacheReuse = isCacheReuse; }
     public IUINode Node { get; }
     public ContainerNode? Container { get; }
     public LifecycleReason Reason { get; }
     public IUINode? Source { get; }
     public IUINode? Target { get; }
     public bool IsFirstEnter { get; }
-    internal LifecycleContext For(UINode node) => ReferenceEquals(node.Owner, Node) ? this : new(node, Container, ReferenceEquals(node.Owner, Node) ? Reason : Container is ModalContainerNode ? LifecycleReason.Modal : LifecycleReason.Ancestor, Source, Target);
+    public bool IsCacheReuse { get; }
+    internal LifecycleContext For(UINode node) => ReferenceEquals(node.Owner, Node) ? this : new(node, Container, ReferenceEquals(node.Owner, Node) ? Reason : Container is ModalContainerNode ? LifecycleReason.Modal : LifecycleReason.Ancestor, Source, Target, IsCacheReuse);
 }
 
 public sealed class StateChangeContext

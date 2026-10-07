@@ -36,7 +36,6 @@ namespace StarCourt.UnityDemo
         public Task WhenIdleAsync() => Task.WhenAll(Task.WhenAll(_tasks.ToArray()), UI.WhenMvvmIdleAsync());
         private readonly List<Task> _tasks = new List<Task>();
         public ClientPlayerVm PlayerVm { get; private set; }
-        private string _confirmation;
         private void Awake() { Instance = this; Application.runInBackground = true; }
         private void Start() { Ready = InitializeAsync(); Track(Ready); }
         public void Track(Task task) => _tasks.Add(task);
@@ -58,14 +57,14 @@ namespace StarCourt.UnityDemo
             await new PlayerSubscriptionLifetime(this).AttachAsync(UI.Root, "PlayerSubscriptionLifetime");
             UI.BindLifetime(gameObject.scene);
             UI.Register<LoginView>("UI/Login"); UI.Register<LobbyView>("UI/Lobby");
-            UI.Register<InventoryView>("UI/Inventory"); UI.Register<ItemView>("UI/Item");
+            UI.Register<InventoryView>("UI/Inventory", cacheMode: NodeCacheMode.KeepAlive); UI.Register<ItemView>("UI/Item", cacheMode: NodeCacheMode.KeepAlive);
             UI.Register<CharactersView>("UI/Characters"); UI.Register<HeroView>("UI/Hero");
             UI.Register<ShopView>("UI/Shop"); UI.Register<TeamView>("UI/Team");
             UI.Register<QuestsView>("UI/Quests"); UI.Register<SettingsView>("UI/Settings");
             UI.Register<GraphicsView>("UI/Graphics"); UI.Register<RewardView>("UI/Reward");
             UI.Register<CompareView>("UI/Compare", windowMode: WindowInstanceMode.Multiple);
             UI.Register<PurchaseView>("UI/Purchase");
-            UI.Register<ConfirmView>("UI/Confirm", view => view.Message = _confirmation);
+            UI.Register<ConfirmView>("UI/Confirm", cacheMode: NodeCacheMode.KeepAlive);
             Pages = await UI.Root.CreateContainerAsync<StackContainerNode>("Client", PageMount);
             Windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Comparison", WindowMount);
             Modals = await UI.Root.CreateContainerAsync<ModalContainerNode>("Dialogs", ModalMount);
@@ -146,7 +145,7 @@ namespace StarCourt.UnityDemo
             await Windows.CloseAsync(view);
             ((ItemView)Pages.Current).RefreshComparison();
         });
-        public Task<bool> AskAsync(string text) { _confirmation = text; return Modals.ShowDialogAsync<ConfirmView, bool>(); }
+        public Task<bool> AskAsync(string text) => Modals.ShowDialogAsync<ConfirmView, bool>(text);
         public Task BackAsync() => RunAsync(async () =>
         {
             if (Modals.Current != null) { await Modals.RequestDismissAsync(); return; }

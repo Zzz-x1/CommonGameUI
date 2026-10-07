@@ -10,7 +10,7 @@ using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo
 {
-[UIResource("res://Scenes/Client/Inventory.tscn")]
+[UIResource("res://Scenes/Client/Inventory.tscn", CacheMode = NodeCacheMode.KeepAlive)]
 public partial class InventoryView : ClientPage
 {
     public override string Module => "Inventory";

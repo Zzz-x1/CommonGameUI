@@ -15,7 +15,7 @@ var confirm = await modals.OpenAsync<PurchaseConfirmView>();
 await modals.CloseAsync(confirm);
 ```
 
-确认框关闭并销毁，原商品详情仍是同一个实例。`Shared` 共用一张遮罩，放在当前弹窗下；`PerModal` 每个弹窗创建一张，允许背景逐层加深。两种配置都不会自动隐藏下层窗口。
+确认框默认关闭并销毁；KeepAlive 时缓存，原商品详情仍是同一个实例。`Shared` 共用一张遮罩，放在当前弹窗下；`PerModal` 每个弹窗创建一张，允许背景逐层加深。两种配置都不会自动隐藏下层窗口。
 
 ### 动画时序
 
@@ -116,3 +116,5 @@ ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 
 - 独立 Modal 容器不能同时拥有输入。相关弹窗放在同一个容器中。
 
 [容器选择](concepts.md#按流程选择容器) · [Stack 历史](stacks.md) · [输入与焦点](input-and-focus.md) · [异步关闭](async-and-errors.md)
+
+KeepAlive 支持[关闭后缓存](resources.md#关闭后缓存)；遮罩仍按原规则释放，Dialog 每次打开使用独立结果会话。

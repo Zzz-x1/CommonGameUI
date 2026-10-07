@@ -43,15 +43,15 @@ await pages.PopToAsync(lobby);
 
 | Operation/query | Behavior |
 | --- | --- |
-| PushAsync&lt;T&gt; | Creates a window; after switching, hides the previous window and adds the new one to history |
-| PopAsync | Removes and disposes the current window; restores the preceding instance |
-| PopToAsync(target) | Disposes windows above the target and restores it directly |
+| PushAsync&lt;T&gt; | Creates or reuses a cached window; after switching, hides the previous window and adds the new one to history |
+| PopAsync | Removes the current window, then disposes or caches it according to registration; restores the preceding instance |
+| PopToAsync(target) | Closes windows above the target according to their cache policy and restores it directly |
 | Current | Current window; null when the stack is empty |
 | History | Instances from the earliest to the current window, including the current one |
 
 - Only the current window is visible in a stable state; transitions may show both windows. Pass `playAnimation: false` to Push/Pop when no switching animation is needed.
 - `PopAsync` can remove the last window, leaving an empty stack. Popping an empty stack fails. Back from the first window of a modal menu usually closes the whole flow; see [Stack inside Modal](modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
-- Popped windows are disposed rather than cached; another Push creates a new instance.
+- Popped windows are destroyed by default; KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching). Cached windows are not history entries.
 - Stack manages history and visibility. It does not create a backdrop or acquire modal input ownership; combine it with Modal for those features.
 
 [Container selection](concepts.md#choose-by-the-flow) · [Lifecycle](lifecycle.md) · [Back and focus](input-and-focus.md)

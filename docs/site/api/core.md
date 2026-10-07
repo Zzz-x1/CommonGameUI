@@ -14,8 +14,9 @@ IUIResourceLoader Loader { get; }
 IUILog Log { get; }
 IUINode? InputOwner { get; } // Set by the framework.
 IUITransition DefaultTransition { get; set; }
-void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : class, IUINode
-void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null) where T : class, IUINode
+void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
+void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
+Task ClearCacheAsync(CancellationToken cancellationToken = default)
 Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
 ValueTask DisposeAsync()
 ```
@@ -64,6 +65,7 @@ UIContext Context { get; }
 IUIElement? Element { get; }
 NodeState State { get; }
 bool HasEntered { get; }
+bool IsCached { get; }
 bool IsVisible { get; }
 bool IsActive { get; }
 bool IsInteractive { get; }
@@ -122,9 +124,10 @@ protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? ente
 
 </details>
 
+
 ## 容器与结果弹窗
 
-Panel Single 保留隐藏项，Close 销毁；Stack 保留历史，Pop 销毁；Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收更早实例。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
+Panel Single 保留隐藏项，Stack 保留历史；Close／Pop 默认销毁，KeepAlive 缓存。Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收更早实例。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
 
 ### `ContainerNode : UINode`
 
@@ -132,11 +135,15 @@ Panel Single 保留隐藏项，Close 销毁；Stack 保留历史，Pop 销毁；
 
 ```csharp
 IUITransition? ChildTransition { get; set; }
+Task ClearCacheAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
+Task ClearCacheAsync(CancellationToken cancellationToken = default)
 ```
+
+ClearCache 只清理已关闭缓存，不关闭活跃或隐藏窗口；Context 同名方法清理整个上下文。见[关闭后缓存](../manual/resources.md#关闭后缓存)。
 
 ### `PanelContainerNode`
 
-独立窗口；隐藏保留，关闭销毁；没有返回历史。场景与代码见 [Panel 指南](../manual/panels.md)。
+独立窗口；隐藏保留，关闭按注册策略销毁或缓存；没有返回历史。场景与代码见 [Panel 指南](../manual/panels.md)。
 
 ```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
@@ -202,7 +209,7 @@ IsFirstEnter 由 HasEntered 决定。Reason 区分实际操作原因，Source／
 
 ```csharp
 LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source = null, IUINode? target = null)
-// Properties: Node, Container, Reason, Source, Target, IsFirstEnter (all get-only).
+// Properties: Node, Container, Reason, Source, Target, IsFirstEnter, IsCacheReuse (all get-only).
 StateChangeContext(LifecycleContext operation, bool previous, bool current)
 // Properties: Operation, Node, Previous, Current (all get-only).
 // INodeLifecycle; NodeLifecycle provides virtual no-op implementations:
@@ -294,6 +301,7 @@ public interface IUILog
 ```csharp
 enum NodeState { Detached, Initializing, Ready, Disposing, Disposed }
 enum WindowInstanceMode { Single, Multiple }
+enum NodeCacheMode { None, KeepAlive }
 enum ModalBackdropMode { Shared, PerModal }
 enum TransitionDirection { None, Forward, Backward }
 enum TransitionPhase { Enter, Exit, PushEnter, PushExit, PopEnter, PopExit }
@@ -302,6 +310,7 @@ enum LifecycleReason { Initialization, Open, Show, Hide, Push, Covered, Switch, 
 UIResourceAttribute(string resource)
 string UIResourceAttribute.Resource { get; }
 WindowInstanceMode UIResourceAttribute.WindowMode { get; set; } // default Single.
+NodeCacheMode UIResourceAttribute.CacheMode { get; set; } // default None.
 const string UIFailure.SecondaryExceptionsKey = "UIFramework.SecondaryExceptions"
 ```
 

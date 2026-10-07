@@ -29,6 +29,11 @@ public sealed class ItemView : EngineUI.UINode<int>
             _bindings.Button("Panel/Back", UnityClient.Instance.BackAsync);
             return Task.CompletedTask;
         }
+        protected override Task OnEnteringAsync(LifecycleContext context, CancellationToken token)
+        {
+            this.GetViewModel<ClientItemVm>("Item").SelectItem(Parameters);
+            RefreshComparison(); return Task.CompletedTask;
+        }
         protected override Task OnDisposeAsync() { _bindings.Dispose(); return Task.CompletedTask; }
         public void RefreshComparison() => this.GetControl<Button>("Panel/Compare").interactable = UnityClient.Instance.Windows.Children.Count < 2;
     }

@@ -16,6 +16,8 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
             (ctx, _) => (Symbol: (INamedTypeSymbol)ctx.TargetSymbol,
                 Resource: (string)ctx.Attributes[0].ConstructorArguments[0].Value!,
                 WindowMode: ctx.Attributes[0].NamedArguments.Where(p => p.Key == "WindowMode")
+                    .Select(p => (int)p.Value.Value!).DefaultIfEmpty(0).Single(),
+                CacheMode: ctx.Attributes[0].NamedArguments.Where(p => p.Key == "CacheMode")
                     .Select(p => (int)p.Value.Value!).DefaultIfEmpty(0).Single())).Collect();
 
         context.RegisterSourceOutput(declarations, (output, nodes) =>
@@ -31,7 +33,8 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                 source.Append("ui.Register<").Append(type).Append(">(");
                 if (coreNode) source.Append("() => new ").Append(type).Append("(), ");
                 source.Append(SymbolDisplay.FormatLiteral(node.Resource, true))
-                    .Append(", windowMode: (global::UIFramework.WindowInstanceMode)").Append(node.WindowMode).Append(");\n");
+                    .Append(", windowMode: (global::UIFramework.WindowInstanceMode)").Append(node.WindowMode)
+                    .Append(", cacheMode: (global::UIFramework.NodeCacheMode)").Append(node.CacheMode).Append(");\n");
             }
             source.Append("}\n}\n}\n");
             foreach (var group in nodes.GroupBy(n => n.Symbol.ContainingNamespace, SymbolEqualityComparer.Default))

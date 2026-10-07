@@ -61,7 +61,7 @@ var player = ui.GetSharedViewModel(playerAsset);
 this.SetViewModel("Player", player);
 ```
 
-The last line borrows the reference; the Runtime still owns the shared clone. Original assets provide initial values and remain unchanged. Hiding keeps bindings and state; closing detaches bindings and releases private VMs.
+The last line borrows the reference; the Runtime still owns the shared clone. Original assets provide initial values and remain unchanged. Hiding and KeepAlive caching retain bindings and VMs; disposal detaches bindings and releases private VMs. See [closed-instance caching](resources.md#closed-instance-caching).
 
 To share asset clones across contexts, call `second.ShareMvvm(first)` before creating nodes. The last Context automatically releases their Runtime. No Runtime construction, initialization or disposal is required.
 
@@ -105,7 +105,7 @@ Moving retains item instances; removal detaches bindings and releases the item. 
 
 Commands support `void` and `Task`, at most one business parameter, and an optional `CancellationToken` for asynchronous work. `async void` is rejected. `CanExecute` and execution state control buttons; the Runtime continuously observes the same task. Save business changes before presenting rewards. Cancelled confirmations do not commit.
 
-A command can await closure of its own window or an ancestor. Bindings detach during closure; its VM stays alive until the command finishes. External closure cancels and awaits commands. `ui.WhenMvvmIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.
+A command can await closure of its own window or an ancestor. Bindings detach during disposal; its VM stays alive until the command finishes. External disposal cancels and awaits commands. `ui.WhenMvvmIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.
 
 Await cleanup before exiting:
 

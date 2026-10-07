@@ -14,8 +14,9 @@ IUIResourceLoader Loader { get; }
 IUILog Log { get; }
 IUINode? InputOwner { get; } // Set by the framework.
 IUITransition DefaultTransition { get; set; }
-void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single) where T : class, IUINode
-void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null) where T : class, IUINode
+void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
+void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
+Task ClearCacheAsync(CancellationToken cancellationToken = default)
 Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
 ValueTask DisposeAsync()
 ```
@@ -64,6 +65,7 @@ UIContext Context { get; }
 IUIElement? Element { get; }
 NodeState State { get; }
 bool HasEntered { get; }
+bool IsCached { get; }
 bool IsVisible { get; }
 bool IsActive { get; }
 bool IsInteractive { get; }
@@ -122,9 +124,10 @@ protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? ente
 
 </details>
 
+
 ## Containers and result dialogs
 
-Panel Single retains hidden items; Close disposes. Stack retains history; Pop disposes. Tab retains bound controls. Modal allows top-layer input. PopTo/CloseTo take earlier instances. ShowDialog waits for answer and cleanup; unanswered external closure cancels. RequestDismiss returns false when no handler is configured.
+Panel Single retains hidden items and Stack retains history; Close/Pop destroy by default or cache with KeepAlive. Tab retains bound controls. Modal allows top-layer input. PopTo/CloseTo take earlier instances. ShowDialog waits for answer and cleanup; unanswered external closure cancels. RequestDismiss returns false when no handler is configured.
 
 ### `ContainerNode : UINode`
 
@@ -132,11 +135,15 @@ Default child transition.
 
 ```csharp
 IUITransition? ChildTransition { get; set; }
+Task ClearCacheAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
+Task ClearCacheAsync(CancellationToken cancellationToken = default)
 ```
+
+ClearCache releases closed cached instances without closing open or hidden windows; the Context method clears caches across the context. See [closed-instance caching](../manual/resources.md#closed-instance-caching).
 
 ### `PanelContainerNode`
 
-Independent windows; hide retains and close disposes. No return history. See the [Panel guide](../manual/panels.md) for scenarios and code.
+Independent windows; hide retains, while close destroys or caches according to registration. No return history. See the [Panel guide](../manual/panels.md) for scenarios and code.
 
 ```csharp
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
@@ -202,7 +209,7 @@ IsFirstEnter follows HasEntered. Reason describes the operation; Source/Target c
 
 ```csharp
 LifecycleContext(IUINode node, ContainerNode? container, LifecycleReason reason, IUINode? source = null, IUINode? target = null)
-// Properties: Node, Container, Reason, Source, Target, IsFirstEnter (all get-only).
+// Properties: Node, Container, Reason, Source, Target, IsFirstEnter, IsCacheReuse (all get-only).
 StateChangeContext(LifecycleContext operation, bool previous, bool current)
 // Properties: Operation, Node, Previous, Current (all get-only).
 // INodeLifecycle; NodeLifecycle provides virtual no-op implementations:
@@ -294,6 +301,7 @@ These enums prescribe no HUD/Overlay layers. UIResource declares paths for the g
 ```csharp
 enum NodeState { Detached, Initializing, Ready, Disposing, Disposed }
 enum WindowInstanceMode { Single, Multiple }
+enum NodeCacheMode { None, KeepAlive }
 enum ModalBackdropMode { Shared, PerModal }
 enum TransitionDirection { None, Forward, Backward }
 enum TransitionPhase { Enter, Exit, PushEnter, PushExit, PopEnter, PopExit }
@@ -302,6 +310,7 @@ enum LifecycleReason { Initialization, Open, Show, Hide, Push, Covered, Switch, 
 UIResourceAttribute(string resource)
 string UIResourceAttribute.Resource { get; }
 WindowInstanceMode UIResourceAttribute.WindowMode { get; set; } // default Single.
+NodeCacheMode UIResourceAttribute.CacheMode { get; set; } // default None.
 const string UIFailure.SecondaryExceptionsKey = "UIFramework.SecondaryExceptions"
 ```
 

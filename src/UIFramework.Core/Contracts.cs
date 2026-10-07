@@ -143,7 +143,10 @@ public sealed class UIResourceAttribute : Attribute
     public UIResourceAttribute(string resource) => Resource = resource;
     public string Resource { get; }
     public WindowInstanceMode WindowMode { get; set; } = WindowInstanceMode.Single;
+    public NodeCacheMode CacheMode { get; set; } = NodeCacheMode.None;
 }
+
+public enum NodeCacheMode { None, KeepAlive }
 
 public enum WindowInstanceMode { Single, Multiple }
 

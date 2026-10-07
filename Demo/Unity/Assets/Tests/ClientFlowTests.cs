@@ -108,6 +108,12 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(item.GetControl<Button>("Panel/Compare").interactable, Is.True);
             await ClickAndWait(item, "Panel/Compare"); await _app.BackAsync(); Assert.That(_app.Windows.Children, Is.Empty);
             await _app.BackAsync(); Assert.That(_app.Pages.Current, Is.SameAs(inventory));
+            await _app.BackAsync(); Assert.That(inventory.IsCached, Is.True);
+            await Route("Inventory"); Assert.That(_app.Pages.Current, Is.SameAs(inventory));
+            Assert.That(inventory.Tabs.CurrentName, Is.EqualTo("装备"));
+            await _app.OpenItemAsync(1); Assert.That(_app.Pages.Current, Is.SameAs(item));
+            Assert.That(item.GetControl<Text>("Panel/Title").text, Is.EqualTo(ClientStore.Items[1]));
+            await _app.BackAsync();
             await Route("Settings"); var settings = (SettingsView)_app.Modals.Current;
             await ClickAndWait(settings, "Panel/Pages/画面/Graphics"); var graphics = _app.Modals.Current;
             graphics.GetControl<Dropdown>("Panel/Quality").value = 0;
