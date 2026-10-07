@@ -12,6 +12,7 @@ internal sealed class BindingScope : IAsyncDisposable
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
     private readonly List<IDisposable> _bindings = new();
     private readonly List<Task> _tasks = new();
+    private readonly List<Task> _initialCollections = new();
     private readonly List<CommandExecution> _commands = new();
     private IViewBindingConfiguration? _configuration;
     private Task? _dispose;
@@ -36,6 +37,25 @@ internal sealed class BindingScope : IAsyncDisposable
         foreach (var source in _configuration.Sources)
             if (!source.Type.IsInstanceOfType(Get(source.Name))) throw new InvalidCastException("VM source type mismatch: " + source.Name);
         _configuration.Apply(Node);
+    }
+    internal async Task InitializeAsync(CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        ApplyConfiguration();
+        var canceled = new TaskCompletionSource<bool>();
+        using (token.Register(() => canceled.TrySetResult(true)))
+        {
+            while (_initialCollections.Count != 0)
+            {
+                _initialCollections.RemoveAll(task => task.IsCompletedSuccessfully);
+                if (_initialCollections.Count == 0) break;
+                var completed = await Task.WhenAny(_initialCollections.Append(canceled.Task));
+                token.ThrowIfCancellationRequested();
+                await completed;
+                _initialCollections.Remove(completed);
+            }
+        }
+        token.ThrowIfCancellationRequested();
     }
     public void Set(string name, object value)
     {
@@ -91,6 +111,11 @@ internal sealed class BindingScope : IAsyncDisposable
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
     private T Own<T>(T binding) where T : IDisposable { _bindings.Add(binding); return binding; }
     internal void Observe(Task task) { _tasks.Add(task); _runtime.Observe(task); }
+    internal void ObserveCollection(Task task)
+    {
+        Observe(task);
+        if (Node.State == NodeState.Initializing) _initialCollections.Add(task);
+    }
     internal void Add(CommandExecution command) => _commands.Add(command);
     internal bool HasCaller => _commands.Any(command => command.IsCaller);
     internal Task Run(IMvvmObject vm, string command, object? parameter) => _runtime.Execute(this, vm, command, parameter);
@@ -127,7 +152,7 @@ internal sealed class BindingScope : IAsyncDisposable
         catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         foreach (var value in _owned.AsEnumerable().Reverse())
             try { await _runtime.Release(value.Value, value.Assets); } catch (Exception error) { _runtime.Report(error, "MVVM VM release"); MvvmRuntime.Failure(ref first, error); }
-        _runtime.Remove(this); _owned.Clear(); _commands.Clear(); _tasks.Clear();
+        _runtime.Remove(this); _owned.Clear(); _commands.Clear(); _tasks.Clear(); _initialCollections.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal sealed class Path : IDisposable

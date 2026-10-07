@@ -217,6 +217,18 @@ void VisibilityChanged(StateChangeContext context)
 Task DisposeAsync(IUINode node)
 ```
 
+### Optional node modules
+
+Modules prepare sources synchronously. After business initialization, binding preparation is awaited before setting the node to Ready. Asynchronous module work, such as initial collection creation, can delay display through this phase.
+
+```csharp
+void UIContext.AddNodeExtension(IUINodeExtension extension)
+// IUINodeExtension:
+void BeforeInitialize(UINode node)
+Task AfterInitializeAsync(UINode node, CancellationToken token)
+ValueTask DisposeAsync(UINode node)
+```
+
 ## Transitions / resources / failures
 
 Select is synchronous/read-only; Create produces a run and Restore always executes after a run is successfully created. Progress is monotonic 0..1. UIResourceLease.Dispose releases ownership synchronously. Secondary failures do not wrap the primary. ConsoleUILog.Error(Exception exception, string context) provides basic console logging.

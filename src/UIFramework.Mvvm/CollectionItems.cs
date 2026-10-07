@@ -42,6 +42,7 @@ public abstract class CollectionItemContext : IAsyncDisposable
     {
         if (_element != null || _dispose != null) throw new InvalidOperationException("Collection item context is already used or disposed.");
         _element = element; element.SetVisible(false);
+        cancellationToken.ThrowIfCancellationRequested();
         CreatedNode = ResolveNode(element);
         MvvmExtensions.Initializers.Add(CreatedNode.Node, node =>
         {
@@ -94,7 +95,7 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(GetType().Name);
         index = index == int.MaxValue ? _entries.Count : index;
         var entry = new Entry(CreateContext(item, index), _owner.Lifetime); _entries.Insert(index, entry); _tasks.RemoveAll(t => t.IsCompletedSuccessfully);
-        entry.Completion = CreateAsync(entry); _tasks.Add(entry.Completion); _owner.ObserveMvvmTask(entry.Completion);
+        entry.Completion = CreateAsync(entry); _tasks.Add(entry.Completion); MvvmExtensions.Scope(_owner.Node).ObserveCollection(entry.Completion);
     }
     private async Task CreateAsync(Entry entry)
     {
@@ -122,7 +123,7 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
         var entry = _entries[index]; _entries.RemoveAt(index); Exception? first = null;
         try { entry.Cancellation.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         try { if (entry.Node != null && entry.Node.State != NodeState.Disposed) Detach(entry.Node); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        var task = ReleaseAsync(entry); _tasks.Add(task); _owner.ObserveMvvmTask(task);
+        var task = ReleaseAsync(entry); _tasks.Add(task); MvvmExtensions.Scope(_owner.Node).ObserveCollection(task);
         try { Reorder(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         if (first != null) { _owner.Context.GetMvvm().Report(first, "MVVM collection removal"); System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw(); }
     }

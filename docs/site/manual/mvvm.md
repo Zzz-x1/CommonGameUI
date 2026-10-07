@@ -140,4 +140,8 @@ node.BindCollection("Inventory.Items", target);
 
 实现 `ICollectionItemFactory.CreateAsync(context, token)` 可按条目选择不同资源。调用 `context.CreateAsync(prefabOrScene, configure, token)` 或 `context.LoadAsync(resourcePath, configure, token)`；配置回调在来源建立后、业务初始化前执行，可调用 `node.CreateViewModel` 创建条目拥有的模型。`context.Item`、`Index`、`Owner`、`IsPreview` 描述创建请求；Index 是创建时索引，不是实时位置。
 
-移动保留实例；删除、替换、Reset 和关闭取消待创建条目，并等待已取得资源释放。初始化完成后才显示。失败直接传播，重试由业务明确发起。自定义布局监听 `target.Changed`，在异步创建完成后重新排布。流程需要等待当前绑定任务时使用 `ui.WhenMvvmIdleAsync()`。
+在 `OnInitializeAsync` 中绑定／填充集合，或通过 GUI 配置初始集合时，框架自动等待初始条目的资源、初始化、嵌套集合及布局回调完成，再进入窗口入场流程。`BindCollection` 仍是同步配置 API，用户无需手动等待 Runtime。
+
+窗口显示后的增删、替换或重新绑定继续异步增量更新，不重新阻塞窗口。移动保留实例；删除、Reset 和关闭取消待创建条目，并等待已取得资源释放。初始化失败阻止窗口显示，清理其他条目后传播原异常。自定义布局监听 `target.Changed`；异步目标继承 `CollectionTargetBase`，即可参与相同的等待与释放流程。
+
+`ui.WhenMvvmIdleAsync()` 等待整个 Runtime 的任务，包括命令和延迟释放，适用于流程外的统一等待；不要用它代替窗口初始化等待。

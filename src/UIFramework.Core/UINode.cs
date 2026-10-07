@@ -172,7 +172,7 @@ public class UINode : IUINode
                     _initializedHandlers.Add(handler);
                     await handler.InitializeAsync(Owner, token);
                 }
-                foreach (var extension in _initializedExtensions) extension.AfterInitialize(this);
+                foreach (var extension in _initializedExtensions) await extension.AfterInitializeAsync(this, token);
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
                 SetLocalState(initiallyVisible ?? InitiallyVisible, initiallyVisible ?? InitiallyVisible);

@@ -217,6 +217,18 @@ void VisibilityChanged(StateChangeContext context)
 Task DisposeAsync(IUINode node)
 ```
 
+### 可选节点模块
+
+模块同步准备来源，业务初始化结束后等待绑定准备，再将节点设为 Ready。异步集合等模块任务可通过初始化后阶段阻止未完成窗口显示。
+
+```csharp
+void UIContext.AddNodeExtension(IUINodeExtension extension)
+// IUINodeExtension:
+void BeforeInitialize(UINode node)
+Task AfterInitializeAsync(UINode node, CancellationToken token)
+ValueTask DisposeAsync(UINode node)
+```
+
 ## Transitions / resources / failures
 
 Select 同步只读；每次 Create 产生执行对象，成功创建执行对象后，Restore 总会执行。进度单调 0..1。UIResourceLease.Dispose 同步归还持有；附加失败不包装主异常。ConsoleUILog.Error(Exception exception, string context) 可用作基础控制台日志。

@@ -196,7 +196,7 @@ public sealed class MvvmNodeExtension : IUINodeExtension
         if (MvvmExtensions.Initializers.TryGetValue(node, out var initialize))
         { MvvmExtensions.Initializers.Remove(node); initialize(node.Owner); }
     }
-    public void AfterInitialize(UINode node) => MvvmExtensions.Scope(node).ApplyConfiguration();
+    public Task AfterInitializeAsync(UINode node, CancellationToken token) => MvvmExtensions.Scope(node).InitializeAsync(token);
     public ValueTask DisposeAsync(UINode node) => MvvmExtensions.Scope(node).DisposeAsync();
 }
 public static class MvvmExtensions

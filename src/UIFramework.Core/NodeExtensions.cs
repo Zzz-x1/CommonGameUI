@@ -4,6 +4,6 @@ namespace UIFramework;
 public interface IUINodeExtension
 {
     void BeforeInitialize(UINode node);
-    void AfterInitialize(UINode node);
+    Task AfterInitializeAsync(UINode node, CancellationToken token);
     ValueTask DisposeAsync(UINode node);
 }

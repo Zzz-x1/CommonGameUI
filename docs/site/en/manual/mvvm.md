@@ -99,7 +99,7 @@ These are synchronous paired APIs without animation wrappers or automatic recove
 
 ## Lists and commands
 
-Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `CollectionTarget` / `CollectionTarget`. Add `MvvmBindings` to the item scene or Prefab and declare a **Manual / Item** source. Items can be basic nodes without a business View class.
+Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `CollectionTarget`. Add `MvvmBindings` to the item scene or Prefab; the framework supplies the `Item` source automatically, without an asset declaration. Items can be basic nodes without a business View class.
 
 Moving retains item instances; removal detaches bindings and releases the item. Ordinary arrays support one-time display. Project resources define layout. The module provides no virtualization, sorting or extra pool.
 
@@ -140,4 +140,8 @@ node.BindCollection("Inventory.Items", target);
 
 Implement `ICollectionItemFactory.CreateAsync(context, token)` to select different item resources. Call `context.CreateAsync(prefabOrScene, configure, token)` or `context.LoadAsync(resourcePath, configure, token)`; the configure callback runs after sources exist and before business initialization. Use `node.CreateViewModel` there for item-owned models. `context.Item`, `Index`, `Owner` and `IsPreview` describe creation; Index is the original index, not a live position.
 
-Moving preserves instances. Removal, replacement, Reset and closure cancel pending creation and wait for acquired resources to be released. Initialization completes before display. Errors propagate; retry is an explicit business action. Use `target.Changed` to update custom layouts after asynchronous creation. Await `ui.WhenMvvmIdleAsync()` when a flow needs all current binding tasks to finish.
+When a collection is bound/populated in `OnInitializeAsync` or applied through GUI configuration, the framework awaits initial item resources, initialization, nested collections and layout callbacks before starting window entry. `BindCollection` remains a synchronous configuration API; users do not need to wait for the Runtime manually.
+
+Changes or rebinding after the window is shown remain asynchronous incremental updates without blocking the window again. Moving preserves instances. Removal, Reset and closure cancel pending creation and wait for acquired resources to be released. Initialization failure prevents display, cleans other items and propagates the original exception. Listen to `target.Changed` for custom layouts. Derive asynchronous targets from `CollectionTargetBase` to participate in the same preparation and cleanup flow.
+
+`ui.WhenMvvmIdleAsync()` awaits the entire Runtime, including commands and deferred releases. Use it for an external synchronization point rather than window initialization.
