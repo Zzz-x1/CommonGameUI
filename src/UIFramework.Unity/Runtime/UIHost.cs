@@ -14,8 +14,10 @@ namespace UIFramework.Unity
         private readonly FramePump _frames;
         private bool _lifetimeEnding;
         internal void BeginLifetimeDisposal() => _lifetimeEnding = true;
-        public UIHost(EventSystem events, FramePump frames)
+        public RectTransform RootMount { get; }
+        public UIHost(EventSystem events, FramePump frames, RectTransform rootMount = null)
         {
+            RootMount = rootMount;
             _events = events ? events : throw new ArgumentNullException(nameof(events));
             _frames = frames ? frames : throw new ArgumentNullException(nameof(frames));
         }

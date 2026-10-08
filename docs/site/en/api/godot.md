@@ -21,12 +21,12 @@ Task<TResult> WaitForResultAsync(CancellationToken token) // DialogNode<TResult>
 ## Setup and control access
 
 ```csharp
-UIContext UI.Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null)
+UIContext UI.Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null, Control? rootMount = null)
 // UIExtensions:
 Task AttachToAsync(this UINode node, IUINode parent, string name, CancellationToken token = default)
 Task BindAsync(this TabContainerNode tabs, string name, UINode node, CancellationToken token = default)
 Task AttachToAsync(this IUINode node, IUINode parent, string name, Control control, CancellationToken token = default)
-Task<T> CreateContainerAsync<T>(this IUINode parent, string name, Control mount, CancellationToken token = default) where T : ContainerNode, new()
+Task<T> CreateContainerAsync<T>(this IUINode parent, string name, Control? mount = null, CancellationToken token = default) where T : ContainerNode, new()
 Task BindAsync(this TabContainerNode tabs, string name, Control page, CancellationToken token = default)
 Task BindAsync(this TabContainerNode tabs, string name, IUINode node, Control page, CancellationToken token = default)
 Control GetRoot(this IUINode node)
@@ -65,7 +65,8 @@ float Alpha { get; init; } // default 1
 ## Low-level adapter types
 
 ```csharp
-UIHost(Viewport viewport)
+UIHost(Viewport viewport, Control? rootMount = null)
+Control? RootMount { get; }
 void UIHost.VerifyAccess()
 Task UIHost.NextFrameAsync()
 object? UIHost.CaptureFocus()

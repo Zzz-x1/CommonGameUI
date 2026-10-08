@@ -57,13 +57,12 @@ public sealed class HelloWindow : EngineUI.UINode
 
 ## 4. 搭建 Main 场景并编写宿主
 
-从刚保存的 Prefab 删除场景中的临时 `HelloWindow`。在 Canvas 下创建 Empty UI Object，命名为 `WindowsMount`；RectTransform 设为四边 Stretch、偏移均为 0，不添加 Image。然后添加一个 Button，命名为 `OpenWindowButton`；设为底部中央锚点、Width 180、Height 44、Pos Y 为 40，文字设为 `Open Window`。
+从刚保存的 Prefab 删除场景中的临时 `HelloWindow`。在 Canvas 下添加一个 Button，命名为 `OpenWindowButton`；设为底部中央锚点、Width 180、Height 44、Pos Y 为 40，文字设为 `Open Window`。
 
 Canvas 使用 Screen Space - Overlay。CanvasScaler 设为 **Scale With Screen Size**，参考分辨率 `1000 × 700`。场景需要一个 EventSystem；创建 Button 时若 Unity 已自动创建，就复用现有对象。
 
 ```text
 Canvas (Canvas, CanvasScaler, TutorialHost)
-├── WindowsMount (RectTransform, Stretch, no Image)
 └── OpenWindowButton (Button)
 EventSystem
 ```
@@ -87,7 +86,6 @@ public sealed class TutorialHost : MonoBehaviour
 {
     public Canvas Canvas;
     public EventSystem Events;
-    public RectTransform WindowsMount;
     public Button OpenWindowButton;
 
     private readonly List<Task> _tasks = new List<Task>();
@@ -100,7 +98,7 @@ public sealed class TutorialHost : MonoBehaviour
     {
         _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
-        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
+        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);
@@ -144,7 +142,6 @@ public sealed class TutorialHost : MonoBehaviour
 | --- | --- |
 | Canvas | 场景 Canvas |
 | Events | 场景 EventSystem |
-| WindowsMount | Canvas 下的 WindowsMount |
 | OpenWindowButton | Canvas 下的 OpenWindowButton |
 
 将 OpenWindowButton 的 Interactable 初始设为关闭。确认窗口 Prefab 根对象已经挂载 HelloWindow，Close Button 引用已赋值。容器加载 Prefab 后取得其中的业务脚本；不调用 `new HelloWindow()`。

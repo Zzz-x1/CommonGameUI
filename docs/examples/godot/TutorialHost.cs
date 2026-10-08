@@ -25,7 +25,7 @@ public partial class TutorialHost : Control
         _openWindowButton = GetNode<Button>("OpenWindow");
         UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
-        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
+        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;

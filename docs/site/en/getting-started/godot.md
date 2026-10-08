@@ -60,11 +60,10 @@ public partial class HelloWindow : EngineUI.UINode
 
 ## 4. Create the Main scene and its host
 
-Create a Control scene and save it as `Main.tscn`. Add a `Windows` Control under the root; set its layout to Full Rect and Mouse Filter to Ignore. Add a Button named `OpenWindow`; set Layout to Bottom Center, Offsets to Left=-90, Top=-64, Right=90, Bottom=-20, Text to `Open window`, and enable Disabled initially.
+Create a Control scene and save it as `Main.tscn`. Add a Button under the root named `OpenWindow`; set Layout to Bottom Center, Offsets to Left=-90, Top=-64, Right=90, Bottom=-20, Text to `Open window`, and enable Disabled initially.
 
 ```text
 Main (Control, TutorialHost.cs)
-├── Windows (Control, Full Rect, Mouse Filter=Ignore)
 └── OpenWindow (Button)
 ```
 
@@ -101,7 +100,7 @@ public partial class TutorialHost : Control
         _openWindowButton = GetNode<Button>("OpenWindow");
         UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
-        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
+        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;

@@ -59,6 +59,31 @@ namespace StarCourt.UnityDemo.Tests
         }
         private static IEnumerator Await(Task task)
         { while (!task.IsCompleted) yield return null; task.GetAwaiter().GetResult(); }
+        [UnityTest] public IEnumerator AutomaticContainerMounts() => Await(AutomaticContainerMountsAsync());
+        private async Task AutomaticContainerMountsAsync()
+        {
+            var windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows");
+            var mount = windows.GetRoot();
+            Assert.That(mount.parent, Is.EqualTo(_canvas.transform));
+            Assert.That(mount.anchorMin, Is.EqualTo(Vector2.zero));
+            Assert.That(mount.anchorMax, Is.EqualTo(Vector2.one));
+            Assert.That(mount.offsetMin, Is.EqualTo(Vector2.zero));
+            Assert.That(mount.offsetMax, Is.EqualTo(Vector2.zero));
+            var structure = new UINode();
+            await structure.AttachAsync(windows, "Structure");
+            var nested = await structure.CreateContainerAsync<StackContainerNode>("Nested");
+            var nestedMount = nested.GetRoot();
+            Assert.That(nestedMount.parent, Is.EqualTo(mount));
+            await nested.DisposeAsync();
+            Assert.That(nestedMount.parent, Is.Null);
+            Assert.That(nestedMount.gameObject.activeSelf, Is.False);
+            var explicitContainer = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Borrowed", _mount);
+            await explicitContainer.DisposeAsync();
+            Assert.That(_mount.parent, Is.EqualTo(_canvas.transform));
+            await windows.DisposeAsync();
+            Assert.That(mount.parent, Is.Null);
+            Assert.That(mount.gameObject.activeSelf, Is.False);
+        }
         [UnityTest] public IEnumerator RootAndBorrowedTabs() => Await(RootAndBorrowedTabsAsync());
         private async Task RootAndBorrowedTabsAsync()
         {

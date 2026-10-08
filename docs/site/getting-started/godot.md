@@ -60,11 +60,10 @@ public partial class HelloWindow : EngineUI.UINode
 
 ## 4. 创建 Main 场景和宿主
 
-新建 Control 场景并保存为 `Main.tscn`。在根节点下添加 `Windows` Control，Layout 设为 Full Rect、Mouse Filter 设为 Ignore。再添加 Button，命名为 `OpenWindow`；Layout 选择 Bottom Center，Offsets 设为 Left=-90、Top=-64、Right=90、Bottom=-20，Text 设为 `Open window`，Disabled 初始开启。
+新建 Control 场景并保存为 `Main.tscn`。在根节点下添加 Button，命名为 `OpenWindow`；Layout 选择 Bottom Center，Offsets 设为 Left=-90、Top=-64、Right=90、Bottom=-20，Text 设为 `Open window`，Disabled 初始开启。
 
 ```text
 Main (Control, TutorialHost.cs)
-├── Windows (Control, Full Rect, Mouse Filter=Ignore)
 └── OpenWindow (Button)
 ```
 
@@ -101,7 +100,7 @@ public partial class TutorialHost : Control
         _openWindowButton = GetNode<Button>("OpenWindow");
         UI = EngineUI.UI.Create(this);
         UI.BindLifetime(this);
-        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows", GetNode<Control>("Windows"));
+        _windows = await UI.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         UI.Register<HelloWindow>("res://HelloWindow.tscn");
         await _windows.OpenAsync<HelloWindow>();
         _openWindowButton.Pressed += OpenWindow;

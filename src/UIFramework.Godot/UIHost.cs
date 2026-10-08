@@ -7,7 +7,8 @@ public sealed class UIHost : IUIHost, IUILog
     private readonly int _thread = System.Environment.CurrentManagedThreadId;
     private readonly Viewport _viewport;
     private readonly LifetimeRunner _frames;
-    public UIHost(Viewport viewport) { _viewport = viewport; _frames = LifetimeRunner.Get(viewport.GetTree()); }
+    public Control? RootMount { get; }
+    public UIHost(Viewport viewport, Control? rootMount = null) { RootMount = rootMount; _viewport = viewport; _frames = LifetimeRunner.Get(viewport.GetTree()); }
     public Task NextFrameAsync() { VerifyAccess(); return _frames.NextFrameAsync(); }
     public void VerifyAccess()
     {

@@ -2012,3 +2012,9 @@ Core 在进入准备完成后同步显示窗口，并在同一调用帧启动窗
 正式名称为 Common Game UI Framework，简称及 GitHub 仓库名为 CommonGameUI。根 README、双语文档首页和站点标题使用发布名称。本次发布基于当前已提交的实现；现有源码程序集及 API 命名空间仍为 UIFramework，安装示例以实际源码为准。
 
 发布许可（2026-10-08，已确认）：框架源码采用 MIT License，根目录 LICENSE 使用 GitHub 标准 MIT 文本，版权署名为发布账号 Zzz-x1。第三方 Demo 素材仍遵循各自原有许可和署名记录，不改为项目代码许可。
+
+## 29. 可选容器挂载（2026-10-09，已确认）
+
+两端 CreateContainerAsync<T>(name, mount = null, token = default) 允许省略挂载。省略时查找最近逻辑祖先的显示对象，创建铺满父区域的专属空挂载；结构 Root 使用 UIHost.RootMount。Unity UI.Create 使用 Canvas；Godot UI.Create 使用 Control owner，非 Control owner 可显式提供 rootMount。没有可用挂载直接报错，不猜测场景根。自动挂载由容器释放；显式挂载保持借用，不随容器销毁。不新增默认项目节点、Canvas 或绘制层级策略。入门示例使用自动挂载，客户端已有分区与层序继续显式挂载。
+
+验证：Godot 入门 headless 13 项检查、Unity AutomaticContainerMounts 单项 Play Mode 通过，覆盖 Root 自动挂载、跨结构节点查找、铺满布局及自有／借用挂载释放。Godot Demo 重新生成成功，0 警告、0 错误；Unity 适配源代码由原生测试重新编译。中英文教程代码和链接检查通过。未运行全量回归或完整客户端验收。

@@ -26,7 +26,7 @@ UIContext UI.Create(Canvas canvas, EventSystem events, IUIResourceLoader loader 
 Task AttachToAsync(this UINode node, IUINode parent, string name, CancellationToken token = default)
 Task BindAsync(this TabContainerNode tabs, string name, UINode node, CancellationToken token = default)
 Task AttachToAsync(this IUINode node, IUINode parent, string name, RectTransform rect, CancellationToken token = default)
-Task<T> CreateContainerAsync<T>(this IUINode parent, string name, RectTransform mount, CancellationToken token = default) where T : ContainerNode, new()
+Task<T> CreateContainerAsync<T>(this IUINode parent, string name, RectTransform mount = null, CancellationToken token = default) where T : ContainerNode, new()
 Task BindAsync(this TabContainerNode tabs, string name, RectTransform page, CancellationToken token = default)
 Task BindAsync(this TabContainerNode tabs, string name, IUINode node, RectTransform page, CancellationToken token = default)
 RectTransform GetRoot(this IUINode node)
@@ -65,7 +65,8 @@ TransitionFrame(Vector2 offset = default, Vector2 relativeOffset = default, floa
 ## Low-level adapter types
 
 ```csharp
-UIHost(EventSystem events, FramePump frames)
+UIHost(EventSystem events, FramePump frames, RectTransform rootMount = null)
+RectTransform RootMount { get; }
 void UIHost.VerifyAccess()
 Task UIHost.NextFrameAsync()
 object UIHost.CaptureFocus()

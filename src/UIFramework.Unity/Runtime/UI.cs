@@ -16,7 +16,7 @@ namespace UIFramework.Unity
             {
                 if (!canvas || !canvas.isActiveAndEnabled) throw new ArgumentException("An active scene Canvas is required.", nameof(canvas));
                 var frames = LifetimeRunner.Get().Frames;
-                var host = new UIHost(events, frames);
+                var host = new UIHost(events, frames, (RectTransform)canvas.transform);
                 return new UIContext(host, loader ?? new UIResourceLoader(host), logger ?? host);
             }
             catch (Exception ex) { Report(ex, "Create Unity UI context"); throw; }
@@ -66,10 +66,49 @@ namespace UIFramework.Unity
             try { return node.Node.AttachAsync(parent, name, new UIElement(Host(parent), rect), token); }
             catch (Exception ex) { UI.Report(ex, "Attach Unity node " + name); throw; }
         }
-        public static async Task<T> CreateContainerAsync<T>(this IUINode parent, string name, RectTransform mount, CancellationToken token = default) where T : ContainerNode, new()
+        public static async Task<T> CreateContainerAsync<T>(this IUINode parent, string name, RectTransform mount = null, CancellationToken token = default) where T : ContainerNode, new()
         {
-            try { var node = new T(); await node.AttachToAsync(parent, name, mount, token); return node; }
-            catch (Exception ex) { UI.Report(ex, "Create Unity container " + name); throw; }
+            GameObject owned = null;
+            T node = null;
+            try
+            {
+                var host = Host(parent);
+                token.ThrowIfCancellationRequested();
+                node = new T();
+                var automatic = ReferenceEquals(mount, null);
+                if (automatic)
+                {
+                    RectTransform ancestor = host.RootMount;
+                    for (var current = parent; current != null; current = current.Parent)
+                    {
+                        if (current.Element == null) continue;
+                        ancestor = (current.Element as UIElement ?? throw new InvalidOperationException("Expected a Unity display.")).Rect;
+                        break;
+                    }
+                    if (!ancestor) throw new InvalidOperationException("Automatic container mounting requires a parent display or a UIHost root mount.");
+                    owned = new GameObject(name, typeof(RectTransform));
+                    owned.layer = ancestor.gameObject.layer;
+                    mount = (RectTransform)owned.transform;
+                    mount.SetParent(ancestor, false);
+                    mount.anchorMin = Vector2.zero;
+                    mount.anchorMax = Vector2.one;
+                    mount.offsetMin = mount.offsetMax = Vector2.zero;
+                }
+                await node.AttachAsync(parent, name, new UIElement(host, mount, owned: automatic), token);
+                return node;
+            }
+            catch (Exception ex)
+            {
+                if (owned && (node == null || node.State != NodeState.Disposed)) UI.Cleanup(ex, () =>
+                {
+                    owned.SetActive(false);
+                    owned.transform.SetParent(null, false);
+                    if (Application.isPlaying) UnityEngine.Object.Destroy(owned);
+                    else UnityEngine.Object.DestroyImmediate(owned);
+                });
+                UI.Report(ex, "Create Unity container " + name);
+                throw;
+            }
         }
         public static Task BindAsync(this TabContainerNode tabs, string name, RectTransform page, CancellationToken token = default) => tabs.BindAsync(name, new CoreNode(), page, token);
         public static Task BindAsync(this TabContainerNode tabs, string name, IUINode node, RectTransform page, CancellationToken token = default)

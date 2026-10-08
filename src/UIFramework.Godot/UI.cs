@@ -7,7 +7,7 @@ namespace UIFramework.Godot;
 public static class UI
 {
     /// <summary>Create a context from a live scene node. Creates only the structural Root.</summary>
-    public static UIContext Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null)
+    public static UIContext Create(global::Godot.Node owner, IUIResourceLoader? loader = null, IUILog? logger = null, Control? rootMount = null)
     {
         try
         {
@@ -15,7 +15,7 @@ public static class UI
             if (!GodotObject.IsInstanceValid(owner) || owner.IsQueuedForDeletion())
                 throw new ObjectDisposedException(nameof(owner));
             if (!owner.IsInsideTree()) throw new InvalidOperationException("The UI owner must be inside the Godot scene tree.");
-            var host = new UIHost(owner.GetViewport());
+            var host = new UIHost(owner.GetViewport(), rootMount ?? owner as Control);
             return new UIContext(host, loader ?? new UIResourceLoader(host), logger ?? host);
         }
         catch (Exception ex) { Report(ex, "Create Godot UI context"); throw; }
@@ -77,19 +77,45 @@ public static class UIExtensions
         catch (Exception ex) { UI.Report(ex, $"Attach Godot node '{name}'"); throw; }
     }
 
-    /// <summary>Create and attach a container to a borrowed mount. No project containers are supplied automatically.</summary>
-    public static async Task<T> CreateContainerAsync<T>(this IUINode parent, string name, Control mount,
+    /// <summary>Create a container with an owned full-size mount, or borrow an explicit mount.</summary>
+    public static async Task<T> CreateContainerAsync<T>(this IUINode parent, string name, Control? mount = null,
         CancellationToken token = default) where T : ContainerNode, new()
     {
+        Control? owned = null;
         try
         {
-            VerifyControl(parent, mount);
+            parent.Context.Host.VerifyAccess();
             token.ThrowIfCancellationRequested();
             var node = new T();
-            await node.AttachToAsync(parent, name, mount, token);
+            var automatic = mount == null;
+            if (automatic)
+            {
+                var host = parent.Context.Host as UIHost ?? throw new InvalidOperationException("Expected a Godot UI context.");
+                var ancestor = host.RootMount;
+                for (var current = parent; current != null; current = current.Parent)
+                {
+                    if (current.Element == null) continue;
+                    ancestor = (current.Element as UIElement ?? throw new InvalidOperationException("Expected a Godot display.")).Control;
+                    break;
+                }
+                if (ancestor == null) throw new InvalidOperationException("Automatic container mounting requires a parent display or a UIHost root mount.");
+                VerifyControl(parent, ancestor);
+                owned = new Control { Name = name, MouseFilter = Control.MouseFilterEnum.Ignore };
+                ancestor.AddChild(owned);
+                owned.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+                mount = owned;
+            }
+            VerifyControl(parent, mount!);
+            await node.AttachAsync(parent, name, new UIElement(mount!, owned: automatic), token);
             return node;
         }
-        catch (Exception ex) { UI.Report(ex, $"Create Godot container '{name}'"); throw; }
+        catch (Exception ex)
+        {
+            if (owned != null && GodotObject.IsInstanceValid(owned) && !owned.IsQueuedForDeletion())
+                UI.Cleanup(ex, () => { owned.GetParent()?.RemoveChild(owned); owned.QueueFree(); });
+            UI.Report(ex, $"Create Godot container '{name}'");
+            throw;
+        }
     }
 
     /// <summary>Bind a borrowed embedded page using a basic node.</summary>

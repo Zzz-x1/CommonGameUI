@@ -57,13 +57,12 @@ public sealed class HelloWindow : EngineUI.UINode
 
 ## 4. Build the Main scene and write its host
 
-Delete the temporary `HelloWindow` instance from the scene after saving its Prefab. Under Canvas, create an Empty UI Object named `WindowsMount`; set its RectTransform to four-sided Stretch with all offsets at 0, and do not add an Image. Add a Button named `OpenWindowButton`; use bottom-center anchors, Width 180, Height 44, Pos Y 40, and the label `Open Window`.
+Delete the temporary `HelloWindow` instance from the scene after saving its Prefab. Under Canvas, add a Button named `OpenWindowButton`; use bottom-center anchors, Width 180, Height 44, Pos Y 40, and the label `Open Window`.
 
 Set Canvas to Screen Space - Overlay. Set CanvasScaler to **Scale With Screen Size** with a reference resolution of `1000 × 700`. The scene needs an EventSystem; if Unity created one when you added a Button, keep that object.
 
 ```text
 Canvas (Canvas, CanvasScaler, TutorialHost)
-├── WindowsMount (RectTransform, Stretch, no Image)
 └── OpenWindowButton (Button)
 EventSystem
 ```
@@ -87,7 +86,6 @@ public sealed class TutorialHost : MonoBehaviour
 {
     public Canvas Canvas;
     public EventSystem Events;
-    public RectTransform WindowsMount;
     public Button OpenWindowButton;
 
     private readonly List<Task> _tasks = new List<Task>();
@@ -100,7 +98,7 @@ public sealed class TutorialHost : MonoBehaviour
     {
         _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
-        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
+        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);
@@ -144,7 +142,6 @@ Attach `TutorialHost.cs` to the Canvas. Assign these references in the Inspector
 | --- | --- |
 | Canvas | The scene Canvas |
 | Events | The scene EventSystem |
-| WindowsMount | WindowsMount under Canvas |
 | OpenWindowButton | OpenWindowButton under Canvas |
 
 Set OpenWindowButton's Interactable value off initially. Confirm that the window Prefab root has a HelloWindow component and its Close Button reference is assigned. The container loads the Prefab and returns its business script; it does not call `new HelloWindow()`.

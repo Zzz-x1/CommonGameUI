@@ -47,6 +47,22 @@ public partial class TutorialSmoke : global::Godot.Node
         AddChild(host);
         await host.Initialization;
         var windows = (PanelContainerNode)host.UI.Root.GetChild("Windows");
+        var automaticMount = windows.GetRoot();
+        Check(automaticMount.GetParent() == host && automaticMount.AnchorRight == 1 && automaticMount.AnchorBottom == 1,
+            "The automatic mount must fill the Context root Control.");
+        var structure = new UIFramework.UINode();
+        await structure.AttachAsync(windows, "Structure");
+        var nested = await structure.CreateContainerAsync<StackContainerNode>("Nested");
+        var nestedMount = nested.GetRoot();
+        Check(nestedMount.GetParent() == automaticMount, "Structural ancestors must use the nearest display.");
+        await nested.DisposeAsync();
+        Check(nestedMount.IsQueuedForDeletion() && nestedMount.GetParent() == null, "Owned mounts must be detached and freed.");
+        var borrowed = new Control();
+        host.AddChild(borrowed);
+        var explicitContainer = await host.UI.Root.CreateContainerAsync<PanelContainerNode>("Borrowed", borrowed);
+        await explicitContainer.DisposeAsync();
+        Check(!borrowed.IsQueuedForDeletion() && borrowed.GetParent() == host, "Explicit mounts must survive disposal.");
+        borrowed.QueueFree();
         Check(windows.TryGet<HelloWindow>(out var first), "The first window must open at startup.");
         Check(first!.GetControl<Label>("Content/Title").Text == "Hello, UIFramework!", "The window resource must be loaded.");
         Check(first!.GetControl<Button>("Content/Close") != null, "The resource must contain its close button.");
@@ -61,6 +77,7 @@ public partial class TutorialSmoke : global::Godot.Node
 
         await host.UI.DisposeAsync();
         Check(host.UI.Root.State == NodeState.Disposed, "Disposing the Context must close the mounted window.");
+        Check(automaticMount.IsQueuedForDeletion(), "Context disposal must release automatic mounts.");
         host.QueueFree();
     }
 }

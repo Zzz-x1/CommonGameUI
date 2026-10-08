@@ -11,7 +11,6 @@ public sealed class TutorialHost : MonoBehaviour
 {
     public Canvas Canvas;
     public EventSystem Events;
-    public RectTransform WindowsMount;
     public Button OpenWindowButton;
 
     private readonly List<Task> _tasks = new List<Task>();
@@ -24,7 +23,7 @@ public sealed class TutorialHost : MonoBehaviour
     {
         _ui = EngineUI.UI.Create(Canvas, Events);
         _ui.BindLifetime(gameObject);
-        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", WindowsMount);
+        _windows = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows");
         _ui.Register<HelloWindow>("UI/HelloWindow");
         await _windows.OpenAsync<HelloWindow>();
         OpenWindowButton.onClick.AddListener(OpenWindow);

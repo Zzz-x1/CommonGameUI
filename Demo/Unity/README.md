@@ -89,3 +89,5 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 默认遮罩在 UIContext 上统一配置为 0.2 秒淡入／淡出，Modal 容器自动继承；特殊容器可覆盖、禁用或恢复默认。
 
 离开装备详情时，两张对比浮窗的关闭请求一次提交，由 Panel 按顺序执行；等待全部完成后继续页面返回。
+
+容器挂载：客户端保留场景中显式配置的内容区和绘制层序。简单全区域容器可用 `await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows")` 自动创建挂载；完整示例见 `docs/examples` 两端入门工程。
