@@ -1,4 +1,4 @@
-# UIFramework 文档
+# CommonGameUI 文档
 
 用 C# 管理游戏 UI 的窗口、页面历史、Tab、弹窗与生命周期，控件和布局使用引擎原生资源。
 

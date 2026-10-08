@@ -1,4 +1,4 @@
-# UIFramework Documentation
+# CommonGameUI Documentation
 
 Manage game windows, page history, tabs, dialogs and lifecycle in C#. Use native engine resources for widgets and layout.
 

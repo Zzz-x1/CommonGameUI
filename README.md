@@ -1,6 +1,6 @@
-# UIFramework
+# Common Game UI Framework
 
-纯 C#、渲染无关的游戏 UI 管理框架。节点管理界面关系，容器管理打开、切换和返回；控件与布局使用引擎原生资源。
+**CommonGameUI** 是纯 C#、渲染无关的游戏 UI 管理框架。节点管理界面关系，容器管理打开、切换和返回；控件与布局使用引擎原生资源。
 
 [中文文档](docs/site/index.md) · [English documentation](docs/site/en/index.md)
 

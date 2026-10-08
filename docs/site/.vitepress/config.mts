@@ -52,7 +52,7 @@ function sidebar(en: boolean) {
 }
 
 export default defineConfig({
-  title: 'UIFramework',
+  title: 'CommonGameUI',
   description: 'Renderer-independent C# UI management / 渲染无关的 C# UI 管理框架',
   base: process.env.DOCS_BASE || '/',
   cleanUrls: false,
