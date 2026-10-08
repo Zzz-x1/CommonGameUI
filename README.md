@@ -43,3 +43,7 @@ Core 目标 netstandard2.1。Godot 持续维护完整 UI 客户端；Unity 客�
 ## 维护
 
 [文档构建与发布](docs/site/README.md) · [设计与验收记录](docs/design-decisions.md) · [素材来源](Demo/Godot/Assets/SOURCES.md)
+
+## 许可证
+
+框架源码采用 [MIT License](LICENSE)。Demo 的第三方素材遵循各自的许可与署名要求，见[素材来源](Demo/Godot/Assets/SOURCES.md)。

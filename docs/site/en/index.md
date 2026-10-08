@@ -12,3 +12,7 @@ Manage game windows, page history, tabs, dialogs and lifecycle in C#. Use native
 | [Troubleshooting](troubleshooting.md) | Resolve integration errors and understand current limits |
 
 [简体中文](../index.md)
+
+## License
+
+Framework source is licensed under the [MIT License](https://github.com/Zzz-x1/CommonGameUI/blob/main/LICENSE). Third-party Demo assets retain their own licenses and attribution requirements.

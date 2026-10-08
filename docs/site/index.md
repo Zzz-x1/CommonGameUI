@@ -12,3 +12,7 @@
 | [Troubleshooting](troubleshooting.md) | 查找常见接入错误与当前限制 |
 
 [English](en/index.md)
+
+## 许可证
+
+框架源码采用 [MIT License](https://github.com/Zzz-x1/CommonGameUI/blob/main/LICENSE)。Demo 的第三方素材遵循各自的许可与署名记录。
