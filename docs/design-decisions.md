@@ -2061,3 +2061,14 @@ ShopContent 初始化直接获取 Shop，却因没有绑定行预先登记来源
 不新增源码包即可调试现有包：Prepare-Mvvm.ps1 增加 Configuration（Debug／Release，默认 Release），生成并同时复制 Core、MVVM 和 Weaver 的 DLL 与匹配 portable PDB。Debug 沿用 SDK 非优化编译；源码与符号保持同次编译对应。Run-UnityDemo.ps1 转发配置，避免调试准备后再次生成 Release。原有安装目录、API 和默认 Release 流程不变；PDB 和 DLL 均为忽略的生成产物，不纳入 Git。中英文 Unity 适配文档提供 VS 附加调试、源码匹配及修改后重新生成的步骤。
 
 交付核验：Debug 构建成功，0 警告、0 错误。三组 DLL／PDB 与 Debug 输出文件散列一致，程序集 DebuggableAttribute 均确认 DisableOptimizations。只进行交付、脚本／双语示例和差异检查，未运行完整回归或实际 VS 附加断点验证，未切换用户窗口。
+
+
+## 34. Unity SO VM 自动初始化（2026-10-10，已确认）
+
+Unity SO VM 可实现可选 IViewModelInitialize.OnInitialize()，不要求框架基类、Runtime 管理或项目回调注册。同步回调在框架完成创建、模板复制和整个嵌套资产图重映射后执行，先处理新建的依赖，再返回实例／应用绑定；每个新实例一次。查询共享实例、隐藏和缓存不会重复调用。资产循环引用不意味着循环业务初始化依赖可用。原始资产、编辑器预览和 Manual 借用实例不执行回调；Unity 原生 OnEnable 时序更早，不作为业务初始化入口。
+
+共享 MVVM 的可选 IViewModelInitialization 资产适配接口负责调用，Core 不引用 Unity；Godot 资产适配暂不实现这一初始化能力。Unity ViewModelAssets 和 GlobalViewModelProvider 增加 preview=false 参数，预览流程显式传 true，仅准备初始值，不执行 VM 业务初始化。回调失败记录并传播原异常，失败实例继续由已建立的节点／Context 所有权释放；不返回失败实例，不吞错或重试。销毁继续调用 IDisposable／IAsyncDisposable 后释放原生资产，不新增销毁回调或所有权包装。
+
+第 32 节关于框架不调用业务方法的规则调整为：不猜测 Initialize／Prepare 等项目方法；显式实现 IViewModelInitialize 后自动执行 OnInitialize。回调可准备业务状态及事件订阅；数据异步加载仍显式等待业务方法，不采用 async void。
+
+验收：初始化顺序／一次执行及原始异常传播 2 项核心专项、Unity 原生 SO 绑定与初始化 1 项通过，覆盖独立 Context、模板不变、共享查询不重复及预览跳过。两端使用的 MVVM 程序集已更新；Unity Debug DLL 与生成输出 SHA256 一致，匹配 PDB 已同步，Godot Demo 生成成功。修改页中英文代码一致，源码／差异检查通过。未执行全量回归、编辑器 GUI 操作或 IL2CPP 导出；Fruit-platter 的项目自定义 Initialize 尚未迁移为此接口。

@@ -45,8 +45,11 @@ public class RuntimeTests
         public void Exception(Exception error, string context) => Errors.Add(error); }
     private sealed class Config(params ViewModelSource[] sources) : IViewBindingConfiguration
     { public IReadOnlyList<ViewModelSource> Sources => sources; public void Apply(UINode node) { } }
-    private sealed class Assets : IViewModelAssets
+    private sealed class Assets : IViewModelAssets, IViewModelInitialization
     {
+        public readonly List<object> Initialized = new();
+        public Action<OwnedVm>? Initializer;
+        public void Initialize(object instance) { Initialized.Add(instance); Initializer?.Invoke((OwnedVm)instance); }
         public bool CanCreate(Type type) => false;
         public object CreateInstance(Type type) => throw new NotSupportedException();
         public readonly List<object> Released = new();
@@ -66,6 +69,29 @@ public class RuntimeTests
         public void Remove(int index) => Items.RemoveAt(index);
         public void Move(int oldIndex, int newIndex) { var value = Items[oldIndex]; Items.RemoveAt(oldIndex); Items.Insert(newIndex, value); Moves++; }
         public void Clear() => Items.Clear(); public void Dispose() => Disposals++;
+    }
+    [Fact]
+    public async Task NativeInitializationRunsAfterRemapAndOnlyOncePerInstance()
+    {
+        var child = new OwnedVm { Gold = 2 }; var template = new OwnedVm { Gold = 1, Other = child };
+        template.Items.Add(child);
+        var assets = new Assets();
+        assets.Initializer = vm => { if (vm.Other != null) { Assert.NotSame(child, vm.Other); Assert.Same(vm.Other, vm.Items.Single()); Assert.Contains(vm.Other, assets.Initialized); } };
+        await using var runtime = new MvvmRuntime(); runtime.RegisterGlobalViewModelProvider(new Provider(assets, template));
+        var value = runtime.GetGlobalViewModel<OwnedVm>("Player");
+        Assert.Same(value, runtime.GetGlobalViewModel<OwnedVm>("Player"));
+        Assert.Equal(2, assets.Initialized.Count); Assert.DoesNotContain(template, assets.Initialized);
+        Assert.Equal(new object[] { value.Other!, value }, assets.Initialized);
+    }
+    [Fact]
+    public async Task NativeInitializationFailureIsLoggedAndPropagatesOriginalException()
+    {
+        var error = new IOException("initialize identity"); var log = new Log();
+        var assets = new Assets { Initializer = _ => throw error };
+        var runtime = new MvvmRuntime(log); runtime.RegisterGlobalViewModelProvider(new Provider(assets, new OwnedVm()));
+        Assert.Same(error, Assert.Throws<IOException>(() => runtime.GetGlobalViewModel<OwnedVm>("Player")));
+        Assert.Contains(error, log.Errors);
+        await runtime.DisposeAsync(); Assert.Single(assets.Released);
     }
     private sealed class Provider(Assets assets, params object[] definitions) : IGlobalViewModelProvider
     { public IReadOnlyDictionary<string, object> ViewModels => definitions.Select((value, index) => (value, index)).ToDictionary(entry => entry.index == 0 ? "Player" : "Player" + entry.index, entry => entry.value); public IViewModelAssets Assets => assets; }

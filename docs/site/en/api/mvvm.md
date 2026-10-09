@@ -140,9 +140,31 @@ class GlobalViewModelCatalog : ScriptableObject
 class GlobalViewModelProvider : IGlobalViewModelProvider
 {
     const string ResourcePath = "UIFramework/Mvvm";
-    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels);
-    static GlobalViewModelProvider Load();
+    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false);
+    static GlobalViewModelProvider Load(bool preview = false);
 }
 ```
 
 Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
+
+
+## Unity SO initialization
+
+```csharp
+// UIFramework.Mvvm.Unity
+interface IViewModelInitialize
+{
+    void OnInitialize();
+}
+class ViewModelAssets : IViewModelAssets, IViewModelInitialization
+{
+    ViewModelAssets(bool preview = false);
+}
+// UIFramework.Mvvm: optional adapter hook
+interface IViewModelInitialization
+{
+    void Initialize(object instance);
+}
+```
+
+Runtime SO instances receive one callback after initial data preparation. preview=true skips business initialization; callers prepare Manual instances. Cleanup uses IDisposable/IAsyncDisposable.

@@ -140,9 +140,31 @@ class GlobalViewModelCatalog : ScriptableObject
 class GlobalViewModelProvider : IGlobalViewModelProvider
 {
     const string ResourcePath = "UIFramework/Mvvm";
-    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels);
-    static GlobalViewModelProvider Load();
+    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false);
+    static GlobalViewModelProvider Load(bool preview = false);
 }
 ```
 
 Unity 默认 Provider 由适配器自动注册；自定义 Provider 可用程序集标记自动注册，需有无参构造并为 IL2CPP 保留构造入口。Provider 只提供定义及资产适配，不持有 Context VM 实例。重复名称、缺失名称或资产和未织入 VM 直接报错。Godot 的来源编辑器本轮保持原行为。
+
+
+## Unity SO 初始化
+
+```csharp
+// UIFramework.Mvvm.Unity
+interface IViewModelInitialize
+{
+    void OnInitialize();
+}
+class ViewModelAssets : IViewModelAssets, IViewModelInitialization
+{
+    ViewModelAssets(bool preview = false);
+}
+// UIFramework.Mvvm: optional adapter hook
+interface IViewModelInitialization
+{
+    void Initialize(object instance);
+}
+```
+
+运行时 SO 完成初始数据准备后自动回调一次。preview=true 跳过业务初始化；Manual 实例由调用方准备。清理沿用 IDisposable／IAsyncDisposable。

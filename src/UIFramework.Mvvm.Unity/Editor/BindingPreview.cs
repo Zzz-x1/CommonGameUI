@@ -40,7 +40,7 @@ namespace UIFramework.Mvvm.EditorUnity
             var required = new HashSet<string>(view.Bindings.Where(binding => binding.Enabled && binding.Kind != ViewBindingKind.Command &&
                 !(binding.Kind == ViewBindingKind.Property && binding.ConverterInput == ConverterInput.Constant)).Select(binding => binding.Source.Split('.')[0]));
             var configuration = view.Sources.Where(source => required.Contains(source.Name)).ToArray();
-            var provider = GlobalViewModelProvider.Load();
+            var provider = GlobalViewModelProvider.Load(preview: true);
             var missing = configuration.Where(source => source.Name == "Item" || !provider.ViewModels.ContainsKey(source.Name)).Select(source => source.Name).ToArray();
             if (missing.Length != 0) throw new InvalidOperationException("缺少预览来源：" + string.Join(", ", missing));
             _runtime.RegisterGlobalViewModelProvider(provider);
@@ -49,7 +49,7 @@ namespace UIFramework.Mvvm.EditorUnity
             var host = new EngineUI.UIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<EngineUI.FramePump>());
             _ui = new UIContext(host, new EngineUI.UIResourceLoader(host));
             _ui.ConfigureMvvm(_runtime, node => node.Name == "Preview" ? (IViewBindingConfiguration)new SourceConfiguration { SourcesList = sources }
-                : node.Element is EngineUI.UIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new EngineMvvm.ViewModelAssets());
+                : node.Element is EngineUI.UIElement display && display.Rect.TryGetComponent<MvvmBindings>(out var configuration) ? new ItemConfiguration { View = configuration } : null, new EngineMvvm.ViewModelAssets(preview: true));
             try
             {
                 var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview");

@@ -18,8 +18,10 @@ using UIFramework.Mvvm.Unity;
 namespace StarCourt.UnityDemo.Tests
 {
     [ViewModel]
-    public sealed class NativePlayerVm : ScriptableObject
+    public sealed class NativePlayerVm : ScriptableObject, IViewModelInitialize
     {
+        public int InitializationCount { get; private set; }
+        public void OnInitialize() => InitializationCount++;
         [SerializeField] private int gold;
         [SerializeField] private List<int> items = new List<int>();
         [FieldNotify] public int Gold { get => gold; set => gold = value; }
@@ -94,7 +96,7 @@ namespace StarCourt.UnityDemo.Tests
             config.Bindings.Add(new ViewBindingData { Target = label.GetComponent<Text>(), Source = template.name + ".Gold", Converter = "FormatNumber" });
             config.Bindings.Add(new ViewBindingData { Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
-            var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
+            var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm.InitializationCount, Is.EqualTo(1)); Assert.That(template.InitializationCount, Is.EqualTo(0)); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
             button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
             slider.GetComponent<Slider>().maxValue = 200;
@@ -104,12 +106,19 @@ namespace StarCourt.UnityDemo.Tests
             node.ResumeBinding("Player.Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));
             vm.Items.Add(2); Assert.That(template.Items.Count, Is.EqualTo(1)); vm.Gold = 0; Assert.That(button.GetComponent<Button>().interactable, Is.False);
             Assert.That(runtime.GetGlobalViewModel<NativePlayerVm>(template.name), Is.SameAs(vm));
+            Assert.That(vm.InitializationCount, Is.EqualTo(1));
             var otherEvents = new GameObject("Other Events", typeof(EventSystem));
             var otherCanvas = new GameObject("Other Canvas", typeof(Canvas));
             var otherUi = EngineUI.UI.Create(otherCanvas.GetComponent<Canvas>(), otherEvents.GetComponent<EventSystem>());
             otherUi.GetMvvm().RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
             var independent = otherUi.GetMvvm().GetGlobalViewModel<NativePlayerVm>(template.name);
             Assert.That(independent, Is.Not.SameAs(vm)); Assert.That(independent.Gold, Is.EqualTo(100));
+            Assert.That(independent.InitializationCount, Is.EqualTo(1));
+            await using (var previewRuntime = new MvvmRuntime())
+            {
+                previewRuntime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }, preview: true));
+                Assert.That(previewRuntime.GetGlobalViewModel<NativePlayerVm>(template.name).InitializationCount, Is.EqualTo(0));
+            }
             await otherUi.DisposeAsync();
             UnityEngine.Object.Destroy(otherCanvas); UnityEngine.Object.Destroy(otherEvents);
             await node.DisposeAsync(); vm.Gold = 50; Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));

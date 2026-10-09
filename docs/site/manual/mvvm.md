@@ -66,6 +66,35 @@ var shop = this.GetViewModel<ShopVm>("Shop");
 var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
+## Unity SO 初始化回调
+
+SO VM 可实现 `UIFramework.Mvvm.Unity.IViewModelInitialize`，无需继承框架基类或注册初始化函数：
+
+```csharp
+[ViewModel]
+public class PlayerVm : UnityEngine.ScriptableObject, IViewModelInitialize, IDisposable
+{
+    [UnityEngine.SerializeField] private int gold;
+    [FieldNotify] public int Gold { get => gold; set => gold = value; }
+
+    public void OnInitialize()
+    {
+        // Connect business services or subscribe to events here.
+    }
+
+    public void Dispose()
+    {
+        // Disconnect business events here.
+    }
+}
+```
+
+框架完成实例创建、模板复制和嵌套 VM 引用重映射后调用 `OnInitialize`，随后才返回实例或应用绑定。每个新实例一次；共享实例查询、隐藏及缓存重开不会重复调用。原始资产、编辑器预览和通过 `SetViewModel` 借用的实例不执行该回调。
+
+回调同步执行，用于业务状态准备及事件订阅；需要等待的数据加载由业务方法显式完成。不要使用 `async void`。回调失败记录并传播原始异常，失败实例仍由所属节点／Context 完成清理。Unity 自身的 `OnEnable` 发生得更早，不能替代框架回调。资产循环引用允许保留，但回调不要相互依赖对方已经完成业务初始化。
+
+销毁时框架先调用 `IDisposable` 或等待 `IAsyncDisposable`，再销毁 SO。独立 VM 随节点销毁；Provider 共享 VM 随 Context 释放。预览不运行初始化，清理方法应能处理尚未业务初始化的实例。框架不会猜测或调用项目自定义的 `Initialize`／`Prepare` 方法；实现此接口才会自动执行业务回调。
+
 ## 选择实例方式
 
 | 方式 | 常见场景 | 释放时机 |

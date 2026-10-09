@@ -10,9 +10,10 @@ namespace UIFramework.Mvvm.Unity
     {
         public const string ResourcePath = "UIFramework/Mvvm";
         public IReadOnlyDictionary<string, object> ViewModels { get; }
-        public IViewModelAssets Assets { get; } = new ViewModelAssets();
-        public GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels)
+        public IViewModelAssets Assets { get; }
+        public GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false)
         {
+            Assets = new ViewModelAssets(preview);
             var definitions = new Dictionary<string, object>(StringComparer.Ordinal);
             foreach (var asset in viewModels)
             {
@@ -22,7 +23,7 @@ namespace UIFramework.Mvvm.Unity
             }
             ViewModels = definitions;
         }
-        public static GlobalViewModelProvider Load() => new GlobalViewModelProvider(
-            Resources.LoadAll<GlobalViewModelCatalog>(ResourcePath).SelectMany(catalog => catalog.ViewModels));
+        public static GlobalViewModelProvider Load(bool preview = false) => new GlobalViewModelProvider(
+            Resources.LoadAll<GlobalViewModelCatalog>(ResourcePath).SelectMany(catalog => catalog.ViewModels), preview);
     }
 }

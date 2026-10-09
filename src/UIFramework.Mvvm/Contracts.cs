@@ -66,6 +66,11 @@ public interface IViewModelAssets
     void Remap(object template, object instance, Func<object, object> resolveViewModel);
     void Release(object instance);
 }
+/// <summary>Optional native-asset initialization after the complete clone graph is prepared.</summary>
+public interface IViewModelInitialization
+{
+    void Initialize(object instance);
+}
 public interface IBindingTarget : IDisposable
 {
     Type ValueType { get; }

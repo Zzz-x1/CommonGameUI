@@ -73,7 +73,18 @@ public sealed class MvvmRuntime : IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
         var graph = shared ? _shared : new Dictionary<object, object>(ReferenceComparer.Instance);
         var added = new List<object>();
-        try { return Resolve(type, template); }
+        var created = new List<(object Value, IViewModelAssets? Assets)>();
+        try
+        {
+            var result = Resolve(type, template);
+            for (var i = created.Count - 1; i >= 0; i--)
+                if (created[i].Assets is IViewModelInitialization initialization)
+                {
+                    try { initialization.Initialize(created[i].Value); }
+                    catch (Exception error) { Report(error, "Initialize MVVM asset " + created[i].Value.GetType().FullName); throw; }
+                }
+            return result;
+        }
         catch { foreach (var key in added) graph.Remove(key); throw; }
         object Resolve(Type requestedType, object? source)
         {
@@ -91,6 +102,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
             if (shared) _owned.Add((value, adapter)); else own(value, adapter);
             if (!requestedType.IsInstanceOfType(value)) throw new InvalidCastException("VM factory/template type mismatch: " + requestedType.FullName);
             if (value is not IMvvmObject) throw new InvalidOperationException("ViewModel has not been woven: " + requestedType.FullName);
+            created.Add((value, adapter));
             if (source != null)
             {
                 graph.Add(source, value); added.Add(source);

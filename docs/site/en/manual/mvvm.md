@@ -66,6 +66,35 @@ Business code can retrieve the Context instance when needed:
 var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
+## Unity SO initialization callback
+
+An SO VM can implement `UIFramework.Mvvm.Unity.IViewModelInitialize`. No framework base class or initializer registration is required:
+
+```csharp
+[ViewModel]
+public class PlayerVm : UnityEngine.ScriptableObject, IViewModelInitialize, IDisposable
+{
+    [UnityEngine.SerializeField] private int gold;
+    [FieldNotify] public int Gold { get => gold; set => gold = value; }
+
+    public void OnInitialize()
+    {
+        // Connect business services or subscribe to events here.
+    }
+
+    public void Dispose()
+    {
+        // Disconnect business events here.
+    }
+}
+```
+
+The framework calls `OnInitialize` after creating the instance, copying template data, and remapping nested VM references, before returning the instance or applying bindings. Each new instance runs it once. Shared lookups, hiding, and cache reuse do not repeat it. Original assets, editor previews, and instances borrowed through `SetViewModel` do not run the callback.
+
+The callback is synchronous, for business state preparation and event subscriptions. Await data loading explicitly through business methods; do not use `async void`. Failures are logged and propagated unchanged; the owning node or Context still cleans up failed instances. Unity's own `OnEnable` runs earlier and does not replace this callback. Cyclic asset references remain supported, but callbacks must not depend on each other having completed business initialization.
+
+During disposal, the framework calls `IDisposable` or awaits `IAsyncDisposable`, then destroys the SO. Independent VMs belong to their node; provider-shared VMs belong to the Context. Previews skip initialization, so cleanup must also handle instances without business initialization. The framework does not guess or invoke custom `Initialize` or `Prepare` methods; implement this interface to receive the automatic callback.
+
 ## Choose ownership
 
 | Mode | Typical use | Released by |

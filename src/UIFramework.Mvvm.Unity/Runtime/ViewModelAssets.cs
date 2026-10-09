@@ -5,8 +5,14 @@ using UnityEngine;
 
 namespace UIFramework.Mvvm.Unity
 {
-    public sealed class ViewModelAssets : IViewModelAssets
+    public sealed class ViewModelAssets : IViewModelAssets, IViewModelInitialization
     {
+        private readonly bool _preview;
+        public ViewModelAssets(bool preview = false) => _preview = preview;
+        public void Initialize(object instance)
+        {
+            if (!_preview && instance is IViewModelInitialize initialization) initialization.OnInitialize();
+        }
         public bool CanCreate(Type type) => typeof(ScriptableObject).IsAssignableFrom(type);
         public object CreateInstance(Type type) { var value = ScriptableObject.CreateInstance(type); value.hideFlags = HideFlags.HideAndDontSave; return value; }
         public bool IsAsset(object value) => value is ScriptableObject && value is IMvvmObject;
