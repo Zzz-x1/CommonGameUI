@@ -23,7 +23,8 @@ namespace UIFramework.Tests.Unity
         {
             private readonly List<Exception> _errors;
             public TestLog(List<Exception> errors) { _errors = errors; }
-            public void Error(Exception error, string stage) => _errors.Add(error);
+            public void Error(string message) => new ConsoleUILog().Error(message);
+            public void Exception(Exception error, string stage) => _errors.Add(error);
         }
         private PanelContainerNode _windows;
         private static IEnumerator Await(Task task)

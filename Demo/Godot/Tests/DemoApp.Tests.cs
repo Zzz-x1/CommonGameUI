@@ -322,7 +322,8 @@ public partial class DemoApp
     private sealed class TestLog : IUILog
     {
         public readonly List<Exception> Errors = new();
-        public void Error(Exception exception, string context) => Errors.Add(exception);
+        public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception exception, string context) => Errors.Add(exception);
     }
 
     private async Task RunAnimationBoundaryTestsAsync(Action<bool, string> pass)

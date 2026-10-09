@@ -13,7 +13,8 @@ public sealed class BindingPauseTests
         public object? CaptureFocus() => null;
         public void Focus(IUIElement? element) { }
         public void RestoreFocus(object? value) { }
-        public void Error(Exception error, string context) => Errors.Add(error);
+        public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception error, string context) => Errors.Add(error);
     }
     private sealed class Loader : IUIResourceLoader
     { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }

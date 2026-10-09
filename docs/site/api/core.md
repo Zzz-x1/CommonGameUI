@@ -241,7 +241,7 @@ ValueTask DisposeAsync(UINode node)
 
 ## Transitions / resources / failures
 
-Select 同步只读；每次 Create 产生执行对象，成功创建执行对象后，Restore 总会执行。进度单调 0..1。UIResourceLease.Dispose 同步归还持有；附加失败不包装主异常。ConsoleUILog.Error(Exception exception, string context) 可用作基础控制台日志。
+Select 同步只读；每次 Create 产生执行对象，成功创建执行对象后，Restore 总会执行。进度单调 0..1。UIResourceLease.Dispose 同步归还持有；附加失败不包装主异常。ConsoleUILog.Exception(Exception exception, string context) 可用作基础控制台日志。
 
 ```csharp
 IUITransition Transitions.Select(Func<TransitionContext, IUITransition> select)
@@ -293,7 +293,8 @@ public interface IUIHost
 }
 public interface IUILog
 {
-    void Error(Exception exception, string context);
+    void Error(string message);
+    void Exception(Exception exception, string context);
 }
 ```
 

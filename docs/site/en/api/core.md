@@ -241,7 +241,7 @@ ValueTask DisposeAsync(UINode node)
 
 ## Transitions / resources / failures
 
-Select is synchronous/read-only; Create produces a run and Restore always executes after a run is successfully created. Progress is monotonic 0..1. UIResourceLease.Dispose releases ownership synchronously. Secondary failures do not wrap the primary. ConsoleUILog.Error(Exception exception, string context) provides basic console logging.
+Select is synchronous/read-only; Create produces a run and Restore always executes after a run is successfully created. Progress is monotonic 0..1. UIResourceLease.Dispose releases ownership synchronously. Secondary failures do not wrap the primary. ConsoleUILog.Exception(Exception exception, string context) provides basic console logging.
 
 ```csharp
 IUITransition Transitions.Select(Func<TransitionContext, IUITransition> select)
@@ -293,7 +293,8 @@ public interface IUIHost
 }
 public interface IUILog
 {
-    void Error(Exception exception, string context);
+    void Error(string message);
+    void Exception(Exception exception, string context);
 }
 ```
 

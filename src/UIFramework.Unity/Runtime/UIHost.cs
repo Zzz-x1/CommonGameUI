@@ -51,9 +51,10 @@ namespace UIFramework.Unity
                 VerifyEvents(); _events.SetSelectedGameObject(target);
             }
         }
-        public void Error(Exception exception, string context)
+        public void Error(string message) => Debug.LogError("[UI] " + message);
+        public void Exception(Exception exception, string context)
         {
-            Debug.LogError("[UI] " + context);
+            Error(context);
             Debug.LogException(exception);
         }
     }

@@ -30,7 +30,8 @@ namespace StarCourt.UnityDemo.Tests
         private sealed class RecordingLog : IUILog
         {
             public readonly List<Exception> Errors = new List<Exception>();
-            public void Error(Exception exception, string context) => Errors.Add(exception);
+            public void Error(string message) => new ConsoleUILog().Error(message);
+            public void Exception(Exception exception, string context) => Errors.Add(exception);
         }
         [UnitySetUp]
         public IEnumerator SetUp()

@@ -33,7 +33,8 @@ public sealed class UIHost : IUIHost, IUILog
             && control.IsVisibleInTree() && control.FocusMode != Control.FocusModeEnum.None
             && (control is not BaseButton button || !button.Disabled)) control.GrabFocus();
     }
-    public void Error(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
+    public void Error(string message) => GD.PushError($"[UI] {message}");
+    public void Exception(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
 }
 
 public sealed class UIResourceLoader : IUIResourceLoader

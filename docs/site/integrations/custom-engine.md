@@ -35,7 +35,8 @@ public interface IUIHost
 }
 public interface IUILog
 {
-    void Error(Exception exception, string context);
+    void Error(string message);
+    void Exception(Exception exception, string context);
 }
 ```
 
@@ -62,3 +63,5 @@ host、loader、logger、mountElement 是项目实现。
 自定义动画实现 IUITransition／IUITransitionRun；遮罩实现 IUIBackdropFactory／IUIBackdrop，并观察 dismiss 返回的任务。接口见 [Core API](../api/core.md)。
 
 用真实引擎验证加载、取消、输入、焦点、动画恢复和资源释放；核心测试不替代引擎测试。
+
+Error 记录错误文本，Exception 记录原始异常及操作上下文。Unity 适配的异常入口使用 Debug.LogException；日志不替代异常传播。

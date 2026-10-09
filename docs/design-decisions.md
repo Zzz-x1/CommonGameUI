@@ -2030,3 +2030,9 @@ Unity 每行 ViewBindingData 保存 ViewModel 原生资产引用和 IsGlobal。�
 本轮仅迁移 Unity 来源 GUI；Godot 保留既有 Resource 来源配置。两端共享的 Runtime 接口和程序集同步更新。无旧 Unity 来源类型或兼容读取层。
 
 验证：核心 GlobalProviders 专项 1 项、Unity 原生 MVVM 2 项及默认目录自动注册 1 项通过，包含同 Context 共享、不同 Context 隔离、模板不变、窗口关闭保留、Context 释放和集合注入。Unity 编辑器实际执行 Undo、Prefab Override、局部／全局资产预览及恢复检查通过。中英文教程／代码／链接检查通过；Unity 包内 MVVM DLL 与 Release 输出 SHA256 一致，Godot Demo 已重新生成，0 警告、0 错误。未运行全量回归、Godot 原生 GUI 或 WebGL／IL2CPP 导出。
+
+## 31. 错误与异常日志分离（2026-10-09，已确认）
+
+IUILog 提供同步 Error(string message) 与 Exception(Exception exception, string context)。Error 记录普通错误文本；框架捕获的原始异常统一调用 Exception，保持上下文、去重、附加清理失败及原始异常传播。Unity Error 使用 Debug.LogError，Exception 先记录操作上下文，再使用 Debug.LogException(exception)，不把异常转成普通错误字符串或包装新异常。Godot 与控制台同步实现两种入口，项目日志实现、测试与中英文接口说明同步迁移，不保留旧 Error(Exception, context) 重载。
+
+交付检查：Core／MVVM 生成成功，Unity 实际引用 DLL 已同步且 Core SHA256 与 Release 一致；Godot Demo 重新生成成功，0 警告、0 错误；Unity 批处理编译无 C# 错误。只进行接口迁移、调用点与差异检查及必要程序集交付，不执行全量测试。

@@ -41,7 +41,8 @@ public class RuntimeTests
     private sealed class Loader : IUIResourceLoader
     { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
     private sealed class Log : IUILog
-    { public readonly List<Exception> Errors = new(); public void Error(Exception error, string context) => Errors.Add(error); }
+    { public readonly List<Exception> Errors = new(); public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception error, string context) => Errors.Add(error); }
     private sealed class Config(params ViewModelSource[] sources) : IViewBindingConfiguration
     { public IReadOnlyList<ViewModelSource> Sources => sources; public void Apply(UINode node) { } }
     private sealed class Assets : IViewModelAssets

@@ -41,7 +41,8 @@ public sealed class TestHost : IUIHost, IUILog, IUIResourceLoader
     public void FocusElement(IUIElement? element) => Focus = element;
     void IUIHost.Focus(IUIElement? element) => FocusElement(element);
     public void RestoreFocus(object? focus) => Focus = focus;
-    public void Error(Exception exception, string context) { Errors.Add(exception); ErrorReported?.TrySetResult(exception); }
+    public void Error(string message) => new ConsoleUILog().Error(message);
+    public void Exception(Exception exception, string context) { Errors.Add(exception); ErrorReported?.TrySetResult(exception); }
     public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)
     {
         if (LoadGate != null) await LoadGate.Task.WaitAsync(token);

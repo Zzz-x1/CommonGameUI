@@ -35,7 +35,8 @@ public interface IUIHost
 }
 public interface IUILog
 {
-    void Error(Exception exception, string context);
+    void Error(string message);
+    void Exception(Exception exception, string context);
 }
 ```
 
@@ -62,3 +63,5 @@ host, loader, logger and mountElement are project implementations.
 Custom animation implements IUITransition/IUITransitionRun. Backdrops implement IUIBackdropFactory/IUIBackdrop and observe dismiss tasks. See [Core API](../api/core.md).
 
 Verify loading, cancellation, input, focus, animation restoration and resource release in the engine. Core tests do not replace native tests.
+
+Error records error messages; Exception records original exceptions and operation context. Unity uses Debug.LogException for exceptions. Logging does not replace exception propagation.

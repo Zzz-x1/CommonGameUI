@@ -387,7 +387,7 @@ public class UINode : IUINode
     internal void ReportFailure(Exception failure, string context)
     {
         if (_context != null) _context.Report(failure, context);
-        else new ConsoleUILog().Error(failure, context);
+        else new ConsoleUILog().Exception(failure, context);
     }
 }
 

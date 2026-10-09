@@ -29,7 +29,8 @@ public partial class DemoApp
     private sealed class LifetimeLog : IUILog
     {
         public readonly List<Exception> Errors = new();
-        public void Error(Exception exception, string context) => Errors.Add(exception);
+        public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception exception, string context) => Errors.Add(exception);
     }
     private async Task RunLifetimeTestsAsync(Action<bool, string> pass)
     {

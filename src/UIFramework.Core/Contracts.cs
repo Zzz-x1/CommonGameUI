@@ -32,12 +32,14 @@ public interface IUIHost
 
 public interface IUILog
 {
-    void Error(Exception exception, string context);
+    void Error(string message);
+    void Exception(Exception exception, string context);
 }
 
 public sealed class ConsoleUILog : IUILog
 {
-    public void Error(Exception exception, string context) => Console.Error.WriteLine($"[UI] {context}\n{exception}");
+    public void Error(string message) => Console.Error.WriteLine($"[UI] {message}");
+    public void Exception(Exception exception, string context) => Console.Error.WriteLine($"[UI] {context}\n{exception}");
 }
 
 public interface IUITransition

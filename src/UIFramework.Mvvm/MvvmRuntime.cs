@@ -189,7 +189,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
         }
     }
     internal void Report(Exception error, string context)
-    { try { Log.Error(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
+    { try { Log.Exception(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
     private sealed class ReferenceComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceComparer Instance = new();

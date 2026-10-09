@@ -62,7 +62,8 @@ namespace StarCourt.UnityDemo.Tests
                 if (createdRoot) UnityEditor.AssetDatabase.DeleteAsset("Assets/Resources/UIFramework");
             }
         }
-        private sealed class TestLog : IUILog { public readonly List<Exception> Errors = new List<Exception>(); public void Error(Exception error, string context) => Errors.Add(error); }
+        private sealed class TestLog : IUILog { public readonly List<Exception> Errors = new List<Exception>(); public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception error, string context) => Errors.Add(error); }
         private static async Task CollectionRun()
         {
             var events = new GameObject("Events", typeof(EventSystem)); var canvas = new GameObject("Canvas", typeof(Canvas));

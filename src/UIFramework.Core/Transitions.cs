@@ -6,7 +6,7 @@ public static class Transitions
     public static IUITransition Select(Func<TransitionContext, IUITransition> select)
     {
         try { return new SelectedTransition(select ?? throw new ArgumentNullException(nameof(select))); }
-        catch (Exception ex) { new ConsoleUILog().Error(ex, "Configure transition selector"); throw; }
+        catch (Exception ex) { new ConsoleUILog().Exception(ex, "Configure transition selector"); throw; }
     }
 
     internal static IUITransition Resolve(IUITransition recipe, TransitionContext context)

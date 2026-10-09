@@ -25,7 +25,8 @@ public sealed class MvvmTests
     private sealed class Host : IUIHost
     { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? e) { } public void RestoreFocus(object? e) { } }
     private sealed class Loader : IUIResourceLoader { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
-    private sealed class Log : IUILog { public readonly List<Exception> Errors = new(); public void Error(Exception error, string context) => Errors.Add(error); }
+    private sealed class Log : IUILog { public readonly List<Exception> Errors = new(); public void Error(string message) => new ConsoleUILog().Error(message);
+        public void Exception(Exception error, string context) => Errors.Add(error); }
     private sealed class Target : IBindingTarget
     {
         public Type ValueType => typeof(int); public int Value; public event Action? Changed;

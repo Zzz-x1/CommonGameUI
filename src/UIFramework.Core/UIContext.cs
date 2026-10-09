@@ -280,7 +280,7 @@ public sealed class UIContext : IAsyncDisposable
         const string key = "UIFramework.Logged";
         if (exception.Data.Contains(key)) return;
         exception.Data[key] = true;
-        try { Log.Error(exception, context); }
+        try { Log.Exception(exception, context); }
         catch (Exception logFailure) { UIFailure.AddSecondary(exception, logFailure); Console.Error.WriteLine(logFailure); }
     }
 
