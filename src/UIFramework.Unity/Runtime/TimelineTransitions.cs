@@ -62,8 +62,11 @@ namespace UIFramework.Unity
                 do
                 {
                     token.ThrowIfCancellationRequested();
-                    if (_stopped || !_director.playableGraph.IsValid() || _director.state != PlayState.Playing || _director.playableAsset != _asset)
-                        throw new InvalidOperationException("UI Timeline playback was interrupted.");
+                    if (_director.playableAsset != _asset)
+                        throw new InvalidOperationException("UI Timeline asset changed during playback.");
+                    if (_stopped || _director.state != PlayState.Playing) return;
+                    if (!_director.playableGraph.IsValid())
+                        throw new InvalidOperationException("UI Timeline graph is invalid during playback.");
                     elapsed = Math.Min(_duration, Time.realtimeSinceStartupAsDouble - started);
                     _director.time = elapsed; _director.Evaluate();
                     _context.ReportProgress(_duration == 0 ? 1 : (float)(elapsed / _duration));

@@ -9,6 +9,7 @@ CommonGameUI 首个公开 Beta，采用 MIT 协议。API 尚未稳定，后续�
 - 生命周期、资源管理、条件转场、Unity Timeline／Animation 与 Godot AnimationPlayer。
 - 可选 MVVM：属性通知、双向绑定、命令参数、异步集合条目、转换器和编辑器配置。
 - Unity 全局 SO VM：Provider 名称查找、按需初始化、Context 共享与异步释放。
+- Timeline 主动停止／暂停按正常结束处理，资产被替换或无效播放图仍明确报错。
 - 两端客户端 Demo、中英文教程与 API 文档。
 
 ## 安装
