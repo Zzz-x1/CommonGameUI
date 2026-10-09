@@ -1,4 +1,5 @@
 param(
+    [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
     [switch]$PrepareOnly,
     [switch]$Play,
     [switch]$SelfTest,
@@ -8,7 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $taskWorkspace = Split-Path -Parent $PSScriptRoot
 $taskUnityProject = Join-Path $taskWorkspace 'Demo/Unity'
-& (Join-Path $PSScriptRoot 'Prepare-Mvvm.ps1')
+& (Join-Path $PSScriptRoot 'Prepare-Mvvm.ps1') -Configuration $Configuration
 if ($PrepareOnly -or (!$Play -and !$SelfTest -and !$RebuildAssets)) { return }
 
 function Invoke-UnityCommand([string]$Name, [string[]]$CommandArguments = @()) {

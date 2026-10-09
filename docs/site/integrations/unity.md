@@ -24,6 +24,18 @@ Button close = inventory.GetControl<Button>("Content/Close");
 - 支持 Timeline／PlayableDirector 和非循环 legacy AnimationClip，均按未缩放时间播放。
 - Resources 请求不可直接取消；释放框架引用不立即清空引擎缓存。
 
+## 在 Visual Studio 调试框架
+
+在仓库根目录生成并同步 Debug DLL 与匹配的 PDB：
+
+```powershell
+./scripts/Prepare-Mvvm.ps1 -Configuration Debug
+```
+
+Unity 刷新程序集后，在 VS 打开本仓库源码并设置断点，选择 **调试 → 附加 Unity 调试器**，连接使用该包的项目，再触发 UI 操作。单步跳过框架时关闭“启用仅我的代码”；Unity 编辑器须使用 Debug 优化模式。
+
+DLL 与 PDB 已复制到现有包的 Plugins 目录，不需安装源码包。源码必须与编译版本一致；修改后重新运行上述命令。使用 `Run-UnityDemo.ps1` 时也传入 `-Configuration Debug`，避免重新准备为 Release。恢复 Release 使用 `-Configuration Release`；两种配置都同步匹配的 PDB。
+
 ## 验证状态
 
 当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。客户端、适配器、生命周期及已保存 Timeline／AnimationClip 资源通过 31 项原生 Play Mode 回归。MVVM 编辑器 Undo／Prefab Override 与预览通过验证。独立入门教程的 C# 示例已在 Unity 6000.3.24f1 batchmode 编译；教程 UI 尚未原生运行验证。Unity Source Generator 工作流尚未接入。

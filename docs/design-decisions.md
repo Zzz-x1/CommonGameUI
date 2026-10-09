@@ -2054,3 +2054,10 @@ ShopContent 初始化直接获取 Shop，却因没有绑定行预先登记来源
 移除 Unity ViewBindingData 和共享 ViewModelSource 的 IsGlobal，不保留旧开关或转发。Unity GUI 只配置来源路径，Provider 选择器只帮助填写名称；预览从目录查找模板并独立克隆，缺少本地样本仍明确提示。Godot 保留 Resource 来源的三种创建配置，未显式提供来源时同样支持注册 Provider 的名称解析。业务 Prepare、服务注入及模块初始化由项目执行，框架不隐式调用业务方法。缺失来源异常含节点、业务类型、名称和请求类型。类型错误保持原异常类型并说明实际类型。
 
 验收：5 项核心专项、Unity 原生资产绑定与清理 1 项通过；共享 Provider 实例不会因节点关闭释放，本地替换可更新已有订阅。两端实际使用的程序集已刷新，Unity MVVM DLL 与 Release SHA256 一致；Godot Demo 生成成功，0 警告、0 错误。修改页中英文代码块一致。未执行全量回归、编辑器交互／预览验收、Godot 原生测试或 IL2CPP 导出。未修改 Fruit-platter；其业务源码对旧 ViewModelSource.IsGlobal 的判断须迁移为显式业务模块初始化。
+
+
+## 33. Unity DLL 调试交付（2026-10-10，已确认）
+
+不新增源码包即可调试现有包：Prepare-Mvvm.ps1 增加 Configuration（Debug／Release，默认 Release），生成并同时复制 Core、MVVM 和 Weaver 的 DLL 与匹配 portable PDB。Debug 沿用 SDK 非优化编译；源码与符号保持同次编译对应。Run-UnityDemo.ps1 转发配置，避免调试准备后再次生成 Release。原有安装目录、API 和默认 Release 流程不变；PDB 和 DLL 均为忽略的生成产物，不纳入 Git。中英文 Unity 适配文档提供 VS 附加调试、源码匹配及修改后重新生成的步骤。
+
+交付核验：Debug 构建成功，0 警告、0 错误。三组 DLL／PDB 与 Debug 输出文件散列一致，程序集 DebuggableAttribute 均确认 DisableOptimizations。只进行交付、脚本／双语示例和差异检查，未运行完整回归或实际 VS 附加断点验证，未切换用户窗口。
