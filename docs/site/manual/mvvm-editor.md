@@ -2,15 +2,15 @@
 
 在界面根节点添加 `MvvmBindings`。Unity 打开 **Window → UIFramework → View Bindings**；Godot 启用插件后使用底部 **View Bindings** 面板。
 
-## 1. 添加 Viewmodels
+## 1. 配置 VM 来源
 
-添加具名来源，例如 `Player`、`Settings`、`Inventory`。选择可引用的 VM 资产及创建方式。
+**Unity**：通过 Create → UIFramework → MVVM → Global ViewModel Catalog 创建目录 SO，保存到 `Assets/Resources/UIFramework/Mvvm/`。将可用的 SO VM 拖入目录的 ViewModels 列表。框架创建 Context 时自动读取所有目录并注册资产，首次使用时克隆；同一 Context 共用实例，不同 Context 默认独立。
 
-- 独立详情选 **CreateInstance**。
-- 业务传入对象选 **Manual**，在节点初始化调用 `SetViewModel`。
-- 多个窗口使用同一资产时选 **SharedAsset**。
+窗口不再保存 ViewModels 列表，也不选择 Creation。左侧 Global Viewmodels 只浏览目录中的资产；拖动成员到绑定表，自动保存 VM 资产引用。绑定详情也可开启“全局来源”并选择资产。
 
-资产列表只发现标记为 `ViewModel` 的原生 `ScriptableObject`／`Resource`，支持搜索和定位。Godot VM 资源使用 `[Tool]`。类型由资产引用取得，不保存类型名称；普通 C# VM 只通过代码创建与绑定。
+集合条目关闭“全局来源”，填写 `Item.Title`；Item 由集合自动注入。业务对象也使用本地来源，在初始化中调用 `SetViewModel`。需要编辑器成员类型和预览时，在绑定行引用“来源类型 / 预览资产”；运行时不会克隆该样本。
+
+**Godot**：继续添加具名来源，选择 Resource 和 CreateInstance／Manual／SharedAsset。Manual 实例在初始化中由业务提供。VM Resource 使用 `[Tool]`，普通 C# VM 通过代码创建和绑定。
 
 ## 2. 建立 View Bindings
 
@@ -44,7 +44,7 @@
 
 点击 **预览初始值**。预览使用独立 Runtime 和资产克隆，只刷新显示及列表，不执行命令、不反向写入原资产。结束后恢复控件原值。
 
-Manual 来源的引用资产用于声明类型和预览样本。预览克隆该资产；运行时仍必须由业务调用 `SetViewModel`，不会自动使用样本代替。缺少资产时不能开始预览。
+Unity 本地来源及 Godot Manual 来源的引用资产用于声明类型和预览样本。预览克隆该资产；运行时仍必须由业务调用 `SetViewModel`，不会自动使用样本代替。缺少资产时不能开始预览。
 
 ## 保存
 

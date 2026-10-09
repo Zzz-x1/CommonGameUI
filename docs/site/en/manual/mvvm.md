@@ -46,6 +46,16 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
 
+## Unity global VM catalogs
+
+Create a `GlobalViewModelCatalog` SO under `Assets/Resources/UIFramework/Mvvm/` and add SO VM references. Binding rows select global assets directly: no per-view source list, Creation setting, or Provider initialization code. Context initialization registers catalogs and first use creates a clone. Originals remain unchanged; global instances survive view closure and are released with the Context. Item and local injected objects are not catalog entries.
+
+Business code can retrieve the Context instance when needed:
+
+```csharp
+var player = ui.GetGlobalViewModel<PlayerVm>(playerAsset);
+```
+
 ## Choose ownership
 
 | Mode | Typical use | Released by |

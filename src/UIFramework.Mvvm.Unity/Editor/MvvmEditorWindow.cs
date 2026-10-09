@@ -20,7 +20,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private Label _status;
         private BindingPreview _preview;
         private readonly List<ViewBindingData> _visible = new List<ViewBindingData>();
-        private readonly List<ViewModelSourceData> _sourceRows = new List<ViewModelSourceData>();
+        private readonly List<ScriptableObject> _sourceRows = new List<ScriptableObject>();
         [MenuItem("Window/UIFramework/View Bindings")]
         public static void Open() => GetWindow<MvvmEditorWindow>("View Bindings");
         public static void Inspect(MvvmBindings view, Component target = null)
@@ -42,22 +42,19 @@ namespace UIFramework.Mvvm.EditorUnity
             _sources = rootVisualElement.Q<ListView>("sources"); _bindings = rootVisualElement.Q<ListView>("bindings");
             _status = rootVisualElement.Q<Label>("status"); _search = rootVisualElement.Q<TextField>("search");
             var view = rootVisualElement.Q<ObjectField>("view"); view.objectType = typeof(MvvmBindings); view.RegisterValueChangedCallback(e => Select((MvvmBindings)e.newValue));
-            _sources.makeItem = () => new Label(); _sources.bindItem = (row, i) => ((Label)row).text = _view.ViewModels[i].Name + " · " + _view.ViewModels[i].Creation;
+            _sources.makeItem = () => new Label(); _sources.bindItem = (row, i) => ((Label)row).text = _sourceRows[i].name;
             _sources.selectionChanged += _ => SourceDetails();
             _bindings.makeItem = () => { var row = new VisualElement(); row.AddToClassList("row"); row.Add(new Label()); row.Add(new Label()); row.Add(new Label()); return row; };
             _bindings.bindItem = (row, i) => { var b = _visible[i]; ((Label)row[0]).text = (b.Target ? b.Target.name : "选择控件") + " · " + b.Member; ((Label)row[1]).text = b.Source; ((Label)row[2]).text = b.Kind == ViewBindingKind.Property ? b.Mode.ToString() : b.Kind.ToString(); };
             _bindings.selectionChanged += _ => BindingDetails();
-            _sources.itemIndexChanged += (a, b) => Reorder("ViewModels", a, b);
             _bindings.itemIndexChanged += (a, b) => { if (_search.value.Length != 0) throw new InvalidOperationException("Clear search before reordering bindings."); Reorder("Bindings", a, b); };
             _search.RegisterValueChangedCallback(_ => Refresh());
-            rootVisualElement.Q<Button>("add-source").clicked += () => { Edit("ViewModels", array => { var index = array.arraySize; array.InsertArrayElementAtIndex(index); var row = array.GetArrayElementAtIndex(index); row.FindPropertyRelative("Name").stringValue = "Source" + (index + 1); row.FindPropertyRelative("Creation").intValue = 0; row.FindPropertyRelative("Template").objectReferenceValue = null; }); Refresh(); _sources.selectedIndex = _view.ViewModels.Count - 1; };
-            rootVisualElement.Q<Button>("delete-source").clicked += () => { if (_sources.selectedIndex >= 0) Edit("ViewModels", array => array.DeleteArrayElementAtIndex(_sources.selectedIndex)); Refresh(); };
             rootVisualElement.Q<Button>("add-binding").clicked += () => { AppendBinding(); Refresh(); _bindings.selectedIndex = _visible.Count - 1; };
             rootVisualElement.Q<Button>("delete-binding").clicked += () => { if (_bindings.selectedIndex >= 0) Edit("Bindings", array => array.DeleteArrayElementAtIndex(_view.Bindings.IndexOf(_visible[_bindings.selectedIndex]))); Refresh(); };
             rootVisualElement.Q<Button>("preview").clicked += () => { StopPreview(); _preview = new BindingPreview(_view); _status.text = "预览中：仅刷新显示，不执行命令或写回资产"; };
             rootVisualElement.Q<Button>("stop-preview").clicked += StopPreview;
             _bindings.RegisterCallback<DragUpdatedEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string) { DragAndDrop.visualMode = DragAndDropVisualMode.Copy; e.StopPropagation(); } });
-            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
+            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path, viewModel: DragAndDrop.GetGenericData("Mvvm.Asset") as ScriptableObject); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
             Undo.undoRedoPerformed += Refresh;
             if (_view) Select(_view); else if (Selection.activeGameObject) Select(Selection.activeGameObject.GetComponentInParent<MvvmBindings>());
         }
@@ -75,14 +72,14 @@ namespace UIFramework.Mvvm.EditorUnity
         }
         private void Binding(ViewBindingData binding, string member, Action<SerializedProperty> write) =>
             Edit("Bindings.Array.data[" + _view.Bindings.IndexOf(binding) + "]." + member, write);
-        private void Source(ViewModelSourceData source, string member, Action<SerializedProperty> write) =>
-            Edit("ViewModels.Array.data[" + _view.ViewModels.IndexOf(source) + "]." + member, write);
         private void Reorder(string path, int oldIndex, int newIndex) { Edit(path, array => array.MoveArrayElement(oldIndex, newIndex)); Refresh(); }
-        private void AppendBinding(Component target = null, string source = "")
+        private void AppendBinding(Component target = null, string source = "", ScriptableObject viewModel = null)
         {
             Edit("Bindings", array =>
             {
                 var index = array.arraySize; array.InsertArrayElementAtIndex(index); var row = array.GetArrayElementAtIndex(index);
+                row.FindPropertyRelative("ViewModel").objectReferenceValue = viewModel;
+                row.FindPropertyRelative("IsGlobal").boolValue = viewModel;
                 row.FindPropertyRelative("Enabled").boolValue = true;
                 row.FindPropertyRelative("Target").objectReferenceValue = target;
                 row.FindPropertyRelative("Source").stringValue = source; row.FindPropertyRelative("Member").stringValue = "text";
@@ -96,39 +93,41 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Refresh()
         {
             if (_sources == null) return;
-            _sourceRows.Clear(); if (_view) _sourceRows.AddRange(_view.ViewModels); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
+            _sourceRows.Clear(); _sourceRows.AddRange(GlobalViewModelProvider.Load().ViewModels.Cast<ScriptableObject>()); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
-            var missing = _view ? _view.ViewModels.Where(source => !source.Template).Select(source => source.Name).ToArray() : new string[0];
+            var missing = _view ? _view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command &&
+                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && !b.ViewModel)
+                .Select(b => b.Source).Distinct().ToArray() : Array.Empty<string>();
             rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
-            if (missing.Length != 0) _status.text = "缺少 VM 资产：" + string.Join(", ", missing);
+            if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
         }
         private void SourceDetails()
         {
-            _details.Clear(); _members.Clear(); if (!_view || _sources.selectedIndex < 0) return;
-            var source = _view.ViewModels[_sources.selectedIndex];
-            Text("名称", source.Name, v => Source(source, "Name", property => property.stringValue = v));
-            var modes = new DropdownField("创建方式", Enum.GetNames(typeof(ViewModelCreation)).ToList(), (int)source.Creation); modes.RegisterValueChangedCallback(e => { Source(source, "Creation", property => property.intValue = (int)Enum.Parse(typeof(ViewModelCreation), e.newValue)); Refresh(); }); _details.Add(modes);
-            var assets = AssetDatabase.FindAssets("t:ScriptableObject").Select(AssetDatabase.GUIDToAssetPath)
-                .SelectMany(AssetDatabase.LoadAllAssetsAtPath).OfType<ScriptableObject>()
-                .Where(asset => asset.GetType().IsDefined(typeof(ViewModelAttribute), false)).ToArray();
-            var search = new TextField("搜索 VM 资产"); _details.Add(search);
-            var picker = new DropdownField("VM 资产", assets.Select(AssetDatabase.GetAssetPath).ToList(), -1);
-            search.RegisterValueChangedCallback(e => picker.choices = assets.Where(asset => AssetDatabase.GetAssetPath(asset).IndexOf(e.newValue, StringComparison.OrdinalIgnoreCase) >= 0).Select(AssetDatabase.GetAssetPath).ToList());
-            picker.SetValueWithoutNotify(source.Template ? AssetDatabase.GetAssetPath(source.Template) : "");
-            picker.RegisterValueChangedCallback(e => { Source(source, "Template", property => property.objectReferenceValue = assets.Single(asset => AssetDatabase.GetAssetPath(asset) == e.newValue)); SourceDetails(); }); _details.Add(picker);
-            if (!source.Template) return;
-            _details.Add(new Button(() => EditorGUIUtility.PingObject(source.Template)) { text = "定位资产" });
-            var vmType = source.Template.GetType();
-            foreach (var property in vmType.GetProperties().Where(p => p.IsDefined(typeof(FieldNotifyAttribute), true))) Member(source.Name + "." + property.Name, property.PropertyType.Name);
-            foreach (var command in vmType.GetMethods().Where(m => m.IsDefined(typeof(CommandAttribute), true))) Member(source.Name + "." + command.Name, "Command");
+            _details.Clear(); _members.Clear(); if (_sources.selectedIndex < 0) return;
+            var asset = _sourceRows[_sources.selectedIndex];
+            _details.Add(new Label("全局 VM · " + asset.name));
+            _details.Add(new Button(() => EditorGUIUtility.PingObject(asset)) { text = "定位资产" });
+            foreach (var property in asset.GetType().GetProperties().Where(p => p.IsDefined(typeof(FieldNotifyAttribute), true)))
+                Member(asset.name + "." + property.Name, property.PropertyType.Name, asset);
+            foreach (var command in asset.GetType().GetMethods().Where(m => m.IsDefined(typeof(CommandAttribute), true)))
+                Member(asset.name + "." + command.Name, "Command", asset);
         }
-        private void Member(string path, string type)
-        { var row = new Label(path + " : " + type); row.RegisterCallback<PointerDownEvent>(e => { if (e.button != 0) return; DragAndDrop.PrepareStartDrag(); DragAndDrop.SetGenericData("Mvvm.Path", path); DragAndDrop.StartDrag(path); }); _members.Add(row); }
+        private void Member(string path, string type, ScriptableObject asset)
+        { var row = new Label(path + " : " + type); row.RegisterCallback<PointerDownEvent>(e => { if (e.button != 0) return; DragAndDrop.PrepareStartDrag(); DragAndDrop.SetGenericData("Mvvm.Path", path); DragAndDrop.SetGenericData("Mvvm.Asset", asset); DragAndDrop.StartDrag(path); }); _members.Add(row); }
         private void BindingDetails()
         {
             _details.Clear(); if (!_view || _bindings.selectedIndex < 0) return; var b = _visible[_bindings.selectedIndex];
+            Toggle("全局来源", b.IsGlobal, v => { Binding(b, "IsGlobal", property => property.boolValue = v); BindingDetails(); });
+            if (b.IsGlobal)
+            {
+                var assets = _sourceRows; var picker = new DropdownField("全局 VM", assets.Select(asset => AssetDatabase.GetAssetPath(asset)).ToList(), -1);
+                picker.SetValueWithoutNotify(b.ViewModel ? AssetDatabase.GetAssetPath(b.ViewModel) : "");
+                picker.RegisterValueChangedCallback(e => { var asset = assets.Single(value => AssetDatabase.GetAssetPath(value) == e.newValue); Binding(b, "ViewModel", property => property.objectReferenceValue = asset); Binding(b, "Source", property => property.stringValue = asset.name + "." + string.Join(".", b.Source.Split('.').Skip(1))); BindingDetails(); });
+                _details.Add(picker);
+            }
+            else Object("来源类型 / 预览资产", typeof(ScriptableObject), b.ViewModel, false, v => { Binding(b, "ViewModel", property => property.objectReferenceValue = v); BindingDetails(); });
             Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v).FirstOrDefault() ?? ""); BindingDetails(); });
             var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Binding(b, "Member", property => property.stringValue = e.newValue)); _details.Add(member);
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
@@ -136,8 +135,7 @@ namespace UIFramework.Mvvm.EditorUnity
             Choice("绑定类型", b.Kind, v => { Binding(b, "Kind", property => property.intValue = (int)v); BindingDetails(); });
             if (b.Kind == ViewBindingKind.Command)
             {
-                var parts = b.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(v => v.Name == parts[0]);
-                Type vmType = source?.Template ? source.Template.GetType() : null;
+                var parts = b.Source.Split('.'); Type vmType = SourceType(parts[0]);
                 foreach (var part in parts.Skip(1).Take(parts.Length - 2)) vmType = vmType?.GetProperty(part)?.PropertyType;
                 var command = vmType?.GetMethods().SingleOrDefault(m => m.Name == parts.Last() && m.IsDefined(typeof(CommandAttribute), true));
                 var parameter = command?.GetParameters().SingleOrDefault(p => p.ParameterType != typeof(System.Threading.CancellationToken));
@@ -156,7 +154,7 @@ namespace UIFramework.Mvvm.EditorUnity
                     {
                         if (b.ParameterMode == CommandParameterMode.Constant) CommandParameters.Validate(parameter.ParameterType, b.ParameterIsNull ? null : CommandParameters.ParseConstant(b.ParameterConstant, parameter.ParameterType));
                         else if (b.ParameterMode == CommandParameterMode.None) throw new ArgumentException("命令需要业务参数");
-                        else { var path = b.ParameterPath.Split('.'); var ps = _view.ViewModels.Single(v => v.Name == path[0]); var pt = ps.Template.GetType(); foreach (var part in path.Skip(1)) pt = pt.GetProperty(part)?.PropertyType ?? throw new MissingMemberException(pt.FullName, part); if (!parameter.ParameterType.IsAssignableFrom(pt)) throw new InvalidCastException("参数来源类型不匹配"); }
+                        else { var path = b.ParameterPath.Split('.'); var pt = SourceType(path[0]) ?? throw new InvalidOperationException("缺少参数来源类型"); foreach (var part in path.Skip(1)) pt = pt.GetProperty(part)?.PropertyType ?? throw new MissingMemberException(pt.FullName, part); if (!parameter.ParameterType.IsAssignableFrom(pt)) throw new InvalidCastException("参数来源类型不匹配"); }
                     }
                     catch (Exception error) { _details.Add(new HelpBox(error.Message, HelpBoxMessageType.Error)); }
                 }
@@ -192,13 +190,15 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Converter(string label, string current, ViewBindingData binding, bool reverse, Action<string> set)
         {
             Type sourceType = null, targetType = null;
-            var parts = binding.Source.Split('.'); var source = _view.ViewModels.FirstOrDefault(s => s.Name == parts[0]);
-            if (source != null) { sourceType = source.Template ? source.Template.GetType() : null; foreach (var part in parts.Skip(1)) sourceType = sourceType?.GetProperty(part)?.PropertyType; }
+            var parts = binding.Source.Split('.'); sourceType = SourceType(parts[0]);
+            foreach (var part in parts.Skip(1)) sourceType = sourceType?.GetProperty(part)?.PropertyType;
             if (binding.Target && binding.Kind == ViewBindingKind.Property && TargetMembers(binding.Target).Contains(binding.Member)) { targetType = BindingTargetRegistry.Find(binding.Target.GetType(), binding.Member).ValueType; }
             var input = reverse ? targetType : sourceType; var output = reverse ? sourceType : targetType;
             var choices = new List<string> { "" }; choices.AddRange(Converters.Discover().Where(c => (input != null || (!reverse && binding.ConverterInput == ConverterInput.Constant)) && output != null && (!reverse && binding.ConverterInput == ConverterInput.Constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name));
             var field = new DropdownField(label, choices, -1); field.SetValueWithoutNotify(current); field.RegisterValueChangedCallback(e => { set(e.newValue); BindingDetails(); }); _details.Add(field);
         }
+        private Type SourceType(string name) => _view.Bindings.FirstOrDefault(b => b.ViewModel && b.Source.Split('.')[0] == name)?.ViewModel.GetType()
+            ?? _sourceRows.FirstOrDefault(asset => asset.name == name)?.GetType();
         private static List<string> TargetMembers(Component target) => target
             ? BindingTargetRegistry.Members(target.GetType()).Select(d => d.Member).ToList() : new List<string>();
         private void Text(string label, string value, Action<string> set)
@@ -210,13 +210,14 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Choice<T>(string label, T value, Action<T> set) where T : Enum
         { var field = new DropdownField(label, Enum.GetNames(typeof(T)).ToList(), Convert.ToInt32(value)); field.RegisterValueChangedCallback(e => { set((T)Enum.Parse(typeof(T), e.newValue)); Refresh(); }); _details.Add(field); }
         private void StopPreview() { _preview?.Dispose(); _preview = null; }
+        private void OnProjectChange() { if (_sources != null) Refresh(); }
         private void OnDisable() { StopPreview(); Undo.undoRedoPerformed -= Refresh; }
     }
     [CustomEditor(typeof(MvvmBindings))]
     public sealed class MvvmBindingsInspector : UnityEditor.Editor
     {
         public override VisualElement CreateInspectorGUI()
-        { var root = new VisualElement(); root.Add(new Button(() => MvvmEditorWindow.Inspect((MvvmBindings)target)) { text = "打开 Viewmodels / View Bindings" }); root.Add(new PropertyField(serializedObject.FindProperty("ViewModels"))); root.Add(new PropertyField(serializedObject.FindProperty("Bindings"))); return root; }
+        { var root = new VisualElement(); root.Add(new Button(() => MvvmEditorWindow.Inspect((MvvmBindings)target)) { text = "打开 Viewmodels / View Bindings" }); root.Add(new PropertyField(serializedObject.FindProperty("Bindings"))); return root; }
     }
     [InitializeOnLoad]
     internal static class ControlBindingEntry

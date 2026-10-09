@@ -46,6 +46,16 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
 
+## Unity 全局 VM 目录
+
+创建 `GlobalViewModelCatalog` SO，保存到 `Assets/Resources/UIFramework/Mvvm/` 并添加 SO VM 引用。窗口绑定行直接选择全局资产；无需来源列表、Creation 或手动初始化 Provider。Context 初始化自动注册目录，首次绑定时创建克隆。原资产保持不变，窗口关闭保留全局实例，Context 释放时销毁；Item 与本地注入对象不进入目录。
+
+业务需要直接修改全局状态时，可以取得该 Context 的实例：
+
+```csharp
+var player = ui.GetGlobalViewModel<PlayerVm>(playerAsset);
+```
+
 ## 选择实例方式
 
 | 方式 | 常见场景 | 释放时机 |

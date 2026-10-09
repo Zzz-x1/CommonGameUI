@@ -8,10 +8,9 @@
     </ui:VisualElement>
     <ui:VisualElement class="columns">
       <ui:VisualElement class="sources pane">
-        <ui:Label text="Viewmodels" class="section-title" />
-        <ui:Label text="为当前界面提供具名数据源" class="hint" />
-        <ui:VisualElement class="actions"><ui:Button name="add-source" text="+ 数据源" /><ui:Button name="delete-source" text="删除" /></ui:VisualElement>
-        <ui:ListView name="sources" selection-type="Single" reorderable="true" />
+        <ui:Label text="Global Viewmodels" class="section-title" />
+        <ui:Label text="浏览全局目录资产中的 VM" class="hint" />
+        <ui:ListView name="sources" selection-type="Single" reorderable="false" />
         <ui:Label text="拖动成员到绑定表建立绑定" class="hint" />
         <ui:ScrollView name="members" />
       </ui:VisualElement>

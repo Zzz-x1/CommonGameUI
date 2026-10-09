@@ -66,6 +66,31 @@ public class RuntimeTests
         public void Move(int oldIndex, int newIndex) { var value = Items[oldIndex]; Items.RemoveAt(oldIndex); Items.Insert(newIndex, value); Moves++; }
         public void Clear() => Items.Clear(); public void Dispose() => Disposals++;
     }
+    private sealed class Provider(Assets assets, params object[] definitions) : IGlobalViewModelProvider
+    { public IReadOnlyList<object> ViewModels => definitions; public IViewModelAssets Assets => assets; }
+    [Fact]
+    public async Task GlobalProvidersRegisterDefinitionsAndCreateContextInstancesOnDemand()
+    {
+        var template = new OwnedVm { Gold = 42 }; var assets = new Assets();
+        var firstRuntime = new MvvmRuntime(); var secondRuntime = new MvvmRuntime();
+        firstRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
+        secondRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
+        Assert.Empty(assets.Released);
+        var config = new Config(new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Template = template, IsGlobal = true });
+        var first = Context(firstRuntime, config, assets); var second = Context(secondRuntime, config, assets);
+        var a = new UINode(); await a.AttachAsync(first.Root, "A");
+        var b = new UINode(); await b.AttachAsync(first.Root, "B");
+        var c = new UINode(); await c.AttachAsync(second.Root, "C");
+        var vm = a.GetViewModel<OwnedVm>("Player");
+        Assert.Same(vm, b.GetViewModel<OwnedVm>("Player"));
+        Assert.NotSame(vm, c.GetViewModel<OwnedVm>("Player"));
+        vm.Gold = 100; Assert.Equal(42, template.Gold);
+        await a.DisposeAsync(); Assert.Equal(0, vm.Disposals);
+        Assert.Throws<ArgumentException>(() => firstRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template)));
+        Assert.Throws<KeyNotFoundException>(() => firstRuntime.GetGlobalViewModel<OwnedVm>(new OwnedVm()));
+        await first.DisposeAsync(); Assert.Equal(1, vm.Disposals);
+        await second.DisposeAsync(); Assert.Equal(2, assets.Released.Count);
+    }
     private static UIContext Context(MvvmRuntime runtime, Config? config = null, Assets? assets = null)
     { var ui = new UIContext(new Host(), new Loader(), new Log()); ui.ConfigureMvvm(runtime, _ => config, assets); return ui; }
     private static ViewModelSource Source(string name, ViewModelCreation mode, object? template = null) => new() { Name = name, Type = typeof(OwnedVm), Creation = mode, Template = template };

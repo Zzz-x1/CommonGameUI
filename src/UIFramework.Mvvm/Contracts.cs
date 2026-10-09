@@ -48,6 +48,15 @@ public sealed class ViewModelSource
     public Type Type { get; set; } = typeof(object);
     public ViewModelCreation Creation { get; set; }
     public object? Template { get; set; }
+    public bool IsGlobal { get; set; }
+}
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+public sealed class GlobalViewModelProviderAttribute(Type providerType) : Attribute
+{ public Type ProviderType { get; } = providerType; }
+public interface IGlobalViewModelProvider
+{
+    IReadOnlyList<object> ViewModels { get; }
+    IViewModelAssets Assets { get; }
 }
 public interface IViewModelAssets
 {

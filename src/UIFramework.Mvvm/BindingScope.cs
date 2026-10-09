@@ -26,6 +26,8 @@ internal sealed class BindingScope : IAsyncDisposable
         _configuration = configuration;
         foreach (var source in configuration.Sources)
         {
+            if (source.IsGlobal)
+            { _sources.Add(source.Name, _runtime.GetGlobalViewModel<object>(source.Template ?? throw new ArgumentException("A global VM asset is required."))); continue; }
             if (source.Creation == ViewModelCreation.Manual) continue;
             var value = _runtime.Create(source.Type, source.Template, _assets, source.Creation == ViewModelCreation.SharedAsset, (item, adapter) => _owned.Add((item, adapter)));
             _sources.Add(source.Name, value);

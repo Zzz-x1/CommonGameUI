@@ -22,8 +22,7 @@ namespace NativeMvvm.Tests
             var child = new GameObject("Gold", typeof(RectTransform), typeof(Text)); child.transform.SetParent(root.transform, false);
             var label = child.GetComponent<Text>(); label.text = "before preview";
             var view = root.GetComponent<MvvmBindings>();
-            view.ViewModels.Add(new ViewModelSourceData { Name = "Player", Template = vm });
-            view.Bindings.Add(new ViewBindingData { Target = label, Source = "Player.Gold", Converter = "FormatNumber" });
+            view.Bindings.Add(new ViewBindingData { ViewModel = vm, Target = label, Source = "Player.Gold", Converter = "FormatNumber" });
             MvvmEditorWindow.Inspect(view, label);
             var window = Resources.FindObjectsOfTypeAll<MvvmEditorWindow>().Single();
             var input = window.rootVisualElement.Query<DropdownField>().ToList().Single(f => f.label == "转换器输入");
@@ -42,9 +41,9 @@ namespace NativeMvvm.Tests
             var saved = loaded.GetComponent<MvvmBindings>().Bindings[0];
             Check(saved.Converter == "FormatNumber" && saved.ConverterInput == ConverterInput.Constant && saved.ConverterConstant == "125", "converter configuration did not survive Prefab reload");
             Check(saved.Target == loaded.GetComponentInChildren<Text>(), "target reference did not remap to Prefab instance");
-            var loadedView = loaded.GetComponent<MvvmBindings>(); loadedView.ViewModels[0].Creation = ViewModelCreation.Manual;
+            var loadedView = loaded.GetComponent<MvvmBindings>();
             using (var preview = new BindingPreview(loadedView)) Check(loaded.GetComponentInChildren<Text>().text == "125", "Manual asset sample preview");
-            Check(loadedView.ViewModels[0].Template == vm && vm.Gold == 10, "Manual preview replaced original asset");
+            Check(loadedView.Bindings[0].ViewModel == vm && vm.Gold == 10, "Manual preview replaced original asset");
             PrefabUtility.UnloadPrefabContents(loaded);
             Undo.PerformUndo();
             Check(view.Bindings[0].ConverterInput == ConverterInput.ViewModel && view.Bindings[0].ConverterConstant == "", "Undo did not restore converter settings");
@@ -58,9 +57,9 @@ namespace NativeMvvm.Tests
             Undo.PerformUndo(); Check(instanceView.Bindings[0].ConverterConstant == "125", "Prefab Override Undo failed");
             UnityEngine.Object.DestroyImmediate(instance);
             var presentation = root.AddComponent<TargetPresentation>();
-            view.Bindings.Add(new ViewBindingData { Target = presentation, Member = "Delay", Source = "Player.Gold", Converter = "IntToFloat" });
+            view.Bindings.Add(new ViewBindingData { ViewModel = vm, Target = presentation, Member = "Delay", Source = "Player.Gold", Converter = "IntToFloat" });
             var buy = new GameObject("Buy", typeof(RectTransform), typeof(Button)); buy.transform.SetParent(root.transform, false);
-            view.Bindings.Add(new ViewBindingData { Kind = ViewBindingKind.Command, Target = buy.GetComponent<Button>(), Source = "Player.Purchase", ParameterMode = CommandParameterMode.Constant, ParameterConstant = "2" });
+            view.Bindings.Add(new ViewBindingData { ViewModel = vm, Kind = ViewBindingKind.Command, Target = buy.GetComponent<Button>(), Source = "Player.Purchase", ParameterMode = CommandParameterMode.Constant, ParameterConstant = "2" });
             MvvmEditorWindow.Inspect(view, presentation);
             Check(window.rootVisualElement.Query<DropdownField>().ToList().Single(f => f.label == "目标属性").choices.Contains("Delay"), "custom target is absent from GUI");
             MvvmEditorWindow.Inspect(view, buy.GetComponent<Button>());
@@ -69,7 +68,7 @@ namespace NativeMvvm.Tests
             var item = new GameObject("ItemTemplate", typeof(RectTransform), typeof(Text), typeof(MvvmBindings)); item.SetActive(false);
             item.GetComponent<MvvmBindings>().Bindings.Add(new ViewBindingData { Target = item.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
             vm.Items.Add(vm);
-            view.Bindings.Add(new ViewBindingData { Kind = ViewBindingKind.Collection, Target = items.GetComponent<RectTransform>(), Source = "Player.Items", ItemPrefab = item, OneTimeCollection = true, ItemSources = new System.Collections.Generic.List<CollectionSourceMapping> { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } } });
+            view.Bindings.Add(new ViewBindingData { ViewModel = vm, Kind = ViewBindingKind.Collection, Target = items.GetComponent<RectTransform>(), Source = "Player.Items", ItemPrefab = item, OneTimeCollection = true, ItemSources = new System.Collections.Generic.List<CollectionSourceMapping> { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } } });
             using (var preview = new BindingPreview(view))
             { Check(presentation.Delay == 10, "custom target preview"); Check(items.transform.childCount == 1 && items.transform.GetChild(0).GetComponent<Text>().text == "10", "mapped item preview"); buy.GetComponent<Button>().onClick.Invoke(); Check(vm.Gold == 10, "preview executed parameter command"); }
             Check(presentation.Delay == 7 && items.transform.childCount == 0, "custom target / item preview restore");

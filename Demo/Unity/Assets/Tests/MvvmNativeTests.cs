@@ -31,6 +31,37 @@ namespace StarCourt.UnityDemo.Tests
     {
         [UnityTest] public IEnumerator AssetCloneBindingsAndNodeCleanup() => Wait(Run());
         [UnityTest] public IEnumerator NativeCollectionRowsInitializeAsynchronously() => Wait(CollectionRun());
+        [UnityTest] public IEnumerator DefaultCatalogRegistersWithoutProjectInitialization() => Wait(DefaultCatalogRun());
+        private static async Task DefaultCatalogRun()
+        {
+            const string folder = "Assets/Resources/UIFramework/Mvvm/ProviderVerification";
+            var createdRoot = !System.IO.Directory.Exists("Assets/Resources/UIFramework");
+            System.IO.Directory.CreateDirectory(folder);
+            var template = ScriptableObject.CreateInstance<NativePlayerVm>(); template.Gold = 77;
+            UnityEditor.AssetDatabase.CreateAsset(template, folder + "/Player.asset");
+            var catalog = ScriptableObject.CreateInstance<GlobalViewModelCatalog>(); catalog.ViewModels.Add(template);
+            UnityEditor.AssetDatabase.CreateAsset(catalog, folder + "/Catalog.asset");
+            UnityEditor.AssetDatabase.SaveAssets();
+            var events = new GameObject("Catalog Events", typeof(EventSystem));
+            var canvas = new GameObject("Catalog Canvas", typeof(Canvas));
+            UIContext ui = null;
+            try
+            {
+                ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>());
+                var vm = ui.GetGlobalViewModel<NativePlayerVm>(template);
+                Assert.That(vm, Is.Not.SameAs(template)); Assert.That(vm.Gold, Is.EqualTo(77));
+                Assert.That(ui.GetGlobalViewModel<NativePlayerVm>(template), Is.SameAs(vm));
+                vm.Gold = 1; Assert.That(template.Gold, Is.EqualTo(77));
+                await ui.DisposeAsync(); ui = null;
+            }
+            finally
+            {
+                if (ui != null) await ui.DisposeAsync();
+                UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events);
+                UnityEditor.AssetDatabase.DeleteAsset(folder);
+                if (createdRoot) UnityEditor.AssetDatabase.DeleteAsset("Assets/Resources/UIFramework");
+            }
+        }
         private sealed class TestLog : IUILog { public readonly List<Exception> Errors = new List<Exception>(); public void Error(Exception error, string context) => Errors.Add(error); }
         private static async Task CollectionRun()
         {
@@ -57,9 +88,10 @@ namespace StarCourt.UnityDemo.Tests
             var rect = new GameObject("View", typeof(RectTransform), typeof(MvvmBindings)); rect.transform.SetParent(canvas.transform, false);
             var label = new GameObject("Gold", typeof(RectTransform), typeof(Text)); label.transform.SetParent(rect.transform, false);
             var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)); button.transform.SetParent(rect.transform, false);
-            var config = rect.GetComponent<MvvmBindings>(); config.ViewModels.Add(new ViewModelSourceData { Name = "Player", Template = template, Creation = ViewModelCreation.SharedAsset });
-            config.Bindings.Add(new ViewBindingData { Target = label.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
-            config.Bindings.Add(new ViewBindingData { Target = button.GetComponent<Button>(), Source = "Player.Buy", Kind = ViewBindingKind.Command });
+            runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
+            var config = rect.GetComponent<MvvmBindings>();
+            config.Bindings.Add(new ViewBindingData { ViewModel = template, IsGlobal = true, Target = label.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
+            config.Bindings.Add(new ViewBindingData { ViewModel = template, IsGlobal = true, Target = button.GetComponent<Button>(), Source = "Player.Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
             var vm = node.GetViewModel<NativePlayerVm>("Player"); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
             button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
@@ -70,6 +102,15 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(vm.Gold, Is.EqualTo(120)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
             node.ResumeBinding("Player.Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));
             vm.Items.Add(2); Assert.That(template.Items.Count, Is.EqualTo(1)); vm.Gold = 0; Assert.That(button.GetComponent<Button>().interactable, Is.False);
+            Assert.That(runtime.GetGlobalViewModel<NativePlayerVm>(template), Is.SameAs(vm));
+            var otherEvents = new GameObject("Other Events", typeof(EventSystem));
+            var otherCanvas = new GameObject("Other Canvas", typeof(Canvas));
+            var otherUi = EngineUI.UI.Create(otherCanvas.GetComponent<Canvas>(), otherEvents.GetComponent<EventSystem>());
+            otherUi.GetMvvm().RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
+            var independent = otherUi.GetMvvm().GetGlobalViewModel<NativePlayerVm>(template);
+            Assert.That(independent, Is.Not.SameAs(vm)); Assert.That(independent.Gold, Is.EqualTo(100));
+            await otherUi.DisposeAsync();
+            UnityEngine.Object.Destroy(otherCanvas); UnityEngine.Object.Destroy(otherEvents);
             await node.DisposeAsync(); vm.Gold = 50; Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
             await ui.DisposeAsync(); await runtime.DisposeAsync();
             UnityEngine.Object.Destroy(rect); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events); UnityEngine.Object.Destroy(template);

@@ -5,6 +5,7 @@ namespace UIFramework.Mvvm;
 public sealed class MvvmRuntime : IAsyncDisposable
 {
     static MvvmRuntime() => MvvmModule.Install();
+    private readonly Dictionary<object, IGlobalViewModelProvider> _globals = new(ReferenceComparer.Instance);
     private readonly Dictionary<Type, Func<object>> _factories = new();
     private readonly Dictionary<object, object> _shared = new(ReferenceComparer.Instance);
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
@@ -42,6 +43,24 @@ public sealed class MvvmRuntime : IAsyncDisposable
     public MvvmRuntime(IUILog? log = null) => Log = log ?? new ConsoleUILog();
     public void RegisterFactory<T>(Func<T> factory) where T : class => _factories.Add(typeof(T), () => factory());
     public void RegisterFactory(Type type, Func<object> factory) => _factories.Add(type, factory);
+    public void RegisterGlobalViewModelProvider(IGlobalViewModelProvider provider)
+    {
+        if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
+        if (provider == null) throw new ArgumentNullException(nameof(provider));
+        var definitions = provider.ViewModels.ToArray();
+        if (definitions.Any(value => value == null || !provider.Assets.IsAsset(value)))
+            throw new ArgumentException("Global ViewModels must be native woven VM assets.");
+        if (definitions.Distinct(ReferenceComparer.Instance).Count() != definitions.Length || definitions.Any(_globals.ContainsKey))
+            throw new ArgumentException("A global VM asset is registered more than once.");
+        foreach (var definition in definitions) _globals.Add(definition, provider);
+    }
+    public T GetGlobalViewModel<T>(object definition) where T : class
+    {
+        if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
+        var provider = _globals.TryGetValue(definition, out var registered) ? registered
+            : throw new KeyNotFoundException("VM asset is not registered by a global provider.");
+        return (T)Create(typeof(T), definition, provider.Assets, true, (_, _) => { });
+    }
     public T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class => (T)Create(typeof(T), template, assets, true, (_, _) => { });
     internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared, Action<object, IViewModelAssets?> own)
     {
@@ -155,7 +174,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
         try { await DrainTasksAsync(); } catch (Exception error) { Failure(ref first, error); }
         foreach (var owned in _owned.AsEnumerable().Reverse())
             try { await Release(owned.Value, owned.Assets); } catch (Exception error) { Report(error, "MVVM shared VM release"); Failure(ref first, error); }
-        _owned.Clear(); _shared.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
+        _owned.Clear(); _shared.Clear(); _globals.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal static void Failure(ref Exception? first, Exception error)
@@ -207,6 +226,7 @@ public static class MvvmExtensions
     public static MvvmRuntime GetMvvm(this UIContext ui) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module must be installed before creating the context.")).Runtime;
     public static void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
         Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module is not installed.")).Configure(runtime, configuration, assets);
+    public static T GetGlobalViewModel<T>(this UIContext ui, object definition) where T : class => ui.GetMvvm().GetGlobalViewModel<T>(definition);
     public static void ShareMvvm(this UIContext ui, UIContext owner) => ui.ConfigureMvvm(owner.GetMvvm());
     public static void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class => ui.GetMvvm().RegisterFactory(factory);
     public static Task WhenMvvmIdleAsync(this UIContext ui) => ui.GetMvvm().WhenIdleAsync();

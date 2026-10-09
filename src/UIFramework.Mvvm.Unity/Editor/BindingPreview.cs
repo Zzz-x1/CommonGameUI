@@ -29,7 +29,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private sealed class ItemConfiguration : IViewBindingConfiguration
         {
             public MvvmBindings View;
-            public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = s.Creation == ViewModelCreation.Manual ? ViewModelCreation.Manual : ViewModelCreation.CreateInstance, Template = s.Template }).ToArray();
+            public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = ViewModelCreation.Manual, Template = s.Template, IsGlobal = s.IsGlobal }).ToArray();
             public void Apply(UINode node)
             {
                 View.Apply(node, true);
@@ -37,7 +37,8 @@ namespace UIFramework.Mvvm.EditorUnity
         }
         public BindingPreview(MvvmBindings view)
         {
-            var sources = view.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.CreateInstance }).ToArray();
+            _runtime.RegisterGlobalViewModelProvider(GlobalViewModelProvider.Load());
+            var sources = view.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.CreateInstance, IsGlobal = s.IsGlobal }).ToArray();
             _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(EngineUI.FramePump)) { hideFlags = HideFlags.HideAndDontSave };
             var host = new EngineUI.UIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<EngineUI.FramePump>());
             _ui = new UIContext(host, new EngineUI.UIResourceLoader(host));

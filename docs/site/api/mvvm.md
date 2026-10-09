@@ -11,6 +11,8 @@ new MvvmRuntime(IUILog? log = null);
 void RegisterFactory<T>(Func<T> factory) where T : class;
 void RegisterFactory(Type type, Func<object> factory);
 T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class;
+void RegisterGlobalViewModelProvider(IGlobalViewModelProvider provider);
+T GetGlobalViewModel<T>(object definition) where T : class;
 Task WhenIdleAsync();
 void Observe(Task task);
 void ObserveTasks();
@@ -28,6 +30,7 @@ ValueTask DisposeAsync();
 ```csharp
 void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class;
 void ShareMvvm(this UIContext ui, UIContext owner);
+T GetGlobalViewModel<T>(this UIContext ui, object definition) where T : class;
 Task WhenMvvmIdleAsync(this UIContext ui);
 MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
@@ -88,11 +91,11 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 | 命令 | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
 | 列表 | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
 
-`MvvmBindings` 保存具名来源和绑定配置。Godot 使用 `ViewModelSourceResource`／`ViewBindingResource`；Unity 使用 `ViewModelSourceData`／`ViewBindingData`。配置种类为 Property、Command、Collection。
+Godot `MvvmBindings` 保存具名来源和绑定配置，Unity 仅保存绑定列表。Godot 使用 `ViewModelSourceResource`／`ViewBindingResource`；Unity 使用直接保存 VM 引用的 `ViewBindingData`。配置种类为 Property、Command、Collection。
 
 自定义适配实现 `IViewModelAssets`、`IBindingTarget`、`ICommandTarget`、`ICollectionTarget`，或使用 `BindingValueTarget<T>`。目标负责原生控件读写和事件；模块负责订阅、路径、转换、所有权及任务。
 
-`ViewBindingData`／`ViewBindingResource.GetOptions(bool preview = false)` 校验转换配置，预览只更新显示。Unity 来源使用 `ViewModelSourceData.Template`；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
+`ViewBindingData`／`ViewBindingResource.GetOptions(bool preview = false)` 校验转换配置，预览只更新显示。Unity 来源使用 `ViewBindingData.ViewModel` 和 `IsGlobal`；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
 
 相关：[入门](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 
@@ -119,3 +122,27 @@ Task<IUINode> CollectionItemContext.LoadAsync(string resource,
 两端 CollectionTarget 构造增加可选 preview、factory、sources 参数。`CollectionItemContext.CreateAsync` 为引擎扩展，接收 GameObject／PackedScene、配置回调与取消 Token。工厂须返回该 context 创建的节点。内置目标实现 IAsyncDisposable；自定义 ICollectionTarget 可实现它以等待清理。`Changed` 通知布局更新。
 
 两端内置目标及 `CollectionTargetBase` 在所属节点初始化期间，将条目创建和移除收尾纳入初始化等待；嵌套集合同样等待。节点就绪后的集合变化只增量更新。自定义同步目标实现 `ICollectionTarget`；自定义异步目标继承 `CollectionTargetBase`，统一参与等待、取消和释放。`ObserveMvvmTask` 仅观察任务，不作为初始化屏障。
+
+## 全局 Provider
+
+```csharp
+interface IGlobalViewModelProvider
+{
+    IReadOnlyList<object> ViewModels { get; }
+    IViewModelAssets Assets { get; }
+}
+[assembly: GlobalViewModelProvider(typeof(ProjectProvider))]
+// UIFramework.Mvvm.Unity
+class GlobalViewModelCatalog : ScriptableObject
+{
+    List<ScriptableObject> ViewModels;
+}
+class GlobalViewModelProvider : IGlobalViewModelProvider
+{
+    const string ResourcePath = "UIFramework/Mvvm";
+    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels);
+    static GlobalViewModelProvider Load();
+}
+```
+
+Unity 默认 Provider 由适配器自动注册；自定义 Provider 可用程序集标记自动注册，需有无参构造并为 IL2CPP 保留构造入口。Provider 只提供定义及资产适配，不持有 Context VM 实例。重复定义、缺失资产和未织入 VM 直接报错。Godot 的来源编辑器本轮保持原行为。

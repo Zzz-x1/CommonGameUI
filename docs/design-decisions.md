@@ -1865,9 +1865,9 @@ Godot 与 Unity 教程顺序一致：准备项目和依赖、建立窗口资源�
 
 用户同时要求 MVVM 针对原生 UI 工作流优化：配置与 UI 资源一起编辑保存，支持原生控件选择和引用，完善项目可引用 VM 资产的发现及引用，并覆盖 Global VM 的编辑器发现／查找。Unity 编辑器继续使用 UXML／USS 与 UI Toolkit，Godot 使用原生编辑器插件；Undo、Prefab Override、场景保存重开和独立预览恢复属于验收范围。GUI 与代码绑定继续使用同一执行逻辑，Runtime 初始化和释放继续由框架托管。
 
-用户已明确 Global VM 仅指编辑器发现项目内可直接引用的 VM 资产：Unity ScriptableObject 和 Godot Resource；不发现或选择普通 C# 对象类型，不增加运行时具名全局 VM 注册或查找。GUI 保存引擎原生资产引用，由资产取得 VM 类型和成员描述；移除 GUI 来源配置中的类型名称／程序集限定名称，不用字符串类型引用或重命名保底维持旧配置。资产搜索支持搜索、筛选、选择引用和定位来源；预览继续使用资产克隆，不修改原资产。普通 C# VM 仍支持运行时代码创建和绑定，不进入 GUI 资产发现工作流。
+原 21 阶段 Global VM 仅指编辑器发现项目内可直接引用的 VM 资产；Unity 当前重构已由第 30 节替代。该阶段定义为：Unity ScriptableObject 和 Godot Resource；不发现或选择普通 C# 对象类型，不增加运行时具名全局 VM 注册或查找。GUI 保存引擎原生资产引用，由资产取得 VM 类型和成员描述；移除 GUI 来源配置中的类型名称／程序集限定名称，不用字符串类型引用或重命名保底维持旧配置。资产搜索支持搜索、筛选、选择引用和定位来源；预览继续使用资产克隆，不修改原资产。普通 C# VM 仍支持运行时代码创建和绑定，不进入 GUI 资产发现工作流。
 
-三种 VM 创建方式 Create Instance、Manual、Shared Asset 继续保留。GUI 的来源类型由引用资产确定；Manual 的资产引用用于声明来源类型及显式提供预览样本，运行时实例必须由业务提供，不能因为缺失而自动使用资产实例。Shared Asset 仍在所属 Runtime 内缓存共享实例，跨 Context 共享沿用现有显式共享配置。用户要求绑定目标按原生控件引用保存，不以节点名称或 UI 层级路径作为绑定身份。Unity 使用 Component 引用；Godot 改为由场景维护的原生控件引用，并按引擎可序列化的能力调整配置载体，不继续在 ViewBindingResource 中保存手工 NodePath 再 GetNode 查找目标。引擎内部序列化的引用表示与框架手工路径关联区分：框架不要求用户维护路径，运行时直接使用已解析的目标对象。目标字段、属性和命令的成员名称仍用于选择绑定成员，不与控件层级身份混用。
+Godot GUI 和运行时代码创建能力继续保留；Unity GUI 不再选择三种创建方式，采用第 30 节的全局目录与本地注入。原 GUI 的来源类型由引用资产确定；Manual 的资产引用用于声明来源类型及显式提供预览样本，运行时实例必须由业务提供，不能因为缺失而自动使用资产实例。Shared Asset 仍在所属 Runtime 内缓存共享实例，跨 Context 共享沿用现有显式共享配置。用户要求绑定目标按原生控件引用保存，不以节点名称或 UI 层级路径作为绑定身份。Unity 使用 Component 引用；Godot 改为由场景维护的原生控件引用，并按引擎可序列化的能力调整配置载体，不继续在 ViewBindingResource 中保存手工 NodePath 再 GetNode 查找目标。引擎内部序列化的引用表示与框架手工路径关联区分：框架不要求用户维护路径，运行时直接使用已解析的目标对象。目标字段、属性和命令的成员名称仍用于选择绑定成员，不与控件层级身份混用。
 
 控件重命名、移动到其他父节点后，同一控件的绑定应保持有效；保存重开、Undo／Redo、Prefab Override、PackedScene／Prefab 克隆及多个实例必须验证引用正确指向各自实例，不交叉引用其他窗口或模板控件。删除控件或真正丢失引用时直接报错，不按旧路径、同名节点或其他控件保底重绑，不以每帧扫描维持引用。
 
@@ -2018,3 +2018,15 @@ Core 在进入准备完成后同步显示窗口，并在同一调用帧启动窗
 两端 CreateContainerAsync<T>(name, mount = null, token = default) 允许省略挂载。省略时查找最近逻辑祖先的显示对象，创建铺满父区域的专属空挂载；结构 Root 使用 UIHost.RootMount。Unity UI.Create 使用 Canvas；Godot UI.Create 使用 Control owner，非 Control owner 可显式提供 rootMount。没有可用挂载直接报错，不猜测场景根。自动挂载由容器释放；显式挂载保持借用，不随容器销毁。不新增默认项目节点、Canvas 或绘制层级策略。入门示例使用自动挂载，客户端已有分区与层序继续显式挂载。
 
 验证：Godot 入门 headless 13 项检查、Unity AutomaticContainerMounts 单项 Play Mode 通过，覆盖 Root 自动挂载、跨结构节点查找、铺满布局及自有／借用挂载释放。Godot Demo 重新生成成功，0 警告、0 错误；Unity 适配源代码由原生测试重新编译。中英文教程代码和链接检查通过。未运行全量回归或完整客户端验收。
+
+## 30. Unity 全局 VM Provider 与目录（2026-10-09，已确认）
+
+Unity MvvmBindings 移除窗口级 ViewModels 列表及 Creation 配置。新增 GlobalViewModelCatalog SO 维护 SO VM 引用，保存到 Resources/UIFramework/Mvvm 目录；Unity 默认 GlobalViewModelProvider 读取所有目录，由适配器在 Context 初始化时自动注册。登记定义不创建实例；首次使用时克隆原资产，同一 Context 默认共享，不同 Context 独立，Context 清理释放克隆。目录和原资产只提供引用及初始值，不参与业务写入。显式 ShareMvvm 仍代表项目主动共用 Runtime，不改变默认隔离。
+
+Core MVVM 提供 IGlobalViewModelProvider（ViewModels、Assets）与 GlobalViewModelProviderAttribute；框架初始化自动注册程序集标记的项目 Provider 和适配器默认 Provider。Provider 不持有运行时实例，重复定义或不合法 VM 直接报错。自定义 Provider 无参构造入口需按引擎裁剪规则保留。用户无需手动初始化或释放 Runtime。
+
+Unity 每行 ViewBindingData 保存 ViewModel 原生资产引用和 IsGlobal。来源路径仍为节点内别名与成员路径，同一别名的资产及模式必须一致。全局引用必须已在 Provider 注册，不按名称查找其他资产保底。GUI 左侧只读浏览全局目录，拖动成员保存资产引用；本地来源可选择类型／预览资产，不在运行时克隆。集合 Item 始终由集合注入，禁止标为全局；父来源映射和业务 SetViewModel 保持借用。预览使用独立克隆，缺少预览来源明确显示原因，不执行命令或写回原资产。配置仍通过 SerializedObject 保存、Undo 和 Prefab Override；不引入 IMGUI。
+
+本轮仅迁移 Unity 来源 GUI；Godot 保留既有 Resource 来源配置。两端共享的 Runtime 接口和程序集同步更新。无旧 Unity 来源类型或兼容读取层。
+
+验证：核心 GlobalProviders 专项 1 项、Unity 原生 MVVM 2 项及默认目录自动注册 1 项通过，包含同 Context 共享、不同 Context 隔离、模板不变、窗口关闭保留、Context 释放和集合注入。Unity 编辑器实际执行 Undo、Prefab Override、局部／全局资产预览及恢复检查通过。中英文教程／代码／链接检查通过；Unity 包内 MVVM DLL 与 Release 输出 SHA256 一致，Godot Demo 已重新生成，0 警告、0 错误。未运行全量回归、Godot 原生 GUI 或 WebGL／IL2CPP 导出。

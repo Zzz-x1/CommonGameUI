@@ -2,15 +2,15 @@
 
 Add `MvvmBindings` to the view root. In Unity open **Window → UIFramework → View Bindings**. In Godot enable the plugin and use the bottom **View Bindings** panel.
 
-## 1. Add Viewmodels
+## 1. Configure VM sources
 
-Add named sources such as `Player`, `Settings` and `Inventory`. Select a native VM asset and its creation mode.
+**Unity**: create a catalog through Create → UIFramework → MVVM → Global ViewModel Catalog and save it under `Assets/Resources/UIFramework/Mvvm/`. Add available SO VMs to its ViewModels list. Context initialization loads all catalogs and registers their assets. Instances are cloned on first use, shared within a Context, and independent across Contexts by default.
 
-- Use **CreateInstance** for independent details.
-- Use **Manual** for business-owned objects; call `SetViewModel` during node initialization.
-- Use **SharedAsset** when several views reference the same asset.
+Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the binding table to store its VM asset reference, or enable the global-source option and select the asset in binding details.
 
-The asset list discovers native `ScriptableObject` / `Resource` VMs marked `ViewModel`, with search and locate actions. Godot VM resources require `[Tool]`. Asset references determine types; type names are not stored. Plain C# VMs use code creation and binding.
+For collection items, disable the global-source option and use `Item.Title`; the collection injects Item automatically. Business objects also use local sources and `SetViewModel` during initialization. Select a source-type / preview asset on the binding row when member discovery or sample preview is needed; runtime does not clone this local sample.
+
+**Godot**: retain named sources with Resource and CreateInstance / Manual / SharedAsset. Business code supplies Manual instances during initialization. VM Resources require `[Tool]`; plain C# VMs use code creation and binding.
 
 ## 2. Create View Bindings
 
@@ -44,7 +44,7 @@ Custom functions are static methods marked `[Converter]`, with one argument and 
 
 Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.
 
-A Manual source references an asset to declare its type and provide a preview sample. Preview clones the asset. Runtime still requires the business to call `SetViewModel`; it never substitutes the sample. Missing assets prevent preview.
+A Unity local source or Godot Manual source references an asset to declare its type and provide a preview sample. Preview clones the asset. Runtime still requires the business to call `SetViewModel`; it never substitutes the sample. Missing assets prevent preview.
 
 ## Save
 

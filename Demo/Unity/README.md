@@ -91,3 +91,5 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 离开装备详情时，两张对比浮窗的关闭请求一次提交，由 Panel 按顺序执行；等待全部完成后继续页面返回。
 
 容器挂载：客户端保留场景中显式配置的内容区和绘制层序。简单全区域容器可用 `await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows")` 自动创建挂载；完整示例见 `docs/examples` 两端入门工程。
+
+Unity MVVM：窗口不再维护 ViewModels 列表。全局 SO VM 放入 GlobalViewModelCatalog，目录资产保存到 Resources/UIFramework/Mvvm；绑定行引用资产。客户端商品条目仍使用自动注入的 Item 和父来源映射，不需要 Creation。全局目录、Context 隔离和编辑器预览示例分别见 MvvmNativeTests、MvvmEditorVerification 与用户指南。

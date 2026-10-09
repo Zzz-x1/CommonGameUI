@@ -15,15 +15,17 @@ public static class MvvmModule
         UIContextExtensions.Register(() => new ContextService());
     }
     public static void RegisterAdapter(Type hostType, IViewModelAssets assets,
-        Func<UINode, IViewBindingConfiguration?> configuration, Action<MvvmRuntime> observe)
-    { Install(); Adapters[hostType] = new Adapter(assets, configuration, observe); }
+        Func<UINode, IViewBindingConfiguration?> configuration, Action<MvvmRuntime> observe,
+        Func<IEnumerable<IGlobalViewModelProvider>>? globalProviders = null)
+    { Install(); Adapters[hostType] = new Adapter(assets, configuration, observe, globalProviders); }
     private sealed class Adapter
     {
+        internal readonly Func<IEnumerable<IGlobalViewModelProvider>>? GlobalProviders;
         internal readonly IViewModelAssets Assets;
         internal readonly Func<UINode, IViewBindingConfiguration?> Configuration;
         internal readonly Action<MvvmRuntime> Observe;
-        internal Adapter(IViewModelAssets assets, Func<UINode, IViewBindingConfiguration?> configuration, Action<MvvmRuntime> observe)
-        { Assets = assets; Configuration = configuration; Observe = observe; }
+        internal Adapter(IViewModelAssets assets, Func<UINode, IViewBindingConfiguration?> configuration, Action<MvvmRuntime> observe, Func<IEnumerable<IGlobalViewModelProvider>>? globalProviders)
+        { Assets = assets; Configuration = configuration; Observe = observe; GlobalProviders = globalProviders; }
     }
     private sealed class RuntimeLease
     {
@@ -44,6 +46,11 @@ public static class MvvmModule
         {
             _ui = ui; Contexts.Add(ui, this); Adapters.TryGetValue(ui.Host.GetType(), out _adapter);
             SetRuntime(new MvvmRuntime(ui.Log));
+            foreach (var provider in _adapter?.GlobalProviders?.Invoke() ?? Enumerable.Empty<IGlobalViewModelProvider>())
+                Runtime.RegisterGlobalViewModelProvider(provider);
+            foreach (var attribute in AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(assembly => assembly.GetCustomAttributes(typeof(GlobalViewModelProviderAttribute), false).Cast<GlobalViewModelProviderAttribute>()))
+                Runtime.RegisterGlobalViewModelProvider((IGlobalViewModelProvider)Activator.CreateInstance(attribute.ProviderType)!);
             _nodes = new MvvmNodeExtension(Runtime, _adapter?.Configuration, _adapter?.Assets);
             ui.AddNodeExtension(_nodes);
         }

@@ -213,7 +213,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7eedde526d1a485c9bcb3774f2706979, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UIFramework.Mvvm.Unity::UIFramework.Mvvm.Unity.MvvmBindings
-  ViewModels: []
   Bindings:
   - Enabled: 1
     Target: {fileID: 6838524965142333167}
