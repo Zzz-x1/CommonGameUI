@@ -39,6 +39,20 @@ Shared 遮罩仍被下层弹窗使用时保留，不重新淡入／淡出。传 
 
 窗口显示和内置动画起点与新遮罩在同一帧开始。这里的显示不等于交互激活：双方动画结束后才开放输入并提交焦点。Unity 基础转场同步刷新布局，不先等待一帧；自定义动画也应在首次等待前应用起点。
 
+## 堆叠菜单：逐级返回
+
+设置 → 画质 → 高级画质，保留下层窗口显示。返回按钮／Esc 调用 `CloseCurrentAsync`，无需先取得当前实例：
+
+```csharp
+await modals.OpenAsync<SettingsWindow>();
+await modals.OpenAsync<GraphicsWindow>();
+await modals.OpenAsync<AdvancedGraphicsWindow>();
+await modals.CloseCurrentAsync(); // AdvancedGraphics → Graphics
+await modals.CloseCurrentAsync(); // Graphics → Settings
+```
+
+每次关闭都会等待退出动画，再按注册策略销毁或缓存，恢复下一层的输入与焦点。关闭最后一层后容器为空；空容器调用此方法直接报错。正常关闭不重播下层窗口的入场动画。
+
 ## 单窗口多级菜单：Modal + Stack
 
 设置 → 画质 → 高级画质，每次只显示当前内容，返回一次恢复一个历史窗口。整个流程只打开一个 Modal；各级窗口使用独立资源，通过内部 Stack 推进。
@@ -125,7 +139,7 @@ ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 
 ## 行为与边界
 
 - `OpenAsync` 每次创建并叠加新弹窗；没有“自动隐藏上一层”的选项。
-- `CloseAsync` 只关闭当前顶层；`CloseToAsync` 目标必须是同一容器中存活的实例；当前目标正常完成。
+- `CloseCurrentAsync` 关闭顶层，无需实例参数；`CloseAsync` 用于显式关闭当前顶层实例。`CloseToAsync` 目标必须是同一容器中存活的实例；当前目标正常完成。
 - 下层窗口保留显示和状态，但不接受输入；恢复时不重播进入生命周期和动画。
 - `Complete` 只能在可交互时调用一次。未回答就外部关闭会取消等待任务，不自动返回 false。
 - 遮罩点击关闭通过 `DismissRequested` 配置；Esc 和项目返回入口由项目处理。

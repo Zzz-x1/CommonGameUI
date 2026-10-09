@@ -714,6 +714,15 @@ public class ModalContainerNode : ContainerNode
             await CloseRangeAsync(_modals.Count - 1, LifecycleReason.Close, playAnimation, ct);
         }, cancellationToken);
 
+    /// <summary>Close and dispose the top modal, restoring the preceding modal if present.</summary>
+    public Task CloseCurrentAsync(bool playAnimation = true, CancellationToken cancellationToken = default) =>
+        OperateAsync("CloseModal", async ct =>
+        {
+            if (CurrentNode == null) throw new InvalidOperationException("Cannot close an empty modal container.");
+            await CloseRangeAsync(_modals.Count - 1, LifecycleReason.Close, playAnimation, ct);
+            return true;
+        }, cancellationToken);
+
     public Task CloseToAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateOpeningAsync("CloseToModal", owner, async (target, ct) =>
         {

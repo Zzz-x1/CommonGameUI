@@ -39,6 +39,20 @@ A Shared backdrop remains when a lower modal still uses it, without replaying it
 
 Window visibility and the initial pose of built-in transitions start in the same frame as the new backdrop. Visibility is separate from interaction: input and focus are committed after both animations finish. Unity simple transitions settle layout synchronously without an initial frame wait; custom animations should also apply their initial pose before the first await.
 
+## Layered menus: step back
+
+Settings → graphics → advanced graphics keeps lower windows visible. Back/Esc calls `CloseCurrentAsync` without looking up the current instance:
+
+```csharp
+await modals.OpenAsync<SettingsWindow>();
+await modals.OpenAsync<GraphicsWindow>();
+await modals.OpenAsync<AdvancedGraphicsWindow>();
+await modals.CloseCurrentAsync(); // AdvancedGraphics → Graphics
+await modals.CloseCurrentAsync(); // Graphics → Settings
+```
+
+Each call awaits the exit animation and release according to the cache policy, restoring input and focus to the next lower window. Closing the last modal leaves the container empty; calling this method on an empty container throws. Normal closure does not replay the lower window's entry animation.
+
 ## One window with multiple menu levels: Modal + Stack
 
 Settings → graphics → advanced graphics shows only the current content, and each Back restores one history window. Open one Modal for the whole flow. Each menu window uses a separate resource and is pushed into its internal Stack.
@@ -125,7 +139,7 @@ ShowDialogAsync returns the answer after the confirmation window closes and clea
 ## Behavior and boundaries
 
 - `OpenAsync` creates and layers a new modal each time; there is no automatic hide-previous-layer option.
-- `CloseAsync` closes only the current top. `CloseToAsync` requires a live instance in the same container; the current target completes without changes.
+- `CloseCurrentAsync` closes the top without an instance argument; `CloseAsync` explicitly closes the current top instance. `CloseToAsync` requires a live instance in the same container; the current target completes without changes.
 - Lower windows retain their display and state but receive no input. Restoration does not replay entry lifecycle or animation.
 - `Complete` is allowed once while interactive. Closing an unanswered dialog cancels its waiter rather than returning false.
 - Configure `DismissRequested` for backdrop dismissal. The project handles Esc and its Back action.

@@ -195,8 +195,11 @@ Task<bool> RequestDismissAsync(CancellationToken token = default)
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
 Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseToAsync(IUINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task CloseCurrentAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IDialogNode<TResult>
 ```
+
+`CloseCurrentAsync` 关闭并销毁当前顶层，恢复下层的输入与焦点；最后一层关闭后容器为空。没有打开的弹窗时抛出 `InvalidOperationException`。它沿用 `CloseAsync` 的转场、取消、结果等待和清理行为。
 
 ### `DialogNode<TResult>`
 

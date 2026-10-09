@@ -195,8 +195,11 @@ Task<bool> RequestDismissAsync(CancellationToken token = default)
 Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode
 Task CloseAsync(IUINode node, bool playAnimation = true, CancellationToken cancellationToken = default)
 Task CloseToAsync(IUINode target, bool playAnimation = true, CancellationToken cancellationToken = default)
+Task CloseCurrentAsync(bool playAnimation = true, CancellationToken cancellationToken = default)
 Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IDialogNode<TResult>
 ```
+
+`CloseCurrentAsync` closes and disposes the top modal, restoring input and focus to the lower modal. Closing the last modal leaves the container empty. An empty container throws `InvalidOperationException`. Transition, cancellation, result waiting and cleanup follow the same behavior as `CloseAsync`.
 
 ### `DialogNode<TResult>`
 

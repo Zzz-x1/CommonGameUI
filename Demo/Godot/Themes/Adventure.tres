@@ -1,0 +1,173 @@
+[gd_resource type="Theme" format=3 uid="uid://ctvasilci5kip"]
+
+[ext_resource type="Texture2D" path="res://Assets/Adventure/banner_classic_curtain.png" id="banner_modern"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/button_brown.png" id="button_brown"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/button_grey.png" id="button_grey"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/checkbox_beige_checked.png" id="checkbox_beige_checked"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/checkbox_beige_empty.png" id="checkbox_beige_empty"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/Nunito.ttf" id="font"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/panel_brown_corners_a.png" id="panel_brown_corners_a"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/progress_green.png" id="progress_green"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/slider_handle.svg" id="round_brown"]
+[ext_resource type="Texture2D" path="res://Assets/Adventure/scrollbar_brown.png" id="scrollbar_brown"]
+
+[sub_resource type="StyleBoxTexture" id="banner"]
+content_margin_left = 34.0
+content_margin_top = 16.0
+content_margin_right = 34.0
+content_margin_bottom = 16.0
+texture = ExtResource("banner_modern")
+texture_margin_left = 32.0
+texture_margin_top = 32.0
+texture_margin_right = 32.0
+texture_margin_bottom = 32.0
+
+[sub_resource type="FontVariation" id="body_font"]
+base_font = ExtResource("font")
+variation_opentype = {
+"wght": 600.0
+}
+variation_embolden = 0.8
+
+[sub_resource type="StyleBoxTexture" id="disabled"]
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+texture = ExtResource("button_grey")
+texture_margin_left = 14.0
+texture_margin_top = 14.0
+texture_margin_right = 14.0
+texture_margin_bottom = 14.0
+modulate_color = Color(0.91, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="focus"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.93, 0.68, 0.25, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxTexture" id="hover"]
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+texture = ExtResource("button_brown")
+texture_margin_left = 14.0
+texture_margin_top = 14.0
+texture_margin_right = 14.0
+texture_margin_bottom = 14.0
+modulate_color = Color(1.08, 1.04, 0.94, 1)
+
+[sub_resource type="StyleBoxTexture" id="normal"]
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+texture = ExtResource("button_brown")
+texture_margin_left = 14.0
+texture_margin_top = 14.0
+texture_margin_right = 14.0
+texture_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxTexture" id="pressed"]
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+texture = ExtResource("button_grey")
+texture_margin_left = 14.0
+texture_margin_top = 14.0
+texture_margin_right = 14.0
+texture_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxEmpty" id="empty"]
+content_margin_top = 8.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="separator"]
+content_margin_top = 1.0
+bg_color = Color(0.9, 0.83, 0.64, 0.35)
+
+[sub_resource type="StyleBoxTexture" id="slider_area"]
+content_margin_left = 0.0
+content_margin_top = 6.0
+content_margin_right = 0.0
+content_margin_bottom = 6.0
+texture = ExtResource("progress_green")
+texture_margin_left = 8.0
+texture_margin_top = 8.0
+texture_margin_right = 8.0
+texture_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxTexture" id="slider"]
+content_margin_left = 0.0
+content_margin_top = 6.0
+content_margin_right = 0.0
+content_margin_bottom = 6.0
+texture = ExtResource("scrollbar_brown")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="panel"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+texture = ExtResource("panel_brown_corners_a")
+texture_margin_left = 22.0
+texture_margin_top = 22.0
+texture_margin_right = 22.0
+texture_margin_bottom = 22.0
+
+[resource]
+default_font = SubResource("body_font")
+default_font_size = 18
+BannerLabel/base_type = &"Label"
+BannerLabel/colors/font_color = Color(1, 0.97, 0.88, 1)
+BannerLabel/styles/normal = SubResource("banner")
+Button/colors/font_color = Color(0.29, 0.2, 0.13, 1)
+Button/colors/font_disabled_color = Color(0.18, 0.26, 0.3, 1)
+Button/colors/font_focus_color = Color(0.18, 0.26, 0.3, 1)
+Button/colors/font_hover_color = Color(0.29, 0.2, 0.13, 1)
+Button/colors/font_hover_pressed_color = Color(0.18, 0.26, 0.3, 1)
+Button/colors/font_pressed_color = Color(0.18, 0.26, 0.3, 1)
+Button/constants/outline_size = 0
+Button/fonts/font = SubResource("body_font")
+Button/styles/disabled = SubResource("disabled")
+Button/styles/focus = SubResource("focus")
+Button/styles/hover = SubResource("hover")
+Button/styles/normal = SubResource("normal")
+Button/styles/pressed = SubResource("pressed")
+CheckButton/colors/font_color = Color(0.29, 0.2, 0.13, 1)
+CheckButton/colors/font_hover_color = Color(0.29, 0.2, 0.13, 1)
+CheckButton/colors/font_pressed_color = Color(0.29, 0.2, 0.13, 1)
+CheckButton/fonts/font = SubResource("body_font")
+CheckButton/icons/checked = ExtResource("checkbox_beige_checked")
+CheckButton/icons/checked_disabled = ExtResource("checkbox_beige_checked")
+CheckButton/icons/unchecked = ExtResource("checkbox_beige_empty")
+CheckButton/icons/unchecked_disabled = ExtResource("checkbox_beige_empty")
+CheckButton/styles/focus = SubResource("focus")
+CheckButton/styles/hover = SubResource("empty")
+CheckButton/styles/hover_pressed = SubResource("empty")
+CheckButton/styles/normal = SubResource("empty")
+CheckButton/styles/pressed = SubResource("empty")
+HSeparator/styles/separator = SubResource("separator")
+HSlider/constants/grabber_offset = 0
+HSlider/icons/grabber = ExtResource("round_brown")
+HSlider/icons/grabber_disabled = ExtResource("round_brown")
+HSlider/icons/grabber_highlight = ExtResource("round_brown")
+HSlider/styles/grabber_area = SubResource("slider_area")
+HSlider/styles/grabber_area_highlight = SubResource("slider_area")
+HSlider/styles/slider = SubResource("slider")
+Label/colors/font_color = Color(0.29, 0.2, 0.13, 1)
+Label/fonts/font = SubResource("body_font")
+PanelContainer/styles/panel = SubResource("panel")

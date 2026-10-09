@@ -29,6 +29,7 @@ namespace UIFramework.Unity
                 var go = new GameObject("ModalBackdrop", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Button));
                 try
                 {
+                    go.layer = target.Rect.gameObject.layer;
                     var rect = (RectTransform)go.transform;
                     rect.SetParent(target.Rect, false);
                     rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one; rect.offsetMin = rect.offsetMax = Vector2.zero;

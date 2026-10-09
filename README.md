@@ -4,6 +4,8 @@
 
 [中文文档](docs/site/index.md) · [English documentation](docs/site/en/index.md)
 
+首个预发布版本：[v0.1.0-beta.1](https://github.com/Zzz-x1/CommonGameUI/releases/tag/v0.1.0-beta.1)。Unity 安装包附带 Debug DLL／PDB；先安装基础包，再按需安装 MVVM 包。Beta API 仍可能调整。
+
 ## 文档
 
 双击根目录的 [Open-Docs.cmd](Open-Docs.cmd)，自动启动本地文档并打开浏览器。也可运行 `./scripts/Open-Docs.ps1`；需要 Node.js 22+，首次运行自动安装文档依赖。

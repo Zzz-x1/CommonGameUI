@@ -5,6 +5,22 @@ namespace UIFramework.Tests;
 
 public class ContainerReturnTests
 {
+    [Fact]
+    public async Task CloseCurrentModalReturnsOneLevelAndRejectsEmptyContainer()
+    {
+        var (ui, _) = Create(); await using var scope = ui;
+        var modals = await Attach<ModalContainerNode>(ui);
+        var first = await modals.OpenAsync<CounterView>();
+        var second = await modals.OpenAsync<CounterView>();
+        await modals.CloseCurrentAsync(playAnimation: false);
+        Assert.Same(first, modals.Current);
+        Assert.True(first.IsInteractive);
+        Assert.Equal(NodeState.Disposed, second.State);
+        await modals.CloseCurrentAsync(playAnimation: false);
+        Assert.Null(modals.Current);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => modals.CloseCurrentAsync());
+    }
+
     private static (UIContext UI, TestHost Host) Create()
     {
         var host = new TestHost(); var ui = new UIContext(host, host, host);

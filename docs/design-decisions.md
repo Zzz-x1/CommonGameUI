@@ -1138,6 +1138,8 @@ await modals.CloseToAsync(shop); // 保留这个商店实例，移除其上的�
 
 目标必须是同一容器中仍存活的具体实例；当前顶层正常完成。null、其他容器的节点、已移除/销毁节点仍直接报错。不按类型猜测，不使用全局 ID。CloseAsync 仍仅关闭当前项，和 CloseTo 共用关闭范围的实现，不通过循环调用 Close 模拟批量返回。
 
+快捷返回（2026-10-07）：新增 `ModalContainerNode.CloseCurrentAsync(bool playAnimation = true, CancellationToken cancellationToken = default)`，供堆叠菜单的返回按钮／Esc 关闭当前顶层，无需项目先查询 `Current`。复用现有关闭范围、容器操作锁、遮罩、焦点、结果等待与清理协议；空容器直接抛 `InvalidOperationException`，不静默跳过。Unity／Godot 共用核心方法。
+
 只有当前顶层执行 Exiting/退出动画/Exited；LifecycleReason.Return、Source=原顶层、Target=保留实例，动画 Phase.Exit、Direction.None。中间项暂时隐藏，逐层遮罩同步隐藏，避免顶层淡出时露出被跳过页面；它们不重新激活、不执行 Entering/Entered 或 Exiting/Exited，只在提交后的可见性变化和销毁流程中通知/清理。保留项仅恢复有效激活状态，不重播进入生命周期和动画。
 
 一次提交最终模态列表和输入所有者；焦点采用紧邻目标的被移除项入场前捕获值，直接恢复到目标原来的焦点。准备期取消/失败恢复全部原弹窗可见性、遮罩和原输入所有者，不修改列表。提交后不回滚，结束通知或清理失败仍清理所有移除项，按首个原异常及 UIFailure 附加异常契约传播。提交后的必要清理不会被调用者取消而跳过。
@@ -2080,3 +2082,9 @@ Cecil 自动识别 GlobalViewModel 业务派生链，不要求额外 ViewModel �
 Unity 依赖映射修订：直接遍历 Unity 已复制实例的序列化字段，不依赖 VM 属性可写性，也不反射调用业务 getter／setter。覆盖私有字段、只读属性背后的引用、数组／列表及 SerializeReference 对象图；资源对象继续共享，原始模板不写入。初始化准备中的实例不能通过查询或借用提前发布。
 
 验收：核心 Runtime／Weaver／集合相关 51 项通过；Unity MVVM 4 项原生测试通过，补验共享 Runtime、异步清理、部分初始化失败、预览隔离、私有序列化只读引用与循环图的专项通过。客户端购买→装备→培养→任务→重启单项原生回归通过，玩家全局 VM 自动订阅及最终解除订阅正常。编辑器实际验证 Undo、Prefab Override、预览与恢复通过。Unity 与 Godot 编译生成成功，Debug DLL／PDB 已刷新并核对 Unity MVVM DLL 与输出 SHA256 一致。中英文修改页代码一致，源码／差异检查通过。未执行全量框架或引擎测试、Godot 原生运行、WebGL／IL2CPP 导出，也未修改 Fruit-platter。
+
+## 36. 首个公开 Beta（2026-10-10）
+
+用户授权提交本地变更、推送远端并发布首个 Beta。版本为 v0.1.0-beta.1，Unity 两个包与 .NET 程序集版本同步；发布当前分支和标签，不合并 main、不覆盖历史。GitHub Release 标记 prerelease，附带从提交代码生成的 Unity Debug 安装包及匹配 PDB；源码由标签提供。发布说明记录已有验收与本轮未运行项，不宣称完成全平台验证。
+
+本地改动纳入发布：Modal CloseCurrentAsync 及双语用法、Backdrop 继承挂载层、Godot 场景／主题／UID 与 Unity 符号 meta。Timeline 播放中断的静默返回恢复为明确异常，遵守原错误契约。本轮逐级返回专项 1 项通过，Debug 程序集生成成功并复制至引擎包；源码／差异检查通过。未执行全量测试或原生平台导出。LRU、容量预算与对象池仍是后续候选。
