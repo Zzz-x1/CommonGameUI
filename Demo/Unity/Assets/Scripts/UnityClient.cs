@@ -53,8 +53,7 @@ namespace StarCourt.UnityDemo
         {
             Store = new ClientStore(Path.Combine(Application.persistentDataPath, SaveFile));
             UI = EngineUI.UI.Create(Canvas, Events);
-            PlayerVm = UI.GetSharedViewModel(Resources.Load<ClientPlayerVm>("MVVM/Player"));
-            await new PlayerSubscriptionLifetime(this).AttachAsync(UI.Root, "PlayerSubscriptionLifetime");
+            PlayerVm = UI.GetGlobalViewModel<ClientPlayerVm>("Player");
             UI.BindLifetime(gameObject.scene);
             UI.Register<LoginView>("UI/Login"); UI.Register<LobbyView>("UI/Lobby");
             UI.Register<InventoryView>("UI/Inventory", cacheMode: NodeCacheMode.KeepAlive); UI.Register<ItemView>("UI/Item", cacheMode: NodeCacheMode.KeepAlive);
@@ -78,13 +77,10 @@ namespace StarCourt.UnityDemo
                 button.onClick.AddListener(() => Track(OpenAsync(route)));
             }
             Navigation.SetActive(false);
-            Store.Changed += Refresh;
-            Refresh();
             var wallet = new WalletNode(); await wallet.AttachToAsync(UI.Root, "Wallet", Wallet.rectTransform);
-            wallet.SetViewModel("Player", PlayerVm); wallet.Bind("Player.Wallet", Wallet.TextTarget());
+            wallet.Bind("Player.Wallet", Wallet.TextTarget());
             await Pages.PushAsync<LoginView>();
         }
-        private void Refresh() => PlayerVm.Refresh(Store.State);
         public Task RunAsync(IUINode owner, Func<Task> action) => RunAsync(async () =>
         {
             var display = (EngineUI.UIElement)owner.Element;
@@ -156,11 +152,6 @@ namespace StarCourt.UnityDemo
             { await Pages.PopAsync(); Navigation.SetActive(false); }
         });
         private sealed class WalletNode : UINode { protected override bool InitiallyVisible => true; }
-        private sealed class PlayerSubscriptionLifetime : UINode
-        {
-            private readonly UnityClient _app; public PlayerSubscriptionLifetime(UnityClient app) { _app = app; }
-            protected override Task OnDisposeAsync() { _app.Store.Changed -= _app.Refresh; return Task.CompletedTask; }
-        }
         public async Task ShutdownAsync()
         {
             await Task.WhenAll(_tasks.ToArray());

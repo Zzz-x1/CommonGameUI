@@ -45,9 +45,10 @@ public class RuntimeTests
         public void Exception(Exception error, string context) => Errors.Add(error); }
     private sealed class Config(params ViewModelSource[] sources) : IViewBindingConfiguration
     { public IReadOnlyList<ViewModelSource> Sources => sources; public void Apply(UINode node) { } }
-    private sealed class Assets : IViewModelAssets, IViewModelInitialization
+    private sealed class Assets : IViewModelAssets, IViewModelAssetLifecycle
     {
         public readonly List<object> Initialized = new();
+        public ValueTask DisposeAsync(object instance) { ((OwnedVm)instance).Dispose(); return default; }
         public Action<OwnedVm>? Initializer;
         public void Initialize(object instance) { Initialized.Add(instance); Initializer?.Invoke((OwnedVm)instance); }
         public bool CanCreate(Type type) => false;
@@ -82,6 +83,16 @@ public class RuntimeTests
         Assert.Same(value, runtime.GetGlobalViewModel<OwnedVm>("Player"));
         Assert.Equal(2, assets.Initialized.Count); Assert.DoesNotContain(template, assets.Initialized);
         Assert.Equal(new object[] { value.Other!, value }, assets.Initialized);
+    }
+    [Fact]
+    public async Task InitializationCannotPublishAnUnfinishedSharedInstance()
+    {
+        var log = new Log(); var assets = new Assets();
+        await using var runtime = new MvvmRuntime(log);
+        runtime.RegisterGlobalViewModelProvider(new Provider(assets, new OwnedVm()));
+        assets.Initializer = _ => runtime.GetGlobalViewModel<OwnedVm>("Player");
+        var error = Assert.Throws<InvalidOperationException>(() => runtime.GetGlobalViewModel<OwnedVm>("Player"));
+        Assert.Contains("still being initialized", error.Message);
     }
     [Fact]
     public async Task NativeInitializationFailureIsLoggedAndPropagatesOriginalException()

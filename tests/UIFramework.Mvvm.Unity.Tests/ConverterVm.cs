@@ -1,9 +1,9 @@
 using UIFramework.Mvvm;
+using UIFramework.Mvvm.Unity;
 using UnityEngine;
 namespace NativeMvvm.Tests
 {
-    [ViewModel]
-    public sealed class ConverterVm : ScriptableObject
+    public sealed class ConverterVm : GlobalViewModel
     {
         [SerializeField] private int gold = 10;
         [SerializeField] private System.Collections.Generic.List<ConverterVm> items = new System.Collections.Generic.List<ConverterVm>();

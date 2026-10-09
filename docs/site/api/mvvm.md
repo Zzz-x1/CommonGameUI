@@ -84,7 +84,7 @@ Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Des
 | 用途 | Godot | Unity |
 |---|---|---|
 | 启用配置和观察器 | 自动 | 自动 |
-| 共享资产 | `ui.GetSharedViewModel(resource)` | `ui.GetSharedViewModel(asset)` |
+| 共享资产 | `ui.GetSharedViewModel(resource)` | `ui.GetGlobalViewModel<PlayerVm>("Player")` |
 | 文本 | Label／LineEdit `.TextTarget()` | Text／TMP／InputField `.TextTarget()` |
 | 滑杆 | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | 开关 | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
@@ -135,12 +135,12 @@ interface IGlobalViewModelProvider
 // UIFramework.Mvvm.Unity
 class GlobalViewModelCatalog : ScriptableObject
 {
-    List<ScriptableObject> ViewModels;
+    List<GlobalViewModel> ViewModels;
 }
 class GlobalViewModelProvider : IGlobalViewModelProvider
 {
     const string ResourcePath = "UIFramework/Mvvm";
-    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false);
+    GlobalViewModelProvider(IEnumerable<GlobalViewModel> viewModels, bool preview = false);
     static GlobalViewModelProvider Load(bool preview = false);
 }
 ```
@@ -148,23 +148,31 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 Unity 默认 Provider 由适配器自动注册；自定义 Provider 可用程序集标记自动注册，需有无参构造并为 IL2CPP 保留构造入口。Provider 只提供定义及资产适配，不持有 Context VM 实例。重复名称、缺失名称或资产和未织入 VM 直接报错。Godot 的来源编辑器本轮保持原行为。
 
 
-## Unity SO 初始化
+## Unity 全局 SO VM
 
 ```csharp
 // UIFramework.Mvvm.Unity
-interface IViewModelInitialize
+abstract class GlobalViewModel : ScriptableObject
 {
-    void OnInitialize();
+    protected virtual void OnInitialize();
+    protected virtual ValueTask OnDisposeAsync();
 }
-class ViewModelAssets : IViewModelAssets, IViewModelInitialization
+class ViewModelAssets : IViewModelAssets, IViewModelAssetLifecycle, IViewModelAssetPolicy
 {
     ViewModelAssets(bool preview = false);
 }
-// UIFramework.Mvvm: optional adapter hook
-interface IViewModelInitialization
+// UIFramework.Mvvm: optional adapter hooks
+interface IViewModelAssetLifecycle
 {
     void Initialize(object instance);
+    ValueTask DisposeAsync(object instance);
+}
+interface IViewModelAssetPolicy
+{
+    void ValidateCreation(Type type, object? template, bool shared, bool registeredTemplate);
+    void ValidateInstance(object instance, bool shared);
+    void ValidateBorrowed(object instance, bool ownedShared);
 }
 ```
 
-运行时 SO 完成初始数据准备后自动回调一次。preview=true 跳过业务初始化；Manual 实例由调用方准备。清理沿用 IDisposable／IAsyncDisposable。
+Unity 仅接受 GlobalViewModel 资产。独立 SO 创建被拒绝；共享模板必须已登记，借用实例须由当前 Runtime 持有。首次使用初始化，Context 最终释放等待清理；preview=true 不执行业务回调。Godot 保留原有资源创建方式。

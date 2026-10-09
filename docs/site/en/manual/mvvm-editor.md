@@ -4,7 +4,7 @@ Add `MvvmBindings` to the view root. In Unity open **Window → UIFramework → 
 
 ## 1. Configure VM sources
 
-**Unity**: create a catalog through Create → UIFramework → MVVM → Global ViewModel Catalog and save it under `Assets/Resources/UIFramework/Mvvm/`. Add available SO VMs to its ViewModels list. Context initialization loads all catalogs and registers their assets. Instances are cloned on first use, shared within a Context, and independent across Contexts by default.
+**Unity**: create a catalog through Create → UIFramework → MVVM → Global ViewModel Catalog and save it under `Assets/Resources/UIFramework/Mvvm/`. Add SO VMs inheriting GlobalViewModel to its ViewModels list; other SO types cannot be selected. Context initialization loads all catalogs and registers their assets. Instances are cloned on first use, shared within a Context, and independent across Contexts by default.
 
 Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the table to store only `AssetName.Member`, or select a provider name in binding details. Runtime uses local instances first, then resolves provider names; no global/local switch is required. Names are case-sensitive; duplicate asset names fail. Update binding paths after renaming an asset.
 

@@ -7,6 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UIFramework.Mvvm.Unity;
 
 namespace StarCourt.UnityDemo.Editor
 {
@@ -35,8 +36,22 @@ namespace StarCourt.UnityDemo.Editor
             viewType.GetProperty("selectedSizeIndex", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(view, total - 1);
             view.Repaint();
         }
+        public static void PrepareGlobalViewModels()
+        {
+            const string folder = "Assets/Resources/UIFramework/Mvvm";
+            if (!AssetDatabase.IsValidFolder("Assets/Resources/UIFramework")) AssetDatabase.CreateFolder("Assets/Resources", "UIFramework");
+            if (!AssetDatabase.IsValidFolder(folder)) AssetDatabase.CreateFolder("Assets/Resources/UIFramework", "Mvvm");
+            const string path = folder + "/Client.asset";
+            var player = AssetDatabase.LoadAssetAtPath<ClientPlayerVm>("Assets/Resources/MVVM/Player.asset");
+            if (!player) throw new InvalidOperationException("Player VM template is missing.");
+            var catalog = AssetDatabase.LoadAssetAtPath<GlobalViewModelCatalog>(path);
+            if (!catalog) { catalog = ScriptableObject.CreateInstance<GlobalViewModelCatalog>(); AssetDatabase.CreateAsset(catalog, path); }
+            catalog.ViewModels.Clear(); catalog.ViewModels.Add(player);
+            EditorUtility.SetDirty(catalog); AssetDatabase.SaveAssetIfDirty(catalog);
+        }
         public static void Build()
         {
+            PrepareGlobalViewModels();
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode before authoring assets.");
             Directory.CreateDirectory("Assets/Resources/UI"); Directory.CreateDirectory("Assets/Scenes"); Directory.CreateDirectory("Assets/Animations");
             AssetDatabase.Refresh();

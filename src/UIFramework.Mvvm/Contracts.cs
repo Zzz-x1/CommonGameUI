@@ -67,9 +67,17 @@ public interface IViewModelAssets
     void Release(object instance);
 }
 /// <summary>Optional native-asset initialization after the complete clone graph is prepared.</summary>
-public interface IViewModelInitialization
+public interface IViewModelAssetLifecycle
 {
     void Initialize(object instance);
+    ValueTask DisposeAsync(object instance);
+}
+/// <summary>Optional engine policy for native shared-only ViewModels.</summary>
+public interface IViewModelAssetPolicy
+{
+    void ValidateCreation(Type type, object? template, bool shared, bool registeredTemplate);
+    void ValidateInstance(object instance, bool shared);
+    void ValidateBorrowed(object instance, bool ownedShared);
 }
 public interface IBindingTarget : IDisposable
 {

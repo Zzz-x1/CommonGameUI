@@ -31,7 +31,7 @@ namespace MvvmWebSample
         [Command] public Task Close() => CloseView();
         [Command] public async Task Wait(CancellationToken token) { await Task.Yield(); token.ThrowIfCancellationRequested(); }
     }
-    [ViewModel] public sealed class PlayerAsset : ScriptableObject
+    public sealed class PlayerAsset : GlobalViewModel
     { [SerializeField] private int gold; [FieldNotify] public int Gold { get => gold; set => gold = value; } }
     public static class TextConversions { [Converter] public static string Gold(int value) => "Gold " + value; }
     public sealed class SamplePresentation { public float Delay; public bool Visible; public int Count; public Vector2 Request; }
@@ -89,7 +89,7 @@ namespace MvvmWebSample
             node.ResumeBinding("Player.Gold"); Check(label.text == "Gold 55" && slider.value == 55, "Resume latest VM value");
             var nested = new GameObject("Selected", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); vm.Selected = new PlayerVm { Gold = 3 };
             node.Bind("Player.Selected.Gold", BindingTargets.Property(nested, "text"), new BindingOptions { Convert = Converters.Find("FormatNumber"), HasNullValue = true, NullValue = "none" }); vm.Selected = new PlayerVm { Gold = 7 }; Check(nested.text == "7", "Nested replacement"); vm.Selected = null; Check(nested.text == "none", "Null presentation");
-            var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.Gold = 42; var clone = runtime.GetSharedViewModel(asset); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetSharedViewModel(asset)), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
+            var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.name = "SharedPlayer"; asset.Gold = 42; runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { asset })); var clone = runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer"); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer")), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
             var described = ((IMvvmObject)(object)vm).Describe(); Check(Array.Exists(described, p => p.Name == "Gold" && p.Observable), "Generated metadata");
             await ((IMvvmObject)(object)vm).Execute("Wait", null, default); Check(true, "Async command");
             var presentation = new SamplePresentation();

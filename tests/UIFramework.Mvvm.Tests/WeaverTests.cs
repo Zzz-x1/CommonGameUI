@@ -45,6 +45,18 @@ public class WeaverTests
             Assert.NotEmpty(reread.Types.Single(t => t.Name == "Base").Methods.Single(m => m.Name == "__mvvmOriginal_set_Gold").DebugInformation.SequencePoints);
         }
     }
+    [Fact] public void GlobalViewModelInheritanceIsWovenWithoutAttributes()
+    {
+        using var module = Compile("namespace UIFramework.Mvvm.Unity { public abstract class GlobalViewModel { } } public abstract class Base : UIFramework.Mvvm.Unity.GlobalViewModel { [FieldNotify] public int Gold { get; set; } } public class Vm : Base { [FieldNotify(nameof(Gold))] public bool Rich => Gold > 10; }");
+        var weaver = Weaver(module, out var runtime); using (runtime)
+        {
+            Assert.Equal(2, weaver.Process()); Assert.Equal(0, weaver.Process());
+            Assert.Empty(module.Types.Single(type => type.FullName == "UIFramework.Mvvm.Unity.GlobalViewModel").Interfaces);
+            Assert.Contains(module.Types.Single(type => type.Name == "Base").Interfaces, item => item.InterfaceType.FullName == typeof(IMvvmObject).FullName);
+            Assert.NotEmpty(module.Types.Single(type => type.Name == "Base").Methods.Single(method => method.Name == "__mvvmOriginal_set_Gold").DebugInformation.SequencePoints);
+            Assert.Contains(module.Types.Single(type => type.Name == "Vm").Methods, method => method.Name == "Describe");
+        }
+    }
     [Fact] public void StartupIsInstalledEvenWithoutVmDeclarationsAndDoesNotDuplicate()
     {
         using var module = Compile("public class App { }"); var weaver = Weaver(module, out var runtime);

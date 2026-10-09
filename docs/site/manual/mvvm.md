@@ -8,7 +8,7 @@ MVVM 是可选模块。它把金币、设置、背包等界面数据放在 VM �
 - **Godot**：运行 `scripts/Prepare-GodotMvvm.ps1 -Project <项目目录>`，安装源代码插件。项目引用 `UIFramework.Mvvm.csproj` 和现有 Godot 适配器，并导入 `build/UIFramework.Mvvm.targets`。在项目设置启用 **UIFramework MVVM**。
 - **普通 .NET**：引用 `UIFramework.Mvvm.csproj`，导入上述 targets。构建工具需要 .NET 10 SDK；游戏运行时模块仍为 `netstandard2.1`。
 
-Cecil 只用于构建。普通 VM 不需要继承框架基类；Unity 资产继承 `ScriptableObject`，Godot 资产继承 `Resource`。
+Cecil 只用于构建。普通 VM 不需要继承框架基类；Unity 全局资产继承 `GlobalViewModel`，Godot 资产继承 `Resource`。
 
 ## 第一个绑定
 
@@ -66,36 +66,45 @@ var shop = this.GetViewModel<ShopVm>("Shop");
 var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
-## Unity SO 初始化回调
+## Unity 全局 SO VM
 
-SO VM 可实现 `UIFramework.Mvvm.Unity.IViewModelInitialize`，无需继承框架基类或注册初始化函数：
+Unity SO VM 继承 `GlobalViewModel`，无需额外 `[ViewModel]` 标记或初始化注册。它用于同一 Context 共享的玩家、商店或设置状态；独立详情、购买流程和列表条目使用普通 C# VM。
 
 ```csharp
-[ViewModel]
-public class PlayerVm : UnityEngine.ScriptableObject, IViewModelInitialize, IDisposable
+using System.Threading.Tasks;
+using UnityEngine;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Unity;
+
+[CreateAssetMenu(menuName = "Game/ViewModels/Player")]
+public sealed class PlayerVm : GlobalViewModel
 {
-    [UnityEngine.SerializeField] private int gold;
+    [SerializeField] private int gold;
     [FieldNotify] public int Gold { get => gold; set => gold = value; }
 
-    public void OnInitialize()
+    protected override void OnInitialize()
     {
-        // Connect business services or subscribe to events here.
+        // Prepare shared business state and subscribe to events.
     }
 
-    public void Dispose()
+    protected override ValueTask OnDisposeAsync()
     {
-        // Disconnect business events here.
+        // Unsubscribe and await cleanup if needed.
+        return default;
     }
 }
 ```
 
-框架完成实例创建、模板复制和嵌套 VM 引用重映射后调用 `OnInitialize`，随后才返回实例或应用绑定。每个新实例一次；共享实例查询、隐藏及缓存重开不会重复调用。原始资产、编辑器预览和通过 `SetViewModel` 借用的实例不执行该回调。
+将资产加入全局目录，通过名称获取。首次使用时克隆、准备数据并执行 `OnInitialize`，成功后才返回或绑定。窗口关闭、隐藏和缓存不会重复初始化或释放共享 VM；Context 最终释放时等待 `OnDisposeAsync`，再销毁 SO。
 
-回调同步执行，用于业务状态准备及事件订阅；需要等待的数据加载由业务方法显式完成。不要使用 `async void`。回调失败记录并传播原始异常，失败实例仍由所属节点／Context 完成清理。Unity 自身的 `OnEnable` 发生得更早，不能替代框架回调。资产循环引用允许保留，但回调不要相互依赖对方已经完成业务初始化。
+原始资产和编辑器预览不执行业务回调。初始化失败传播原异常，部分初始化实例仍执行清理。回调可订阅业务事件；不要使用 `async void`，也不要用 Unity `OnEnable／OnDisable` 替代框架回调。循环资产引用不保证循环业务依赖已经初始化。
 
-销毁时框架先调用 `IDisposable` 或等待 `IAsyncDisposable`，再销毁 SO。独立 VM 随节点销毁；Provider 共享 VM 随 Context 释放。预览不运行初始化，清理方法应能处理尚未业务初始化的实例。框架不会猜测或调用项目自定义的 `Initialize`／`Prepare` 方法；实现此接口才会自动执行业务回调。
+模板初始值遵循 Unity 序列化规则，使用 SerializeField 或 SerializeReference 保存配置。嵌套 VM 引用会在克隆后的序列化字段中重映射，公开只读属性也可以读取正确的共享实例。
 
-## 选择实例方式
+框架拒绝独立 SO 创建、SO 工厂返回值和未登记模板的直接共享获取。`SetViewModel` 仅可借用当前 Runtime 已有的共享 SO 克隆，不能传原资产、外部实例或其他 Runtime 的实例。创建和销毁由框架管理，没有公开的手工初始化／销毁入口。
+
+
+## 普通 C# VM 与 Godot 的实例方式
 
 | 方式 | 常见场景 | 释放时机 |
 |---|---|---|
@@ -106,7 +115,7 @@ public class PlayerVm : UnityEngine.ScriptableObject, IViewModelInitialize, IDis
 ```csharp
 ui.RegisterViewModelFactory(() => new InventoryVm(inventoryService));
 var inventory = this.CreateViewModel<InventoryVm>("Inventory");
-var player = ui.GetSharedViewModel(playerAsset);
+var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 this.SetViewModel("Player", player);
 ```
 

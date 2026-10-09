@@ -20,7 +20,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private Label _status;
         private BindingPreview _preview;
         private readonly List<ViewBindingData> _visible = new List<ViewBindingData>();
-        private readonly List<ScriptableObject> _sourceRows = new List<ScriptableObject>();
+        private readonly List<GlobalViewModel> _sourceRows = new List<GlobalViewModel>();
         [MenuItem("Window/UIFramework/View Bindings")]
         public static void Open() => GetWindow<MvvmEditorWindow>("View Bindings");
         public static void Inspect(MvvmBindings view, Component target = null)
@@ -91,7 +91,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Refresh()
         {
             if (_sources == null) return;
-            _sourceRows.Clear(); _sourceRows.AddRange(GlobalViewModelProvider.Load().ViewModels.Values.Cast<ScriptableObject>()); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
+            _sourceRows.Clear(); _sourceRows.AddRange(GlobalViewModelProvider.Load().ViewModels.Values.Cast<GlobalViewModel>()); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
@@ -112,7 +112,7 @@ namespace UIFramework.Mvvm.EditorUnity
             foreach (var command in asset.GetType().GetMethods().Where(m => m.IsDefined(typeof(CommandAttribute), true)))
                 Member(asset.name + "." + command.Name, "Command", asset);
         }
-        private void Member(string path, string type, ScriptableObject asset)
+        private void Member(string path, string type, GlobalViewModel asset)
         { var row = new Label(path + " : " + type); row.RegisterCallback<PointerDownEvent>(e => { if (e.button != 0) return; DragAndDrop.PrepareStartDrag(); DragAndDrop.SetGenericData("Mvvm.Path", path); DragAndDrop.StartDrag(path); }); _members.Add(row); }
         private void BindingDetails()
         {

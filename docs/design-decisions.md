@@ -2063,12 +2063,20 @@ ShopContent 初始化直接获取 Shop，却因没有绑定行预先登记来源
 交付核验：Debug 构建成功，0 警告、0 错误。三组 DLL／PDB 与 Debug 输出文件散列一致，程序集 DebuggableAttribute 均确认 DisableOptimizations。只进行交付、脚本／双语示例和差异检查，未运行完整回归或实际 VS 附加断点验证，未切换用户窗口。
 
 
-## 34. Unity SO VM 自动初始化（2026-10-10，已确认）
+## 34. Unity SO 初始化接口阶段（已由第 35 节替代）
 
-Unity SO VM 可实现可选 IViewModelInitialize.OnInitialize()，不要求框架基类、Runtime 管理或项目回调注册。同步回调在框架完成创建、模板复制和整个嵌套资产图重映射后执行，先处理新建的依赖，再返回实例／应用绑定；每个新实例一次。查询共享实例、隐藏和缓存不会重复调用。资产循环引用不意味着循环业务初始化依赖可用。原始资产、编辑器预览和 Manual 借用实例不执行回调；Unity 原生 OnEnable 时序更早，不作为业务初始化入口。
+此前 IViewModelInitialize 实现完成了自动回调与预览隔离的 2 项核心、1 项 Unity 专项验证。用户后续明确 SO 只用于全局共享，因此删除这一接口，改用第 35 节的 GlobalViewModel 基类；本节仅保留实施历史，不作为当前 API 契约。
 
-共享 MVVM 的可选 IViewModelInitialization 资产适配接口负责调用，Core 不引用 Unity；Godot 资产适配暂不实现这一初始化能力。Unity ViewModelAssets 和 GlobalViewModelProvider 增加 preview=false 参数，预览流程显式传 true，仅准备初始值，不执行 VM 业务初始化。回调失败记录并传播原异常，失败实例继续由已建立的节点／Context 所有权释放；不返回失败实例，不吞错或重试。销毁继续调用 IDisposable／IAsyncDisposable 后释放原生资产，不新增销毁回调或所有权包装。
+## 35. Unity 全局 SO ViewModel（2026-10-10，已确认）
 
-第 32 节关于框架不调用业务方法的规则调整为：不猜测 Initialize／Prepare 等项目方法；显式实现 IViewModelInitialize 后自动执行 OnInitialize。回调可准备业务状态及事件订阅；数据异步加载仍显式等待业务方法，不采用 async void。
+Unity SO VM 统一继承 UIFramework.Mvvm.Unity.GlobalViewModel。提供 protected 同步 OnInitialize 和 ValueTask OnDisposeAsync，框架调用内部入口，用户不管理初始化或释放。首次按 Provider 名称查询／绑定时创建 Context 共享克隆，完成初始数据和嵌套引用准备后初始化；成功后返回。关闭、隐藏、缓存不重建或销毁共享 VM；Context 最终释放等待回调再销毁原生对象。不同 Context 默认隔离；ShareMvvm 沿用共享 Runtime 的既有所有权。原资产与编辑器预览不执行业务回调，预览仍销毁临时原生实例。初始化失败保留原异常并清理部分初始化实例，不作为可用实例发布。
 
-验收：初始化顺序／一次执行及原始异常传播 2 项核心专项、Unity 原生 SO 绑定与初始化 1 项通过，覆盖独立 Context、模板不变、共享查询不重复及预览跳过。两端使用的 MVVM 程序集已更新；Unity Debug DLL 与生成输出 SHA256 一致，匹配 PDB 已同步，Godot Demo 生成成功。修改页中英文代码一致，源码／差异检查通过。未执行全量回归、编辑器 GUI 操作或 IL2CPP 导出；Fruit-platter 的项目自定义 Initialize 尚未迁移为此接口。
+普通 C# VM 用于独立窗口、购买流程与列表条目；不要求引擎基类。Unity 拒绝独立 SO 创建、SO 工厂结果、未登记模板的直接共享获取及原资产／外部 SO／其他 Runtime 实例的借用；SetViewModel 可借用当前 Runtime 持有的共享克隆，包括集合来源映射。目录为 List<GlobalViewModel>，编辑器仅发现该基类资产。移除 Unity 资产直接共享扩展和 IViewModelInitialize，不保留兼容入口。
+
+Cecil 自动识别 GlobalViewModel 业务派生链，不要求额外 ViewModel 属性；框架原生基类自身不织入，普通 C# VM 的显式属性标记保持原工作流。Core 通过可选 IViewModelAssetLifecycle／IViewModelAssetPolicy 接入，不依赖 Unity。Godot 的 Resource 来源创建方式本轮不变。Unity Demo 玩家 VM 的业务事件订阅与释放改在基类回调中完成；独立 VM 继续为 C# 对象。
+
+本轮仅框架、Demo、测试及用户文档，不迁移 Fruit-platter；该项目现有独立 SO 用法需单独迁移，不增加兼容放行。
+
+Unity 依赖映射修订：直接遍历 Unity 已复制实例的序列化字段，不依赖 VM 属性可写性，也不反射调用业务 getter／setter。覆盖私有字段、只读属性背后的引用、数组／列表及 SerializeReference 对象图；资源对象继续共享，原始模板不写入。初始化准备中的实例不能通过查询或借用提前发布。
+
+验收：核心 Runtime／Weaver／集合相关 51 项通过；Unity MVVM 4 项原生测试通过，补验共享 Runtime、异步清理、部分初始化失败、预览隔离、私有序列化只读引用与循环图的专项通过。客户端购买→装备→培养→任务→重启单项原生回归通过，玩家全局 VM 自动订阅及最终解除订阅正常。编辑器实际验证 Undo、Prefab Override、预览与恢复通过。Unity 与 Godot 编译生成成功，Debug DLL／PDB 已刷新并核对 Unity MVVM DLL 与输出 SHA256 一致。中英文修改页代码一致，源码／差异检查通过。未执行全量框架或引擎测试、Godot 原生运行、WebGL／IL2CPP 导出，也未修改 Fruit-platter。

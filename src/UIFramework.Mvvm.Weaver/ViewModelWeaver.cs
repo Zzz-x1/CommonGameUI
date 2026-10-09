@@ -12,6 +12,14 @@ public sealed class ViewModelWeaver
     private MethodReference Runtime(string type, string method) => _module.ImportReference(_runtime.GetType(Prefix + type).Methods.Single(m => m.Name == method));
     private TypeReference RuntimeType(string name) => _module.ImportReference(_runtime.GetType(Prefix + name));
     private static bool Attribute(ICustomAttributeProvider member, string name) => member.CustomAttributes.Any(a => a.AttributeType.FullName == Prefix + name);
+    private static bool IsViewModel(TypeDefinition type)
+    {
+        if (type.FullName == "UIFramework.Mvvm.Unity.GlobalViewModel") return false;
+        if (Attribute(type, "ViewModelAttribute")) return true;
+        for (var parent = type.BaseType?.Resolve(); parent != null; parent = parent.BaseType?.Resolve())
+            if (parent.FullName == "UIFramework.Mvvm.Unity.GlobalViewModel") return true;
+        return false;
+    }
     public bool Changed { get; private set; }
     public int Process()
     {
@@ -26,7 +34,7 @@ public sealed class ViewModelWeaver
         if (!startup.Body.Instructions.Any(i => i.Operand is MethodReference method && method.DeclaringType.FullName == Prefix + "MvvmModule" && method.Name == "Install"))
         { startup.Body.GetILProcessor().InsertBefore(startup.Body.Instructions[0], Instruction.Create(OpCodes.Call, Runtime("MvvmModule", "Install"))); Changed = true; }
         int count = 0;
-        foreach (var type in Types(_module.Types).Where(t => Attribute(t, "ViewModelAttribute")).ToArray()) if (Weave(type)) count++;
+        foreach (var type in Types(_module.Types).Where(IsViewModel).ToArray()) if (Weave(type)) count++;
         if (WeaveConverters()) count++;
         Changed |= count != 0;
         return count;
@@ -72,13 +80,13 @@ public sealed class ViewModelWeaver
         if (Attribute(type, "WovenViewModelAttribute")) return false;
         if (!type.IsClass || type.HasGenericParameters) throw new InvalidOperationException("VM must be a non-generic class: " + type.FullName);
         TypeDefinition? parent = type.BaseType?.Resolve();
-        bool inherited = parent != null && Attribute(parent, "ViewModelAttribute");
+        bool inherited = parent != null && IsViewModel(parent);
         if (inherited && parent!.Module == _module) Weave(parent);
         var properties = type.Properties.Where(p => p.GetMethod?.IsPublic == true && !p.GetMethod.IsStatic && !p.HasParameters).ToList();
         var commands = type.Methods.Where(m => Attribute(m, "CommandAttribute")).ToList();
         if (inherited)
         {
-            for (var baseType = parent; baseType != null && Attribute(baseType, "ViewModelAttribute"); baseType = baseType.BaseType?.Resolve())
+            for (var baseType = parent; baseType != null && IsViewModel(baseType); baseType = baseType.BaseType?.Resolve())
             {
                 properties.AddRange(baseType.Properties.Where(p => p.GetMethod?.IsPublic == true && !p.HasParameters && properties.All(x => x.Name != p.Name)));
                 commands.AddRange(baseType.Methods.Where(m => Attribute(m, "CommandAttribute") && commands.All(x => x.Name != m.Name)));

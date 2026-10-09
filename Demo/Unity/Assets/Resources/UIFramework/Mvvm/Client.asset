@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 165b00b59e2d40e6a5dd8a29e3b1c741, type: 3}
+  m_Name: Client
+  m_EditorClassIdentifier: UIFramework.Mvvm.Unity::UIFramework.Mvvm.Unity.GlobalViewModelCatalog
+  ViewModels:
+  - {fileID: 11400000, guid: e76731dfc2c70c249bc55ffbeac1bc8a, type: 2}

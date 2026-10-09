@@ -92,4 +92,7 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 
 容器挂载：客户端保留场景中显式配置的内容区和绘制层序。简单全区域容器可用 `await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows")` 自动创建挂载；完整示例见 `docs/examples` 两端入门工程。
 
-Unity MVVM：窗口不再维护 ViewModels 列表。全局 SO VM 放入 GlobalViewModelCatalog，目录资产保存到 Resources/UIFramework/Mvvm；绑定行引用资产。客户端商品条目仍使用自动注入的 Item 和父来源映射，不需要 Creation。全局目录、Context 隔离和编辑器预览示例分别见 MvvmNativeTests、MvvmEditorVerification 与用户指南。
+Unity MVVM：窗口不再维护 ViewModels 列表。全局 SO VM 放入 GlobalViewModelCatalog，目录资产保存到 Resources/UIFramework/Mvvm；绑定行只保存来源字符串，例如 Player.Wallet。客户端商品条目仍使用自动注入的 Item 和父来源映射，不需要 Creation。全局目录、Context 隔离和编辑器预览示例分别见 MvvmNativeTests、MvvmEditorVerification 与用户指南。
+
+
+全局 SO VM：ClientPlayerVm 继承 GlobalViewModel，通过 Resources/UIFramework/Mvvm/Client.asset 登记。首次获取时 OnInitialize 订阅本地玩家存档变化，Context 释放时 OnDisposeAsync 解除订阅；窗口关闭或缓存不释放玩家状态。独立详情、购买与列表条目继续使用普通 C# VM。缺少目录时可在编辑器执行 ClientSceneAuthoring.PrepareGlobalViewModels，不在运行时补建目录。

@@ -11,13 +11,14 @@ namespace UIFramework.Mvvm.Unity
         public const string ResourcePath = "UIFramework/Mvvm";
         public IReadOnlyDictionary<string, object> ViewModels { get; }
         public IViewModelAssets Assets { get; }
-        public GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false)
+        public GlobalViewModelProvider(IEnumerable<GlobalViewModel> viewModels, bool preview = false)
         {
             Assets = new ViewModelAssets(preview);
             var definitions = new Dictionary<string, object>(StringComparer.Ordinal);
             foreach (var asset in viewModels)
             {
                 if (!asset) throw new ArgumentException("Global VM catalog contains a null asset.");
+                if (asset.IsRuntimeInstance) throw new ArgumentException("Global VM provider requires template assets: " + asset.name);
                 if (definitions.ContainsKey(asset.name)) throw new ArgumentException("Duplicate global VM name '" + asset.name + "': " + asset);
                 definitions.Add(asset.name, asset);
             }

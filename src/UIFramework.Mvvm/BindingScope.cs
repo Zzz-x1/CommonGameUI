@@ -61,6 +61,7 @@ internal sealed class BindingScope : IAsyncDisposable
     {
         Node.Context.Host.VerifyAccess();
         if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
+        if (_assets is IViewModelAssetPolicy policy) policy.ValidateBorrowed(value, _runtime.OwnsShared(value));
         if (value is not IMvvmObject) throw new InvalidOperationException("VM must be woven: " + value.GetType().FullName);
         _sources[name] = value; SourcesChanged?.Invoke();
     }

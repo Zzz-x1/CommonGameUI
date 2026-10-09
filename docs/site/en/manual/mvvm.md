@@ -8,7 +8,7 @@ MVVM is optional. Keep currency, settings and inventory data in a VM and update 
 - **Godot**: run `scripts/Prepare-GodotMvvm.ps1 -Project <project directory>` to install the source plugin. Reference `UIFramework.Mvvm.csproj` and the existing Godot adapter, then import `build/UIFramework.Mvvm.targets`. Enable **UIFramework MVVM** in project settings.
 - **Plain .NET**: reference `UIFramework.Mvvm.csproj` and import the same targets. The build tool requires the .NET 10 SDK; the game runtime module targets `netstandard2.1`.
 
-Cecil is a build dependency only. Plain VMs need no framework base class. Unity assets derive from `ScriptableObject`; Godot assets derive from `Resource`.
+Cecil is a build dependency only. Plain VMs need no framework base class. Unity global assets derive from `GlobalViewModel`; Godot assets derive from `Resource`.
 
 ## First binding
 
@@ -66,36 +66,45 @@ Business code can retrieve the Context instance when needed:
 var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
-## Unity SO initialization callback
+## Unity global SO VMs
 
-An SO VM can implement `UIFramework.Mvvm.Unity.IViewModelInitialize`. No framework base class or initializer registration is required:
+Unity SO VMs inherit `GlobalViewModel`; no additional `[ViewModel]` marker or initializer registration is needed. Use them for player, shop, or settings state shared within a Context. Use plain C# VMs for independent details, purchase flows, and list items.
 
 ```csharp
-[ViewModel]
-public class PlayerVm : UnityEngine.ScriptableObject, IViewModelInitialize, IDisposable
+using System.Threading.Tasks;
+using UnityEngine;
+using UIFramework.Mvvm;
+using UIFramework.Mvvm.Unity;
+
+[CreateAssetMenu(menuName = "Game/ViewModels/Player")]
+public sealed class PlayerVm : GlobalViewModel
 {
-    [UnityEngine.SerializeField] private int gold;
+    [SerializeField] private int gold;
     [FieldNotify] public int Gold { get => gold; set => gold = value; }
 
-    public void OnInitialize()
+    protected override void OnInitialize()
     {
-        // Connect business services or subscribe to events here.
+        // Prepare shared business state and subscribe to events.
     }
 
-    public void Dispose()
+    protected override ValueTask OnDisposeAsync()
     {
-        // Disconnect business events here.
+        // Unsubscribe and await cleanup if needed.
+        return default;
     }
 }
 ```
 
-The framework calls `OnInitialize` after creating the instance, copying template data, and remapping nested VM references, before returning the instance or applying bindings. Each new instance runs it once. Shared lookups, hiding, and cache reuse do not repeat it. Original assets, editor previews, and instances borrowed through `SetViewModel` do not run the callback.
+Add the asset to a global catalog and resolve it by name. First use clones it, prepares initial data, and calls `OnInitialize` before returning or binding it. Closing, hiding, and caching a window do not reinitialize or release the shared VM. Final Context disposal awaits `OnDisposeAsync`, then destroys the SO.
 
-The callback is synchronous, for business state preparation and event subscriptions. Await data loading explicitly through business methods; do not use `async void`. Failures are logged and propagated unchanged; the owning node or Context still cleans up failed instances. Unity's own `OnEnable` runs earlier and does not replace this callback. Cyclic asset references remain supported, but callbacks must not depend on each other having completed business initialization.
+Original assets and editor previews do not run business callbacks. Initialization failures propagate unchanged; partially initialized instances still receive cleanup. Callbacks may subscribe to business events. Do not use `async void` or replace these callbacks with Unity `OnEnable`/`OnDisable`. Cyclic asset references do not guarantee initialized cyclic business dependencies.
 
-During disposal, the framework calls `IDisposable` or awaits `IAsyncDisposable`, then destroys the SO. Independent VMs belong to their node; provider-shared VMs belong to the Context. Previews skip initialization, so cleanup must also handle instances without business initialization. The framework does not guess or invoke custom `Initialize` or `Prepare` methods; implement this interface to receive the automatic callback.
+Template values follow Unity serialization rules; use SerializeField or SerializeReference for configuration. Nested VM references are remapped in cloned serialized fields, so public read-only properties also see the correct shared instances.
 
-## Choose ownership
+The framework rejects independent SO creation, SO factory results, and direct shared lookup of unregistered templates. `SetViewModel` may only borrow an existing shared SO clone owned by the current Runtime, not original assets, external instances, or another Runtime's instances. The framework owns creation and destruction; there are no public manual initialization or disposal entry points.
+
+
+## Plain C# and Godot instance ownership
 
 | Mode | Typical use | Released by |
 |---|---|---|
@@ -106,7 +115,7 @@ During disposal, the framework calls `IDisposable` or awaits `IAsyncDisposable`,
 ```csharp
 ui.RegisterViewModelFactory(() => new InventoryVm(inventoryService));
 var inventory = this.CreateViewModel<InventoryVm>("Inventory");
-var player = ui.GetSharedViewModel(playerAsset);
+var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 this.SetViewModel("Player", player);
 ```
 

@@ -53,10 +53,4 @@ namespace UIFramework.Mvvm.Unity
             }
         }
     }
-    public static class MvvmExtensions
-    {
-        public static T GetSharedViewModel<T>(this UIContext ui, T template) where T : ScriptableObject => ui.GetMvvm().GetSharedViewModel(template, new ViewModelAssets());
-    public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : ScriptableObject => runtime.GetSharedViewModel(template, new ViewModelAssets());
-
-    }
 }

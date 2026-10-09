@@ -7,6 +7,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
     static MvvmRuntime() => MvvmModule.Install();
     private readonly Dictionary<string, (object Definition, IGlobalViewModelProvider Provider)> _globals = new(StringComparer.Ordinal);
     private readonly Dictionary<Type, Func<object>> _factories = new();
+    private readonly HashSet<object> _preparing = new(ReferenceComparer.Instance);
     private readonly Dictionary<object, object> _shared = new(ReferenceComparer.Instance);
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
     private readonly List<BindingScope> _scopes = new();
@@ -53,6 +54,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
             if (string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Contains(".")) throw new ArgumentException($"Global VM provider '{provider.GetType().FullName}' contains an invalid name '{entry.Key}'; names must be nonempty and contain no dots.");
             var definition = entry.Value;
             if (definition == null) throw new ArgumentException($"Global VM '{entry.Key}' from provider '{provider.GetType().FullName}' has a null asset reference.");
+            if (provider.Assets is IViewModelAssetPolicy policy) policy.ValidateInstance(definition, true);
             if (!provider.Assets.IsAsset(definition)) throw new ArgumentException($"Global VM '{entry.Key}', asset '{definition}' ({definition.GetType().FullName}), from provider '{provider.GetType().FullName}' is not a native woven VM asset.");
             if (_globals.ContainsKey(entry.Key)) throw new ArgumentException($"Global VM name '{entry.Key}' is already registered; conflicting asset '{definition}' from provider '{provider.GetType().FullName}'.");
         }
@@ -71,21 +73,28 @@ public sealed class MvvmRuntime : IAsyncDisposable
     internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared, Action<object, IViewModelAssets?> own)
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
+        if (assets is IViewModelAssetPolicy policy)
+            policy.ValidateCreation(type, template, shared, _globals.Values.Any(entry => ReferenceEquals(entry.Definition, template)));
         var graph = shared ? _shared : new Dictionary<object, object>(ReferenceComparer.Instance);
         var added = new List<object>();
         var created = new List<(object Value, IViewModelAssets? Assets)>();
         try
         {
             var result = Resolve(type, template);
+            if (_preparing.Contains(result) && !created.Any(item => ReferenceEquals(item.Value, result)))
+                throw new InvalidOperationException("VM is still being initialized: " + result.GetType().FullName);
             for (var i = created.Count - 1; i >= 0; i--)
-                if (created[i].Assets is IViewModelInitialization initialization)
+            {
+                if (created[i].Assets is IViewModelAssetLifecycle initialization)
                 {
                     try { initialization.Initialize(created[i].Value); }
                     catch (Exception error) { Report(error, "Initialize MVVM asset " + created[i].Value.GetType().FullName); throw; }
                 }
+                _preparing.Remove(created[i].Value);
+            }
             return result;
         }
-        catch { foreach (var key in added) graph.Remove(key); throw; }
+        catch { foreach (var key in added) graph.Remove(key); foreach (var item in created) _preparing.Remove(item.Value); throw; }
         object Resolve(Type requestedType, object? source)
         {
             if (source != null && graph.TryGetValue(source, out var cached)) return cached;
@@ -94,15 +103,17 @@ public sealed class MvvmRuntime : IAsyncDisposable
             if (source != null)
             {
                 if (assets == null || !assets.IsAsset(source)) throw new ArgumentException("A native VM asset is required.");
+                if (assets is IViewModelAssetPolicy sourcePolicy) sourcePolicy.ValidateInstance(source, shared);
                 value = assets.Clone(source);
             }
             else value = _factories.TryGetValue(requestedType, out var factory) ? factory() : assets?.CanCreate(requestedType) == true ? assets.CreateInstance(requestedType) : Activator.CreateInstance(requestedType)
                 ?? throw new InvalidOperationException("VM factory returned null.");
+            if (assets is IViewModelAssetPolicy instancePolicy) instancePolicy.ValidateInstance(value, shared);
             var adapter = assets?.IsAsset(value) == true ? assets : null;
             if (shared) _owned.Add((value, adapter)); else own(value, adapter);
             if (!requestedType.IsInstanceOfType(value)) throw new InvalidCastException("VM factory/template type mismatch: " + requestedType.FullName);
             if (value is not IMvvmObject) throw new InvalidOperationException("ViewModel has not been woven: " + requestedType.FullName);
-            created.Add((value, adapter));
+            created.Add((value, adapter)); _preparing.Add(value);
             if (source != null)
             {
                 graph.Add(source, value); added.Add(source);
@@ -111,6 +122,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
             return value;
         }
     }
+    internal bool OwnsShared(object instance) => !_preparing.Contains(instance) && _shared.Values.Any(value => ReferenceEquals(value, instance));
     internal void Add(BindingScope scope) => _scopes.Add(scope);
     internal void Remove(BindingScope scope)
     {
@@ -122,7 +134,8 @@ public sealed class MvvmRuntime : IAsyncDisposable
         Exception? first = null;
         try
         {
-            if (value is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
+            if (assets is IViewModelAssetLifecycle lifecycle) await lifecycle.DisposeAsync(value);
+            else if (value is IAsyncDisposable asyncDisposable) await asyncDisposable.DisposeAsync();
             else if (value is IDisposable disposable) disposable.Dispose();
         }
         catch (Exception error) { Failure(ref first, error); }

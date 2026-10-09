@@ -4,7 +4,7 @@
 
 ## 1. 配置 VM 来源
 
-**Unity**：通过 Create → UIFramework → MVVM → Global ViewModel Catalog 创建目录 SO，保存到 `Assets/Resources/UIFramework/Mvvm/`。将可用的 SO VM 拖入目录的 ViewModels 列表。框架创建 Context 时自动读取所有目录并注册资产，首次使用时克隆；同一 Context 共用实例，不同 Context 默认独立。
+**Unity**：通过 Create → UIFramework → MVVM → Global ViewModel Catalog 创建目录 SO，保存到 `Assets/Resources/UIFramework/Mvvm/`。将继承 GlobalViewModel 的 SO VM 拖入目录的 ViewModels 列表，其他 SO 类型不能选择。框架创建 Context 时自动读取所有目录并注册资产，首次使用时克隆；同一 Context 共用实例，不同 Context 默认独立。
 
 窗口不再保存 ViewModels 列表，也不选择 Creation。左侧 Global Viewmodels 只浏览目录中的资产；拖动成员到绑定表，只保存 `资产名.成员`。绑定详情可选择 Provider 名称或直接填写来源路径。运行时先使用本地注入的实例，没有本地实例时查询 Provider；无需全局／本地开关。名称区分大小写，目录中同名资产直接报错；重命名后须更新绑定路径。
 

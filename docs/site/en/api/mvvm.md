@@ -84,7 +84,7 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 | Purpose | Godot | Unity |
 |---|---|---|
 | Enable configuration and observer | Automatic | Automatic |
-| Shared asset | `ui.GetSharedViewModel(resource)` | `ui.GetSharedViewModel(asset)` |
+| Shared asset | `ui.GetSharedViewModel(resource)` | `ui.GetGlobalViewModel<PlayerVm>("Player")` |
 | Text | Label / LineEdit `.TextTarget()` | Text / TMP / InputField `.TextTarget()` |
 | Slider | Range `.ValueTarget()` | Slider `.ValueTarget()` |
 | Toggle | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
@@ -135,12 +135,12 @@ interface IGlobalViewModelProvider
 // UIFramework.Mvvm.Unity
 class GlobalViewModelCatalog : ScriptableObject
 {
-    List<ScriptableObject> ViewModels;
+    List<GlobalViewModel> ViewModels;
 }
 class GlobalViewModelProvider : IGlobalViewModelProvider
 {
     const string ResourcePath = "UIFramework/Mvvm";
-    GlobalViewModelProvider(IEnumerable<ScriptableObject> viewModels, bool preview = false);
+    GlobalViewModelProvider(IEnumerable<GlobalViewModel> viewModels, bool preview = false);
     static GlobalViewModelProvider Load(bool preview = false);
 }
 ```
@@ -148,23 +148,31 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
 
 
-## Unity SO initialization
+## Unity global SO VMs
 
 ```csharp
 // UIFramework.Mvvm.Unity
-interface IViewModelInitialize
+abstract class GlobalViewModel : ScriptableObject
 {
-    void OnInitialize();
+    protected virtual void OnInitialize();
+    protected virtual ValueTask OnDisposeAsync();
 }
-class ViewModelAssets : IViewModelAssets, IViewModelInitialization
+class ViewModelAssets : IViewModelAssets, IViewModelAssetLifecycle, IViewModelAssetPolicy
 {
     ViewModelAssets(bool preview = false);
 }
-// UIFramework.Mvvm: optional adapter hook
-interface IViewModelInitialization
+// UIFramework.Mvvm: optional adapter hooks
+interface IViewModelAssetLifecycle
 {
     void Initialize(object instance);
+    ValueTask DisposeAsync(object instance);
+}
+interface IViewModelAssetPolicy
+{
+    void ValidateCreation(Type type, object? template, bool shared, bool registeredTemplate);
+    void ValidateInstance(object instance, bool shared);
+    void ValidateBorrowed(object instance, bool ownedShared);
 }
 ```
 
-Runtime SO instances receive one callback after initial data preparation. preview=true skips business initialization; callers prepare Manual instances. Cleanup uses IDisposable/IAsyncDisposable.
+Unity accepts only GlobalViewModel assets. Independent SO creation is rejected; shared templates must be registered and borrowed instances must belong to the current Runtime. First use initializes; final Context disposal awaits cleanup. preview=true skips business callbacks. Godot retains its existing resource creation modes.
