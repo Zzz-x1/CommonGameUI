@@ -2036,3 +2036,7 @@ Unity 每行 ViewBindingData 保存 ViewModel 原生资产引用和 IsGlobal。�
 IUILog 提供同步 Error(string message) 与 Exception(Exception exception, string context)。Error 记录普通错误文本；框架捕获的原始异常统一调用 Exception，保持上下文、去重、附加清理失败及原始异常传播。Unity Error 使用 Debug.LogError，Exception 先记录操作上下文，再使用 Debug.LogException(exception)，不把异常转成普通错误字符串或包装新异常。Godot 与控制台同步实现两种入口，项目日志实现、测试与中英文接口说明同步迁移，不保留旧 Error(Exception, context) 重载。
 
 交付检查：Core／MVVM 生成成功，Unity 实际引用 DLL 已同步且 Core SHA256 与 Release 一致；Godot Demo 重新生成成功，0 警告、0 错误；Unity 批处理编译无 C# 错误。只进行接口迁移、调用点与差异检查及必要程序集交付，不执行全量测试。
+
+错误信息修订（2026-10-09）：全局 VM 未注册异常必须包含资产的原生文本身份（Unity 为资产名及类型）、完整 VM 类型，以及初始化请求的节点名、业务类型和来源别名；直接查询标明 direct lookup。空引用、重复注册与非法资产标明具体 Provider 或资产。仍在原失败位置创建对应异常，不包装、吞掉或默认补注册。
+
+修订检查：缺失全局 VM 信息专项测试通过，确认异常包含 VM 类型、MainMenu 节点及 Player 来源；Unity 本地包 MVVM DLL 与 Release 输出已同步，Godot Demo 已重新生成。未跑全量回归，未修改 Fruit-platter 业务配置。

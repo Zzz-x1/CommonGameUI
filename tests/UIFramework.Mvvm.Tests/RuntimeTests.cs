@@ -92,6 +92,19 @@ public class RuntimeTests
         await first.DisposeAsync(); Assert.Equal(1, vm.Disposals);
         await second.DisposeAsync(); Assert.Equal(2, assets.Released.Count);
     }
+    [Fact]
+    public async Task MissingGlobalVmReportsAssetTypeNodeAndSource()
+    {
+        var runtime = new MvvmRuntime(); var template = new OwnedVm();
+        var source = new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Template = template, IsGlobal = true };
+        var ui = Context(runtime, new Config(source), new Assets());
+        var node = new UINode();
+        var error = await Assert.ThrowsAsync<KeyNotFoundException>(() => node.AttachAsync(ui.Root, "MainMenu"));
+        Assert.Contains(typeof(OwnedVm).FullName!, error.Message);
+        Assert.Contains("MainMenu", error.Message);
+        Assert.Contains("Player", error.Message);
+        await ui.DisposeAsync();
+    }
     private static UIContext Context(MvvmRuntime runtime, Config? config = null, Assets? assets = null)
     { var ui = new UIContext(new Host(), new Loader(), new Log()); ui.ConfigureMvvm(runtime, _ => config, assets); return ui; }
     private static ViewModelSource Source(string name, ViewModelCreation mode, object? template = null) => new() { Name = name, Type = typeof(OwnedVm), Creation = mode, Template = template };

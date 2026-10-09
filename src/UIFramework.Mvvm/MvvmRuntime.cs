@@ -48,17 +48,24 @@ public sealed class MvvmRuntime : IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
         if (provider == null) throw new ArgumentNullException(nameof(provider));
         var definitions = provider.ViewModels.ToArray();
-        if (definitions.Any(value => value == null || !provider.Assets.IsAsset(value)))
-            throw new ArgumentException("Global ViewModels must be native woven VM assets.");
-        if (definitions.Distinct(ReferenceComparer.Instance).Count() != definitions.Length || definitions.Any(_globals.ContainsKey))
-            throw new ArgumentException("A global VM asset is registered more than once.");
+        var seen = new HashSet<object>(ReferenceComparer.Instance);
+        foreach (var definition in definitions)
+        {
+            if (definition == null) throw new ArgumentException($"Global VM provider '{provider.GetType().FullName}' contains a null asset reference.");
+            if (!provider.Assets.IsAsset(definition))
+                throw new ArgumentException($"Global VM asset '{definition}' ({definition.GetType().FullName}) from provider '{provider.GetType().FullName}' is not a native woven VM asset.");
+            if (!seen.Add(definition) || _globals.ContainsKey(definition))
+                throw new ArgumentException($"Global VM asset '{definition}' ({definition.GetType().FullName}) is registered more than once by provider '{provider.GetType().FullName}'.");
+        }
         foreach (var definition in definitions) _globals.Add(definition, provider);
     }
-    public T GetGlobalViewModel<T>(object definition) where T : class
+    public T GetGlobalViewModel<T>(object definition) where T : class => GetGlobalViewModel<T>(definition, "direct lookup");
+    internal T GetGlobalViewModel<T>(object definition, string request) where T : class
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
+        if (definition == null) throw new ArgumentNullException(nameof(definition), $"Global VM asset reference is null; requested by {request}.");
         var provider = _globals.TryGetValue(definition, out var registered) ? registered
-            : throw new KeyNotFoundException("VM asset is not registered by a global provider.");
+            : throw new KeyNotFoundException($"Global VM asset '{definition}' ({definition.GetType().FullName}) is not registered by a global provider; requested by {request}. Add this asset to a provider registered with this Context.");
         return (T)Create(typeof(T), definition, provider.Assets, true, (_, _) => { });
     }
     public T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class => (T)Create(typeof(T), template, assets, true, (_, _) => { });
