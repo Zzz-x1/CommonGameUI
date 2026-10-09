@@ -10,7 +10,6 @@ namespace UIFramework.Mvvm.Unity
     public enum ViewBindingKind { Property, Command, Collection }
     [Serializable] public sealed class ViewBindingData
     {
-        public bool IsGlobal;
         public bool Enabled = true; public Component Target; public string Member = "text"; public string Source = "";
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
         public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
@@ -35,13 +34,8 @@ namespace UIFramework.Mvvm.Unity
             get
             {
                 return Bindings.Where(binding => binding.Enabled && !(binding.Kind == ViewBindingKind.Property && binding.ConverterInput == ConverterInput.Constant))
-                    .GroupBy(binding => binding.Source.Split('.')[0]).Select(group =>
-                    {
-                        var binding = group.First();
-                        if (group.Any(other => other.IsGlobal != binding.IsGlobal)) throw new InvalidOperationException("Conflicting source modes: " + group.Key);
-                        if (binding.IsGlobal && group.Key == "Item") throw new InvalidOperationException("Item is a collection-injected source, not a global VM.");
-                        return new ViewModelSource { Name = group.Key, Creation = ViewModelCreation.Manual, IsGlobal = binding.IsGlobal };
-                    }).ToArray();
+                    .Select(binding => binding.Source.Split('.')[0]).Distinct(StringComparer.Ordinal)
+                    .Select(name => new ViewModelSource { Name = name, Creation = ViewModelCreation.Manual }).ToArray();
             }
         }
         public CollectionTarget GetCollectionTarget(IUINode node, ViewBindingData binding, bool preview = false) =>

@@ -46,6 +46,16 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
 
+## Automatic source resolution
+
+`GetViewModel`, code bindings and GUI bindings use the same rule: use the current node's local source first, then resolve the provider name. Global VMs need no prior injection. Collections or business code must inject `Item`. A local instance with the wrong type raises an error instead of selecting a global instance.
+
+```csharp
+var shop = this.GetViewModel<ShopVm>("Shop");
+```
+
+Resolution only retrieves instances; business preparation remains project code. The Context releases shared instances. A later `SetViewModel` can supply a local instance with the same name and update existing bindings.
+
 ## Unity global VM catalogs
 
 Create a `GlobalViewModelCatalog` SO under `Assets/Resources/UIFramework/Mvvm/` and add SO VM references. The default provider uses asset names as keys (for example `Player`). Rows store `Player.Gold` without VM asset references: no per-view source list, Creation setting, or Provider initialization code. Context initialization registers catalogs and first use creates a clone. Originals remain unchanged; global instances survive view closure and are released with the Context. Item and local injected objects are not catalog entries.

@@ -95,7 +95,7 @@ Godot `MvvmBindings` stores named sources and bindings; Unity stores only bindin
 
 Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTarget`, `ICollectionTarget`, or use `BindingValueTarget<T>`. Targets handle native control access and events; the module handles subscriptions, paths, conversions, ownership and tasks.
 
-`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Unity sources use `ViewBindingData.Source` and `IsGlobal`, resolved by name through the provider; Godot uses `ViewModelSourceResource.Template`, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
+`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Unity sources use `ViewBindingData.Source`, resolving local sources first and then provider names; Godot uses `ViewModelSourceResource.Template`, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
 
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 

@@ -2025,7 +2025,7 @@ Unity MvvmBindings 移除窗口级 ViewModels 列表及 Creation 配置。新增
 
 Core MVVM 提供 IGlobalViewModelProvider（ViewModels、Assets）与 GlobalViewModelProviderAttribute；框架初始化自动注册程序集标记的项目 Provider 和适配器默认 Provider。Provider 不持有运行时实例，重复定义或不合法 VM 直接报错。自定义 Provider 无参构造入口需按引擎裁剪规则保留。用户无需手动初始化或释放 Runtime。
 
-Unity 每行 ViewBindingData 仅保存 Source 字符串和 IsGlobal，不保存 VM 资产／类型引用。Provider 提供名称→资产定义字典，默认 Unity Provider 以资产名为键；名称区分大小写，禁止空名及点号，同名登记直接报错。全局来源路径为 Provider 名称与成员（Player.Gold），绑定和运行时 GetGlobalViewModel<T>(string name) 使用同一名称查找。原生资产引用只保留在目录。GUI 浏览目录及成员，拖放只保存来源路径；改名需更新路径，不按旧名称或资产身份保底。Item 和业务本地来源通过 SetViewModel 注入，不查询全局目录。目标控件继续保存组件引用。全局预览从目录取得资产并独立克隆；本地来源无样本时明确显示缺少预览来源，绑定行不再存预览资产。Undo、Prefab Override 和 UI Toolkit 工作流保留。
+Unity 每行 ViewBindingData 仅保存 Source 字符串，不保存 IsGlobal 或 VM 资产／类型引用。Provider 提供名称→资产定义字典，默认 Unity Provider 以资产名为键；名称区分大小写，禁止空名及点号，同名登记直接报错。来源路径为名称与成员（Player.Gold），按第 32 节统一解析。原生资产引用只保留在目录。GUI 浏览目录及成员，拖放只保存来源路径；改名需更新路径，不按旧名称或资产身份保底。Item 和业务本地来源通过 SetViewModel 注入，不查询全局目录。目标控件继续保存组件引用。全局预览从目录取得资产并独立克隆；本地来源无样本时明确显示缺少预览来源，绑定行不再存预览资产。Undo、Prefab Override 和 UI Toolkit 工作流保留。
 
 本轮仅迁移 Unity 来源 GUI；Godot 保留既有 Resource 来源配置。两端共享的 Runtime 接口和程序集同步更新。无旧 Unity 来源类型或兼容读取层。
 
@@ -2045,3 +2045,12 @@ IUILog 提供同步 Error(string message) 与 Exception(Exception exception, str
 名称解析修订（2026-10-09）：移除 Unity 绑定行 VM 引用，统一 Provider 字符串查找。此规则替代第 31 节旧资产身份查找描述；缺失名称异常包含确切名称、节点、业务类型及来源，非法／重复目录项包含资产或 Provider。无需用户管理 Runtime。两端共享接口同步迁移，Godot 既有来源配置保持不变。
 
 修订检查：名称解析／Context 隔离及缺失名称信息 2 项核心专项通过，Unity 原生资产绑定与清理 1 项通过（绑定行不含 VM 引用）。Unity 批处理编译无 C# 错误；实际引用 MVVM DLL 与 Release SHA256 一致，Godot Demo 已重新生成。修改页中英文代码一致。未执行全量回归、编辑器交互／预览验收、Godot 原生测试或 IL2CPP 导出。
+
+
+## 32. VM 来源自动解析（2026-10-10，已确认）
+
+ShopContent 初始化直接获取 Shop，却因没有绑定行预先登记来源而失败。代码 GetViewModel、属性／命令／集合路径和 GUI 配置现共用解析：先使用当前节点显式创建／注入的本地来源，没有时按名称取得 Provider 的 Context 共享实例。查询全局实例不写入本地来源表，不转移所有权；后续 SetViewModel 可提供同名本地实例，既有绑定解除全局订阅并改为跟踪本地实例。已有本地实例类型错误直接报错，不查全局替代。Item 为集合／业务注入来源，缺失时直接报错，不自动从 Provider 取得。
+
+移除 Unity ViewBindingData 和共享 ViewModelSource 的 IsGlobal，不保留旧开关或转发。Unity GUI 只配置来源路径，Provider 选择器只帮助填写名称；预览从目录查找模板并独立克隆，缺少本地样本仍明确提示。Godot 保留 Resource 来源的三种创建配置，未显式提供来源时同样支持注册 Provider 的名称解析。业务 Prepare、服务注入及模块初始化由项目执行，框架不隐式调用业务方法。缺失来源异常含节点、业务类型、名称和请求类型。类型错误保持原异常类型并说明实际类型。
+
+验收：5 项核心专项、Unity 原生资产绑定与清理 1 项通过；共享 Provider 实例不会因节点关闭释放，本地替换可更新已有订阅。两端实际使用的程序集已刷新，Unity MVVM DLL 与 Release SHA256 一致；Godot Demo 生成成功，0 警告、0 错误。修改页中英文代码块一致。未执行全量回归、编辑器交互／预览验收、Godot 原生测试或 IL2CPP 导出。未修改 Fruit-platter；其业务源码对旧 ViewModelSource.IsGlobal 的判断须迁移为显式业务模块初始化。

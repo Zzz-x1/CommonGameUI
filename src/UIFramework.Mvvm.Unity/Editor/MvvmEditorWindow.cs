@@ -54,7 +54,7 @@ namespace UIFramework.Mvvm.EditorUnity
             rootVisualElement.Q<Button>("preview").clicked += () => { StopPreview(); _preview = new BindingPreview(_view); _status.text = "预览中：仅刷新显示，不执行命令或写回资产"; };
             rootVisualElement.Q<Button>("stop-preview").clicked += StopPreview;
             _bindings.RegisterCallback<DragUpdatedEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string) { DragAndDrop.visualMode = DragAndDropVisualMode.Copy; e.StopPropagation(); } });
-            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path, isGlobal: true); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
+            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
             Undo.undoRedoPerformed += Refresh;
             if (_view) Select(_view); else if (Selection.activeGameObject) Select(Selection.activeGameObject.GetComponentInParent<MvvmBindings>());
         }
@@ -73,12 +73,11 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Binding(ViewBindingData binding, string member, Action<SerializedProperty> write) =>
             Edit("Bindings.Array.data[" + _view.Bindings.IndexOf(binding) + "]." + member, write);
         private void Reorder(string path, int oldIndex, int newIndex) { Edit(path, array => array.MoveArrayElement(oldIndex, newIndex)); Refresh(); }
-        private void AppendBinding(Component target = null, string source = "", bool isGlobal = false)
+        private void AppendBinding(Component target = null, string source = "")
         {
             Edit("Bindings", array =>
             {
                 var index = array.arraySize; array.InsertArrayElementAtIndex(index); var row = array.GetArrayElementAtIndex(index);
-                row.FindPropertyRelative("IsGlobal").boolValue = isGlobal;
                 row.FindPropertyRelative("Enabled").boolValue = true;
                 row.FindPropertyRelative("Target").objectReferenceValue = target;
                 row.FindPropertyRelative("Source").stringValue = source; row.FindPropertyRelative("Member").stringValue = "text";
@@ -97,7 +96,7 @@ namespace UIFramework.Mvvm.EditorUnity
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
             var missing = _view ? _view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command &&
-                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && (!b.IsGlobal || !_sourceRows.Any(asset => asset.name == b.Source.Split('.')[0])))
+                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && !_sourceRows.Any(asset => asset.name == b.Source.Split('.')[0] && asset.name != "Item"))
                 .Select(b => b.Source).Distinct().ToArray() : Array.Empty<string>();
             rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
             if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
@@ -118,14 +117,10 @@ namespace UIFramework.Mvvm.EditorUnity
         private void BindingDetails()
         {
             _details.Clear(); if (!_view || _bindings.selectedIndex < 0) return; var b = _visible[_bindings.selectedIndex];
-            Toggle("全局来源", b.IsGlobal, v => { Binding(b, "IsGlobal", property => property.boolValue = v); BindingDetails(); });
-            if (b.IsGlobal)
-            {
-                var assets = _sourceRows; var picker = new DropdownField("全局 VM", assets.Select(asset => AssetDatabase.GetAssetPath(asset)).ToList(), -1);
-                picker.SetValueWithoutNotify(AssetDatabase.GetAssetPath(assets.SingleOrDefault(asset => asset.name == b.Source.Split('.')[0])));
-                picker.RegisterValueChangedCallback(e => { var asset = assets.Single(value => AssetDatabase.GetAssetPath(value) == e.newValue); Binding(b, "Source", property => property.stringValue = asset.name + "." + string.Join(".", b.Source.Split('.').Skip(1))); BindingDetails(); });
-                _details.Add(picker);
-            }
+            var assets = _sourceRows; var picker = new DropdownField("Provider 来源", assets.Select(asset => asset.name).ToList(), -1);
+            picker.SetValueWithoutNotify(b.Source.Split('.')[0]);
+            picker.RegisterValueChangedCallback(e => { Binding(b, "Source", property => property.stringValue = e.newValue + "." + string.Join(".", b.Source.Split('.').Skip(1))); Refresh(); BindingDetails(); });
+            _details.Add(picker);
             Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v).FirstOrDefault() ?? ""); BindingDetails(); });
             var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Binding(b, "Member", property => property.stringValue = e.newValue)); _details.Add(member);
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)

@@ -91,8 +91,8 @@ namespace StarCourt.UnityDemo.Tests
             var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)); button.transform.SetParent(rect.transform, false);
             runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
             var config = rect.GetComponent<MvvmBindings>();
-            config.Bindings.Add(new ViewBindingData { IsGlobal = true, Target = label.GetComponent<Text>(), Source = template.name + ".Gold", Converter = "FormatNumber" });
-            config.Bindings.Add(new ViewBindingData { IsGlobal = true, Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
+            config.Bindings.Add(new ViewBindingData { Target = label.GetComponent<Text>(), Source = template.name + ".Gold", Converter = "FormatNumber" });
+            config.Bindings.Add(new ViewBindingData { Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
             var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
             button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));

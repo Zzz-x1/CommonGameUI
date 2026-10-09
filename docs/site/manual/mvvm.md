@@ -46,6 +46,16 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
 
+## 来源自动解析
+
+`GetViewModel`、代码绑定和 GUI 绑定使用同一规则：先查当前节点的本地来源，没有时按名称查询 Provider。无需提前注入全局 VM。`Item` 必须由集合或业务注入。已有本地实例类型错误时直接报错，不改用全局实例。
+
+```csharp
+var shop = this.GetViewModel<ShopVm>("Shop");
+```
+
+自动解析只取得实例，业务准备仍由项目执行。共享实例由 Context 释放；后续 `SetViewModel` 可提供同名本地实例，已有绑定随之更新。
+
 ## Unity 全局 VM 目录
 
 创建 `GlobalViewModelCatalog` SO，保存到 `Assets/Resources/UIFramework/Mvvm/` 并添加 SO VM 引用。默认 Provider 使用资产名作为名称（例如 `Player`）；绑定行保存 `Player.Gold`，不保存 VM 引用；无需来源列表、Creation 或手动初始化 Provider。Context 初始化自动注册目录，首次绑定时创建克隆。原资产保持不变，窗口关闭保留全局实例，Context 释放时销毁；Item 与本地注入对象不进入目录。

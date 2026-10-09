@@ -77,7 +77,7 @@ public class RuntimeTests
         firstRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
         secondRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
         Assert.Empty(assets.Released);
-        var config = new Config(new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), IsGlobal = true });
+        var config = new Config(new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Creation = ViewModelCreation.Manual });
         var first = Context(firstRuntime, config, assets); var second = Context(secondRuntime, config, assets);
         var a = new UINode(); await a.AttachAsync(first.Root, "A");
         var b = new UINode(); await b.AttachAsync(first.Root, "B");
@@ -98,13 +98,59 @@ public class RuntimeTests
     public async Task MissingGlobalVmReportsNameNodeAndSource()
     {
         var runtime = new MvvmRuntime();
-        var source = new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), IsGlobal = true };
+        var source = new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Creation = ViewModelCreation.Manual };
         var ui = Context(runtime, new Config(source), new Assets());
         var node = new UINode();
         var error = await Assert.ThrowsAsync<KeyNotFoundException>(() => node.AttachAsync(ui.Root, "MainMenu"));
         Assert.Contains("Global VM", error.Message);
         Assert.Contains("MainMenu", error.Message);
         Assert.Contains("Player", error.Message);
+        await ui.DisposeAsync();
+    }
+    private sealed class AutomaticSourceNode : UINode
+    {
+        public OwnedVm Model { get; private set; } = null!;
+        protected override Task OnInitializeAsync(CancellationToken token)
+        { Model = this.GetViewModel<OwnedVm>("Player"); return Task.CompletedTask; }
+    }
+    [Fact]
+    public async Task AutomaticSourceResolvesDuringInitializationAndCodeBinding()
+    {
+        var assets = new Assets(); var runtime = new MvvmRuntime();
+        runtime.RegisterGlobalViewModelProvider(new Provider(assets, new OwnedVm { Gold = 42 }));
+        var ui = Context(runtime); var node = new AutomaticSourceNode(); await node.AttachAsync(ui.Root, "Shop");
+        Assert.Same(runtime.GetGlobalViewModel<OwnedVm>("Player"), node.Model);
+        var displayed = 0;
+        node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
+        Assert.Equal(42, displayed); node.Model.Gold = 60; Assert.Equal(60, displayed);
+        var items = new ListTarget(); node.BindCollection("Player.Items", items);
+        node.Model.Items.Add(new OwnedVm()); Assert.Single(items.Items);
+        await node.DisposeAsync(); Assert.Equal(0, node.Model.Disposals);
+        await ui.DisposeAsync(); Assert.Equal(1, node.Model.Disposals);
+    }
+    [Fact]
+    public async Task AutomaticSourcePrefersLocalAndRebindsWithoutReleasingSharedModel()
+    {
+        var assets = new Assets(); var runtime = new MvvmRuntime();
+        runtime.RegisterGlobalViewModelProvider(new Provider(assets, new OwnedVm { Gold = 10 }));
+        var ui = Context(runtime); var node = await Node(ui, "Inventory");
+        var shared = node.GetViewModel<OwnedVm>("Player"); var displayed = 0;
+        node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
+        var local = new OwnedVm { Gold = 20 }; node.SetViewModel("Player", local);
+        Assert.Same(local, node.GetViewModel<OwnedVm>("Player")); Assert.Equal(20, displayed);
+        shared.Gold = 99; Assert.Equal(20, displayed); local.Gold = 30; Assert.Equal(30, displayed);
+        await node.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(0, shared.Disposals);
+        await ui.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(1, shared.Disposals);
+    }
+    [Fact]
+    public async Task AutomaticSourceReportsWrongLocalTypeAndMissingItem()
+    {
+        var runtime = new MvvmRuntime(); runtime.RegisterGlobalViewModelProvider(new Provider(new Assets(), new OwnedVm()));
+        var ui = Context(runtime); var node = await Node(ui, "Shop");
+        node.SetViewModel("Player", new ClosingVm());
+        var error = Assert.Throws<InvalidCastException>(() => node.GetViewModel<OwnedVm>("Player"));
+        Assert.Contains("Shop", error.Message); Assert.Contains(typeof(OwnedVm).FullName!, error.Message);
+        Assert.Throws<KeyNotFoundException>(() => node.GetViewModel<OwnedVm>("Item"));
         await ui.DisposeAsync();
     }
     private static UIContext Context(MvvmRuntime runtime, Config? config = null, Assets? assets = null)

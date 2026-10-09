@@ -238,7 +238,7 @@ public static class MvvmExtensions
     public static Task WhenMvvmIdleAsync(this UIContext ui) => ui.GetMvvm().WhenIdleAsync();
     public static void ObserveMvvmTask(this IUINode node, Task task) => Scope(node.Node).Observe(task);
     public static void SetViewModel(this IUINode node, string name, object vm) => Scope(node.Node).Set(name, vm);
-    public static T GetViewModel<T>(this IUINode node, string name) where T : class => (T)Scope(node.Node).Get(name);
+    public static T GetViewModel<T>(this IUINode node, string name) where T : class => (T)Scope(node.Node).Get(name, typeof(T));
     public static T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class => Scope(node.Node).Create<T>(name, template);
     public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
         Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode });

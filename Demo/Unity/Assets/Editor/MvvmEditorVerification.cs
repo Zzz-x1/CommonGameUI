@@ -27,14 +27,13 @@ namespace StarCourt.UnityDemo.Editor
             System.IO.Directory.CreateDirectory("Assets/Resources/UIFramework/Mvvm");
             var catalog = ScriptableObject.CreateInstance<GlobalViewModelCatalog>(); catalog.ViewModels.Add(template);
             AssetDatabase.CreateAsset(catalog, catalogPath); AssetDatabase.SaveAssets();
-            cfg.Bindings.Add(new ViewBindingData { IsGlobal = true, Target = label.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
+            cfg.Bindings.Add(new ViewBindingData { Target = label.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
             var window = EditorWindow.GetWindow<MvvmEditorWindow>(); window.CreateGUI(); window.rootVisualElement.Q<ObjectField>("view").value = cfg;
             window.rootVisualElement.Q<ListView>("bindings").selectedIndex = 0;
             var name = window.rootVisualElement.Q<ScrollView>("details").Query<TextField>().ToList().Find(field => field.label == "来源路径"); name.value = "Player.CanBuy";
             Check(cfg.Bindings[0].Source == "Player.CanBuy", "Binding GUI failed"); Undo.PerformUndo(); Check(cfg.Bindings[0].Source == "Player.Gold", "GUI Undo failed");
             using (var preview = new BindingPreview(cfg)) { Check(label.GetComponent<Text>().text == "100", "Preview failed"); Check(template.Gold == 100, "Asset changed in preview"); }
             await Task.Yield(); Check(label.GetComponent<Text>().text == "original", "Preview did not restore");
-            cfg.Bindings[0].IsGlobal = true;
             using (var preview = new BindingPreview(cfg))
             { Check(label.GetComponent<Text>().text == "100", "Global catalog preview failed"); Check(template.Gold == 100, "Global preview changed asset"); }
             await Task.Yield(); Check(label.GetComponent<Text>().text == "original", "Global preview did not restore");

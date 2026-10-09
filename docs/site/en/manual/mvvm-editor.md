@@ -6,9 +6,9 @@ Add `MvvmBindings` to the view root. In Unity open **Window → UIFramework → 
 
 **Unity**: create a catalog through Create → UIFramework → MVVM → Global ViewModel Catalog and save it under `Assets/Resources/UIFramework/Mvvm/`. Add available SO VMs to its ViewModels list. Context initialization loads all catalogs and registers their assets. Instances are cloned on first use, shared within a Context, and independent across Contexts by default.
 
-Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the table to store only `AssetName.Member`, or enable the global-source option and select a name. The provider resolves that name at runtime. Names are case-sensitive; duplicate asset names fail. Update binding paths after renaming an asset.
+Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the table to store only `AssetName.Member`, or select a provider name in binding details. Runtime uses local instances first, then resolves provider names; no global/local switch is required. Names are case-sensitive; duplicate asset names fail. Update binding paths after renaming an asset.
 
-For collection items, disable the global-source option and use `Item.Title`; the collection injects Item automatically. Business objects also use local sources and `SetViewModel` during initialization. Local rows store no asset or type reference; injected objects supply runtime members. Without a sample, the editor explicitly reports a missing preview source.
+For collection items, use `Item.Title`; the collection injects Item automatically. Business objects also use local sources and `SetViewModel` during initialization. Local rows store no asset or type reference; injected objects supply runtime members. Without a sample, the editor explicitly reports a missing preview source.
 
 **Godot**: retain named sources with Resource and CreateInstance / Manual / SharedAsset. Business code supplies Manual instances during initialization. VM Resources require `[Tool]`; plain C# VMs use code creation and binding.
 

@@ -6,9 +6,9 @@
 
 **Unity**：通过 Create → UIFramework → MVVM → Global ViewModel Catalog 创建目录 SO，保存到 `Assets/Resources/UIFramework/Mvvm/`。将可用的 SO VM 拖入目录的 ViewModels 列表。框架创建 Context 时自动读取所有目录并注册资产，首次使用时克隆；同一 Context 共用实例，不同 Context 默认独立。
 
-窗口不再保存 ViewModels 列表，也不选择 Creation。左侧 Global Viewmodels 只浏览目录中的资产；拖动成员到绑定表，只保存 `资产名.成员`。绑定详情可开启“全局来源”并选择名称；运行时由 Provider 查找。名称区分大小写，目录中同名资产直接报错；重命名后须更新绑定路径。
+窗口不再保存 ViewModels 列表，也不选择 Creation。左侧 Global Viewmodels 只浏览目录中的资产；拖动成员到绑定表，只保存 `资产名.成员`。绑定详情可选择 Provider 名称或直接填写来源路径。运行时先使用本地注入的实例，没有本地实例时查询 Provider；无需全局／本地开关。名称区分大小写，目录中同名资产直接报错；重命名后须更新绑定路径。
 
-集合条目关闭“全局来源”，填写 `Item.Title`；Item 由集合自动注入。业务对象也使用本地来源，在初始化中调用 `SetViewModel`。本地来源不保存资产或类型引用，运行时由注入对象提供成员。没有预览来源时，编辑器明确显示“缺少预览来源”。
+集合条目填写 `Item.Title`；Item 由集合自动注入。业务对象也使用本地来源，在初始化中调用 `SetViewModel`。本地来源不保存资产或类型引用，运行时由注入对象提供成员。没有预览来源时，编辑器明确显示“缺少预览来源”。
 
 **Godot**：继续添加具名来源，选择 Resource 和 CreateInstance／Manual／SharedAsset。Manual 实例在初始化中由业务提供。VM Resource 使用 `[Tool]`，普通 C# VM 通过代码创建和绑定。
 

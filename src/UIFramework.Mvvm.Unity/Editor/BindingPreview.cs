@@ -29,7 +29,7 @@ namespace UIFramework.Mvvm.EditorUnity
         private sealed class ItemConfiguration : IViewBindingConfiguration
         {
             public MvvmBindings View;
-            public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = ViewModelCreation.Manual, Template = s.Template, IsGlobal = s.IsGlobal }).ToArray();
+            public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = ViewModelCreation.Manual, Template = s.Template }).ToArray();
             public void Apply(UINode node)
             {
                 View.Apply(node, true);
@@ -40,10 +40,11 @@ namespace UIFramework.Mvvm.EditorUnity
             var required = new HashSet<string>(view.Bindings.Where(binding => binding.Enabled && binding.Kind != ViewBindingKind.Command &&
                 !(binding.Kind == ViewBindingKind.Property && binding.ConverterInput == ConverterInput.Constant)).Select(binding => binding.Source.Split('.')[0]));
             var configuration = view.Sources.Where(source => required.Contains(source.Name)).ToArray();
-            var missing = configuration.Where(source => !source.IsGlobal).Select(source => source.Name).ToArray();
+            var provider = GlobalViewModelProvider.Load();
+            var missing = configuration.Where(source => source.Name == "Item" || !provider.ViewModels.ContainsKey(source.Name)).Select(source => source.Name).ToArray();
             if (missing.Length != 0) throw new InvalidOperationException("缺少预览来源：" + string.Join(", ", missing));
-            _runtime.RegisterGlobalViewModelProvider(GlobalViewModelProvider.Load());
-            var sources = configuration.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.Manual, IsGlobal = s.IsGlobal }).ToArray();
+            _runtime.RegisterGlobalViewModelProvider(provider);
+            var sources = configuration.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Template = s.Template, Creation = ViewModelCreation.Manual }).ToArray();
             _host = new GameObject("MVVM Preview Host", typeof(EventSystem), typeof(EngineUI.FramePump)) { hideFlags = HideFlags.HideAndDontSave };
             var host = new EngineUI.UIHost(_host.GetComponent<EventSystem>(), _host.GetComponent<EngineUI.FramePump>());
             _ui = new UIContext(host, new EngineUI.UIResourceLoader(host));

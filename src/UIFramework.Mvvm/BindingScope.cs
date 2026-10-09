@@ -26,12 +26,6 @@ internal sealed class BindingScope : IAsyncDisposable
         _configuration = configuration;
         foreach (var source in configuration.Sources)
         {
-            if (source.IsGlobal)
-            {
-                var request = $"node '{Node.Name}' ({Node.Owner.GetType().FullName}), source '{source.Name}'";
-                _sources.Add(source.Name, _runtime.GetGlobalViewModel<object>(source.Name, request));
-                continue;
-            }
             if (source.Creation == ViewModelCreation.Manual) continue;
             var value = _runtime.Create(source.Type, source.Template, _assets, source.Creation == ViewModelCreation.SharedAsset, (item, adapter) => _owned.Add((item, adapter)));
             _sources.Add(source.Name, value);
@@ -70,11 +64,19 @@ internal sealed class BindingScope : IAsyncDisposable
         if (value is not IMvvmObject) throw new InvalidOperationException("VM must be woven: " + value.GetType().FullName);
         _sources[name] = value; SourcesChanged?.Invoke();
     }
-    public object Get(string name)
+    public object Get(string name, Type? requestedType = null)
     {
         Node.Context.Host.VerifyAccess();
         if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
-        return _sources.TryGetValue(name, out var value) ? value : throw new KeyNotFoundException("Missing VM source: " + name);
+        var request = $"node '{Node.Name}' ({Node.Owner.GetType().FullName}), source '{name}', requested type '{requestedType?.FullName ?? typeof(object).FullName}'";
+        if (!_sources.TryGetValue(name, out var value))
+        {
+            if (name == "Item") throw new KeyNotFoundException($"Missing collection-injected VM source 'Item'; requested by {request}.");
+            value = _runtime.GetGlobalViewModel<object>(name, request);
+        }
+        if (requestedType != null && !requestedType.IsInstanceOfType(value))
+            throw new InvalidCastException($"VM source '{name}' has type '{value.GetType().FullName}'; requested by {request}.");
+        return value;
     }
     public T Create<T>(string name, object? template) where T : class
     {
