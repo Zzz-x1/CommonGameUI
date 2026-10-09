@@ -55,7 +55,7 @@ public sealed class GlobalViewModelProviderAttribute(Type providerType) : Attrib
 { public Type ProviderType { get; } = providerType; }
 public interface IGlobalViewModelProvider
 {
-    IReadOnlyList<object> ViewModels { get; }
+    IReadOnlyDictionary<string, object> ViewModels { get; }
     IViewModelAssets Assets { get; }
 }
 public interface IViewModelAssets

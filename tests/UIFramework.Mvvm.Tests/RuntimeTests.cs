@@ -68,7 +68,7 @@ public class RuntimeTests
         public void Clear() => Items.Clear(); public void Dispose() => Disposals++;
     }
     private sealed class Provider(Assets assets, params object[] definitions) : IGlobalViewModelProvider
-    { public IReadOnlyList<object> ViewModels => definitions; public IViewModelAssets Assets => assets; }
+    { public IReadOnlyDictionary<string, object> ViewModels => definitions.Select((value, index) => (value, index)).ToDictionary(entry => entry.index == 0 ? "Player" : "Player" + entry.index, entry => entry.value); public IViewModelAssets Assets => assets; }
     [Fact]
     public async Task GlobalProvidersRegisterDefinitionsAndCreateContextInstancesOnDemand()
     {
@@ -77,30 +77,32 @@ public class RuntimeTests
         firstRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
         secondRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template));
         Assert.Empty(assets.Released);
-        var config = new Config(new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Template = template, IsGlobal = true });
+        var config = new Config(new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), IsGlobal = true });
         var first = Context(firstRuntime, config, assets); var second = Context(secondRuntime, config, assets);
         var a = new UINode(); await a.AttachAsync(first.Root, "A");
         var b = new UINode(); await b.AttachAsync(first.Root, "B");
         var c = new UINode(); await c.AttachAsync(second.Root, "C");
         var vm = a.GetViewModel<OwnedVm>("Player");
         Assert.Same(vm, b.GetViewModel<OwnedVm>("Player"));
+        Assert.Same(vm, firstRuntime.GetGlobalViewModel<OwnedVm>("Player"));
+        Assert.Throws<KeyNotFoundException>(() => firstRuntime.GetGlobalViewModel<OwnedVm>("player"));
         Assert.NotSame(vm, c.GetViewModel<OwnedVm>("Player"));
         vm.Gold = 100; Assert.Equal(42, template.Gold);
         await a.DisposeAsync(); Assert.Equal(0, vm.Disposals);
         Assert.Throws<ArgumentException>(() => firstRuntime.RegisterGlobalViewModelProvider(new Provider(assets, template)));
-        Assert.Throws<KeyNotFoundException>(() => firstRuntime.GetGlobalViewModel<OwnedVm>(new OwnedVm()));
+        Assert.Throws<KeyNotFoundException>(() => firstRuntime.GetGlobalViewModel<OwnedVm>("Missing"));
         await first.DisposeAsync(); Assert.Equal(1, vm.Disposals);
         await second.DisposeAsync(); Assert.Equal(2, assets.Released.Count);
     }
     [Fact]
-    public async Task MissingGlobalVmReportsAssetTypeNodeAndSource()
+    public async Task MissingGlobalVmReportsNameNodeAndSource()
     {
-        var runtime = new MvvmRuntime(); var template = new OwnedVm();
-        var source = new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), Template = template, IsGlobal = true };
+        var runtime = new MvvmRuntime();
+        var source = new ViewModelSource { Name = "Player", Type = typeof(OwnedVm), IsGlobal = true };
         var ui = Context(runtime, new Config(source), new Assets());
         var node = new UINode();
         var error = await Assert.ThrowsAsync<KeyNotFoundException>(() => node.AttachAsync(ui.Root, "MainMenu"));
-        Assert.Contains(typeof(OwnedVm).FullName!, error.Message);
+        Assert.Contains("Global VM", error.Message);
         Assert.Contains("MainMenu", error.Message);
         Assert.Contains("Player", error.Message);
         await ui.DisposeAsync();

@@ -6,9 +6,9 @@ Add `MvvmBindings` to the view root. In Unity open **Window → UIFramework → 
 
 **Unity**: create a catalog through Create → UIFramework → MVVM → Global ViewModel Catalog and save it under `Assets/Resources/UIFramework/Mvvm/`. Add available SO VMs to its ViewModels list. Context initialization loads all catalogs and registers their assets. Instances are cloned on first use, shared within a Context, and independent across Contexts by default.
 
-Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the binding table to store its VM asset reference, or enable the global-source option and select the asset in binding details.
+Views no longer store a ViewModels list or select Creation. The Global Viewmodels panel browses catalog assets. Drag a member into the table to store only `AssetName.Member`, or enable the global-source option and select a name. The provider resolves that name at runtime. Names are case-sensitive; duplicate asset names fail. Update binding paths after renaming an asset.
 
-For collection items, disable the global-source option and use `Item.Title`; the collection injects Item automatically. Business objects also use local sources and `SetViewModel` during initialization. Select a source-type / preview asset on the binding row when member discovery or sample preview is needed; runtime does not clone this local sample.
+For collection items, disable the global-source option and use `Item.Title`; the collection injects Item automatically. Business objects also use local sources and `SetViewModel` during initialization. Local rows store no asset or type reference; injected objects supply runtime members. Without a sample, the editor explicitly reports a missing preview source.
 
 **Godot**: retain named sources with Resource and CreateInstance / Manual / SharedAsset. Business code supplies Manual instances during initialization. VM Resources require `[Tool]`; plain C# VMs use code creation and binding.
 
@@ -44,7 +44,7 @@ Custom functions are static methods marked `[Converter]`, with one argument and 
 
 Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.
 
-A Unity local source or Godot Manual source references an asset to declare its type and provide a preview sample. Preview clones the asset. Runtime still requires the business to call `SetViewModel`; it never substitutes the sample. Missing assets prevent preview.
+Unity global preview resolves templates from the provider catalog and clones them independently. Local sources without samples cannot preview. Godot Manual sources still use explicit preview assets; runtime requires `SetViewModel`.
 
 ## Save
 

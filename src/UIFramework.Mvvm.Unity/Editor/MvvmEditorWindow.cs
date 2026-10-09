@@ -54,7 +54,7 @@ namespace UIFramework.Mvvm.EditorUnity
             rootVisualElement.Q<Button>("preview").clicked += () => { StopPreview(); _preview = new BindingPreview(_view); _status.text = "预览中：仅刷新显示，不执行命令或写回资产"; };
             rootVisualElement.Q<Button>("stop-preview").clicked += StopPreview;
             _bindings.RegisterCallback<DragUpdatedEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string) { DragAndDrop.visualMode = DragAndDropVisualMode.Copy; e.StopPropagation(); } });
-            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path, viewModel: DragAndDrop.GetGenericData("Mvvm.Asset") as ScriptableObject); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
+            _bindings.RegisterCallback<DragPerformEvent>(e => { if (DragAndDrop.GetGenericData("Mvvm.Path") is string path) { DragAndDrop.AcceptDrag(); AppendBinding(source: path, isGlobal: true); Refresh(); _bindings.selectedIndex = _visible.Count - 1; } });
             Undo.undoRedoPerformed += Refresh;
             if (_view) Select(_view); else if (Selection.activeGameObject) Select(Selection.activeGameObject.GetComponentInParent<MvvmBindings>());
         }
@@ -73,13 +73,12 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Binding(ViewBindingData binding, string member, Action<SerializedProperty> write) =>
             Edit("Bindings.Array.data[" + _view.Bindings.IndexOf(binding) + "]." + member, write);
         private void Reorder(string path, int oldIndex, int newIndex) { Edit(path, array => array.MoveArrayElement(oldIndex, newIndex)); Refresh(); }
-        private void AppendBinding(Component target = null, string source = "", ScriptableObject viewModel = null)
+        private void AppendBinding(Component target = null, string source = "", bool isGlobal = false)
         {
             Edit("Bindings", array =>
             {
                 var index = array.arraySize; array.InsertArrayElementAtIndex(index); var row = array.GetArrayElementAtIndex(index);
-                row.FindPropertyRelative("ViewModel").objectReferenceValue = viewModel;
-                row.FindPropertyRelative("IsGlobal").boolValue = viewModel;
+                row.FindPropertyRelative("IsGlobal").boolValue = isGlobal;
                 row.FindPropertyRelative("Enabled").boolValue = true;
                 row.FindPropertyRelative("Target").objectReferenceValue = target;
                 row.FindPropertyRelative("Source").stringValue = source; row.FindPropertyRelative("Member").stringValue = "text";
@@ -93,12 +92,12 @@ namespace UIFramework.Mvvm.EditorUnity
         private void Refresh()
         {
             if (_sources == null) return;
-            _sourceRows.Clear(); _sourceRows.AddRange(GlobalViewModelProvider.Load().ViewModels.Cast<ScriptableObject>()); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
+            _sourceRows.Clear(); _sourceRows.AddRange(GlobalViewModelProvider.Load().ViewModels.Values.Cast<ScriptableObject>()); _sources.itemsSource = _sourceRows; _sources.Rebuild(); _visible.Clear();
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
             var missing = _view ? _view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command &&
-                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && !b.ViewModel)
+                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && (!b.IsGlobal || !_sourceRows.Any(asset => asset.name == b.Source.Split('.')[0])))
                 .Select(b => b.Source).Distinct().ToArray() : Array.Empty<string>();
             rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
             if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
@@ -115,7 +114,7 @@ namespace UIFramework.Mvvm.EditorUnity
                 Member(asset.name + "." + command.Name, "Command", asset);
         }
         private void Member(string path, string type, ScriptableObject asset)
-        { var row = new Label(path + " : " + type); row.RegisterCallback<PointerDownEvent>(e => { if (e.button != 0) return; DragAndDrop.PrepareStartDrag(); DragAndDrop.SetGenericData("Mvvm.Path", path); DragAndDrop.SetGenericData("Mvvm.Asset", asset); DragAndDrop.StartDrag(path); }); _members.Add(row); }
+        { var row = new Label(path + " : " + type); row.RegisterCallback<PointerDownEvent>(e => { if (e.button != 0) return; DragAndDrop.PrepareStartDrag(); DragAndDrop.SetGenericData("Mvvm.Path", path); DragAndDrop.StartDrag(path); }); _members.Add(row); }
         private void BindingDetails()
         {
             _details.Clear(); if (!_view || _bindings.selectedIndex < 0) return; var b = _visible[_bindings.selectedIndex];
@@ -123,11 +122,10 @@ namespace UIFramework.Mvvm.EditorUnity
             if (b.IsGlobal)
             {
                 var assets = _sourceRows; var picker = new DropdownField("全局 VM", assets.Select(asset => AssetDatabase.GetAssetPath(asset)).ToList(), -1);
-                picker.SetValueWithoutNotify(b.ViewModel ? AssetDatabase.GetAssetPath(b.ViewModel) : "");
-                picker.RegisterValueChangedCallback(e => { var asset = assets.Single(value => AssetDatabase.GetAssetPath(value) == e.newValue); Binding(b, "ViewModel", property => property.objectReferenceValue = asset); Binding(b, "Source", property => property.stringValue = asset.name + "." + string.Join(".", b.Source.Split('.').Skip(1))); BindingDetails(); });
+                picker.SetValueWithoutNotify(AssetDatabase.GetAssetPath(assets.SingleOrDefault(asset => asset.name == b.Source.Split('.')[0])));
+                picker.RegisterValueChangedCallback(e => { var asset = assets.Single(value => AssetDatabase.GetAssetPath(value) == e.newValue); Binding(b, "Source", property => property.stringValue = asset.name + "." + string.Join(".", b.Source.Split('.').Skip(1))); BindingDetails(); });
                 _details.Add(picker);
             }
-            else Object("来源类型 / 预览资产", typeof(ScriptableObject), b.ViewModel, false, v => { Binding(b, "ViewModel", property => property.objectReferenceValue = v); BindingDetails(); });
             Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v).FirstOrDefault() ?? ""); BindingDetails(); });
             var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Binding(b, "Member", property => property.stringValue = e.newValue)); _details.Add(member);
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
@@ -197,8 +195,7 @@ namespace UIFramework.Mvvm.EditorUnity
             var choices = new List<string> { "" }; choices.AddRange(Converters.Discover().Where(c => (input != null || (!reverse && binding.ConverterInput == ConverterInput.Constant)) && output != null && (!reverse && binding.ConverterInput == ConverterInput.Constant ? Converters.SupportsConstant(c.Input) : c.Input.IsAssignableFrom(input)) && output.IsAssignableFrom(c.Output)).Select(c => c.Name));
             var field = new DropdownField(label, choices, -1); field.SetValueWithoutNotify(current); field.RegisterValueChangedCallback(e => { set(e.newValue); BindingDetails(); }); _details.Add(field);
         }
-        private Type SourceType(string name) => _view.Bindings.FirstOrDefault(b => b.ViewModel && b.Source.Split('.')[0] == name)?.ViewModel.GetType()
-            ?? _sourceRows.FirstOrDefault(asset => asset.name == name)?.GetType();
+        private Type SourceType(string name) => _sourceRows.SingleOrDefault(asset => asset.name == name)?.GetType();
         private static List<string> TargetMembers(Component target) => target
             ? BindingTargetRegistry.Members(target.GetType()).Select(d => d.Member).ToList() : new List<string>();
         private void Text(string label, string value, Action<string> set)

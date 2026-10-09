@@ -12,7 +12,7 @@ void RegisterFactory<T>(Func<T> factory) where T : class;
 void RegisterFactory(Type type, Func<object> factory);
 T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class;
 void RegisterGlobalViewModelProvider(IGlobalViewModelProvider provider);
-T GetGlobalViewModel<T>(object definition) where T : class;
+T GetGlobalViewModel<T>(string name) where T : class;
 Task WhenIdleAsync();
 void Observe(Task task);
 void ObserveTasks();
@@ -30,7 +30,7 @@ When a command awaits Runtime disposal, bindings end first and its VM remains al
 ```csharp
 void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class;
 void ShareMvvm(this UIContext ui, UIContext owner);
-T GetGlobalViewModel<T>(this UIContext ui, object definition) where T : class;
+T GetGlobalViewModel<T>(this UIContext ui, string name) where T : class;
 Task WhenMvvmIdleAsync(this UIContext ui);
 MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
@@ -91,11 +91,11 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 | Command | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
 | Collection | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
 
-Godot `MvvmBindings` stores named sources and bindings; Unity stores only binding rows. Godot uses `ViewModelSourceResource` / `ViewBindingResource`; Unity uses `ViewBindingData` with direct VM references. Binding kinds are Property, Command and Collection.
+Godot `MvvmBindings` stores named sources and bindings; Unity stores only binding rows. Godot uses `ViewModelSourceResource` / `ViewBindingResource`; Unity uses `ViewBindingData` with source strings. Binding kinds are Property, Command and Collection.
 
 Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTarget`, `ICollectionTarget`, or use `BindingValueTarget<T>`. Targets handle native control access and events; the module handles subscriptions, paths, conversions, ownership and tasks.
 
-`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Sources use `ViewBindingData.ViewModel` and `IsGlobal` in Unity and `ViewModelSourceResource.Template` in Godot, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
+`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Unity sources use `ViewBindingData.Source` and `IsGlobal`, resolved by name through the provider; Godot uses `ViewModelSourceResource.Template`, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
 
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 
@@ -128,7 +128,7 @@ Built-in targets and `CollectionTargetBase` include item creation and removal cl
 ```csharp
 interface IGlobalViewModelProvider
 {
-    IReadOnlyList<object> ViewModels { get; }
+    IReadOnlyDictionary<string, object> ViewModels { get; }
     IViewModelAssets Assets { get; }
 }
 [assembly: GlobalViewModelProvider(typeof(ProjectProvider))]
@@ -145,4 +145,4 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 }
 ```
 
-Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate definitions, missing assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
+Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.

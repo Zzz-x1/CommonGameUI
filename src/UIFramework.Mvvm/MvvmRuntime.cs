@@ -5,7 +5,7 @@ namespace UIFramework.Mvvm;
 public sealed class MvvmRuntime : IAsyncDisposable
 {
     static MvvmRuntime() => MvvmModule.Install();
-    private readonly Dictionary<object, IGlobalViewModelProvider> _globals = new(ReferenceComparer.Instance);
+    private readonly Dictionary<string, (object Definition, IGlobalViewModelProvider Provider)> _globals = new(StringComparer.Ordinal);
     private readonly Dictionary<Type, Func<object>> _factories = new();
     private readonly Dictionary<object, object> _shared = new(ReferenceComparer.Instance);
     private readonly List<(object Value, IViewModelAssets? Assets)> _owned = new();
@@ -48,25 +48,24 @@ public sealed class MvvmRuntime : IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
         if (provider == null) throw new ArgumentNullException(nameof(provider));
         var definitions = provider.ViewModels.ToArray();
-        var seen = new HashSet<object>(ReferenceComparer.Instance);
-        foreach (var definition in definitions)
+        foreach (var entry in definitions)
         {
-            if (definition == null) throw new ArgumentException($"Global VM provider '{provider.GetType().FullName}' contains a null asset reference.");
-            if (!provider.Assets.IsAsset(definition))
-                throw new ArgumentException($"Global VM asset '{definition}' ({definition.GetType().FullName}) from provider '{provider.GetType().FullName}' is not a native woven VM asset.");
-            if (!seen.Add(definition) || _globals.ContainsKey(definition))
-                throw new ArgumentException($"Global VM asset '{definition}' ({definition.GetType().FullName}) is registered more than once by provider '{provider.GetType().FullName}'.");
+            if (string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Contains(".")) throw new ArgumentException($"Global VM provider '{provider.GetType().FullName}' contains an invalid name '{entry.Key}'; names must be nonempty and contain no dots.");
+            var definition = entry.Value;
+            if (definition == null) throw new ArgumentException($"Global VM '{entry.Key}' from provider '{provider.GetType().FullName}' has a null asset reference.");
+            if (!provider.Assets.IsAsset(definition)) throw new ArgumentException($"Global VM '{entry.Key}', asset '{definition}' ({definition.GetType().FullName}), from provider '{provider.GetType().FullName}' is not a native woven VM asset.");
+            if (_globals.ContainsKey(entry.Key)) throw new ArgumentException($"Global VM name '{entry.Key}' is already registered; conflicting asset '{definition}' from provider '{provider.GetType().FullName}'.");
         }
-        foreach (var definition in definitions) _globals.Add(definition, provider);
+        foreach (var entry in definitions) _globals.Add(entry.Key, (entry.Value, provider));
     }
-    public T GetGlobalViewModel<T>(object definition) where T : class => GetGlobalViewModel<T>(definition, "direct lookup");
-    internal T GetGlobalViewModel<T>(object definition, string request) where T : class
+    public T GetGlobalViewModel<T>(string name) where T : class => GetGlobalViewModel<T>(name, "direct lookup");
+    internal T GetGlobalViewModel<T>(string name, string request) where T : class
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
-        if (definition == null) throw new ArgumentNullException(nameof(definition), $"Global VM asset reference is null; requested by {request}.");
-        var provider = _globals.TryGetValue(definition, out var registered) ? registered
-            : throw new KeyNotFoundException($"Global VM asset '{definition}' ({definition.GetType().FullName}) is not registered by a global provider; requested by {request}. Add this asset to a provider registered with this Context.");
-        return (T)Create(typeof(T), definition, provider.Assets, true, (_, _) => { });
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException($"Global VM name is empty; requested by {request}.", nameof(name));
+        var entry = _globals.TryGetValue(name, out var registered) ? registered
+            : throw new KeyNotFoundException($"Global VM '{name}' is not registered by a provider; requested by {request}. Register this name in the Context's provider.");
+        return (T)Create(typeof(T), entry.Definition, entry.Provider.Assets, true, (_, _) => { });
     }
     public T GetSharedViewModel<T>(T template, IViewModelAssets assets) where T : class => (T)Create(typeof(T), template, assets, true, (_, _) => { });
     internal object Create(Type type, object? template, IViewModelAssets? assets, bool shared, Action<object, IViewModelAssets?> own)
@@ -233,7 +232,7 @@ public static class MvvmExtensions
     public static MvvmRuntime GetMvvm(this UIContext ui) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module must be installed before creating the context.")).Runtime;
     public static void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
         Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null) => MvvmModule.Contexts.GetValue(ui, _ => throw new InvalidOperationException("MVVM module is not installed.")).Configure(runtime, configuration, assets);
-    public static T GetGlobalViewModel<T>(this UIContext ui, object definition) where T : class => ui.GetMvvm().GetGlobalViewModel<T>(definition);
+    public static T GetGlobalViewModel<T>(this UIContext ui, string name) where T : class => ui.GetMvvm().GetGlobalViewModel<T>(name);
     public static void ShareMvvm(this UIContext ui, UIContext owner) => ui.ConfigureMvvm(owner.GetMvvm());
     public static void RegisterViewModelFactory<T>(this UIContext ui, Func<T> factory) where T : class => ui.GetMvvm().RegisterFactory(factory);
     public static Task WhenMvvmIdleAsync(this UIContext ui) => ui.GetMvvm().WhenIdleAsync();

@@ -10,7 +10,7 @@ namespace UIFramework.Mvvm.Unity
     public enum ViewBindingKind { Property, Command, Collection }
     [Serializable] public sealed class ViewBindingData
     {
-        public ScriptableObject ViewModel; public bool IsGlobal;
+        public bool IsGlobal;
         public bool Enabled = true; public Component Target; public string Member = "text"; public string Source = "";
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
         public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
@@ -34,20 +34,14 @@ namespace UIFramework.Mvvm.Unity
         {
             get
             {
-                var bindings = Bindings.Where(binding => binding.Enabled).ToArray();
-                foreach (var binding in bindings.Where(binding => binding.IsGlobal))
-                {
-                    if (!binding.ViewModel) throw new InvalidOperationException("Missing global VM asset: " + binding.Source);
-                    if (binding.Source.Split('.')[0] == "Item") throw new InvalidOperationException("Item is a collection-injected source, not a global VM.");
-                }
-                return bindings.Where(binding => binding.ViewModel).GroupBy(binding => binding.Source.Split('.')[0]).Select(group =>
-                {
-                    var binding = group.First();
-                    if (group.Any(other => other.ViewModel != binding.ViewModel || other.IsGlobal != binding.IsGlobal))
-                        throw new InvalidOperationException("Conflicting VM references for source: " + group.Key);
-                    return new ViewModelSource { Name = group.Key, Type = binding.ViewModel.GetType(),
-                        Template = binding.ViewModel, Creation = ViewModelCreation.Manual, IsGlobal = binding.IsGlobal };
-                }).ToArray();
+                return Bindings.Where(binding => binding.Enabled && !(binding.Kind == ViewBindingKind.Property && binding.ConverterInput == ConverterInput.Constant))
+                    .GroupBy(binding => binding.Source.Split('.')[0]).Select(group =>
+                    {
+                        var binding = group.First();
+                        if (group.Any(other => other.IsGlobal != binding.IsGlobal)) throw new InvalidOperationException("Conflicting source modes: " + group.Key);
+                        if (binding.IsGlobal && group.Key == "Item") throw new InvalidOperationException("Item is a collection-injected source, not a global VM.");
+                        return new ViewModelSource { Name = group.Key, Creation = ViewModelCreation.Manual, IsGlobal = binding.IsGlobal };
+                    }).ToArray();
             }
         }
         public CollectionTarget GetCollectionTarget(IUINode node, ViewBindingData binding, bool preview = false) =>

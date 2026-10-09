@@ -48,9 +48,9 @@ namespace StarCourt.UnityDemo.Tests
             try
             {
                 ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>());
-                var vm = ui.GetGlobalViewModel<NativePlayerVm>(template);
+                var vm = ui.GetGlobalViewModel<NativePlayerVm>(template.name);
                 Assert.That(vm, Is.Not.SameAs(template)); Assert.That(vm.Gold, Is.EqualTo(77));
-                Assert.That(ui.GetGlobalViewModel<NativePlayerVm>(template), Is.SameAs(vm));
+                Assert.That(ui.GetGlobalViewModel<NativePlayerVm>(template.name), Is.SameAs(vm));
                 vm.Gold = 1; Assert.That(template.Gold, Is.EqualTo(77));
                 await ui.DisposeAsync(); ui = null;
             }
@@ -83,7 +83,7 @@ namespace StarCourt.UnityDemo.Tests
         private static IEnumerator Wait(Task task) { while (!task.IsCompleted) yield return null; task.GetAwaiter().GetResult(); }
         private static async Task Run()
         {
-            var template = ScriptableObject.CreateInstance<NativePlayerVm>(); template.Gold = 100; template.Items.Add(1);
+            var template = ScriptableObject.CreateInstance<NativePlayerVm>(); template.name = "Player"; template.Gold = 100; template.Items.Add(1);
             var events = new GameObject("MVVM Events", typeof(EventSystem)); var canvas = new GameObject("MVVM Canvas", typeof(Canvas));
             var ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>()); var runtime = new MvvmRuntime(); ui.ConfigureMvvm(runtime);
             var rect = new GameObject("View", typeof(RectTransform), typeof(MvvmBindings)); rect.transform.SetParent(canvas.transform, false);
@@ -91,10 +91,10 @@ namespace StarCourt.UnityDemo.Tests
             var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)); button.transform.SetParent(rect.transform, false);
             runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
             var config = rect.GetComponent<MvvmBindings>();
-            config.Bindings.Add(new ViewBindingData { ViewModel = template, IsGlobal = true, Target = label.GetComponent<Text>(), Source = "Player.Gold", Converter = "FormatNumber" });
-            config.Bindings.Add(new ViewBindingData { ViewModel = template, IsGlobal = true, Target = button.GetComponent<Button>(), Source = "Player.Buy", Kind = ViewBindingKind.Command });
+            config.Bindings.Add(new ViewBindingData { IsGlobal = true, Target = label.GetComponent<Text>(), Source = template.name + ".Gold", Converter = "FormatNumber" });
+            config.Bindings.Add(new ViewBindingData { IsGlobal = true, Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
-            var vm = node.GetViewModel<NativePlayerVm>("Player"); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
+            var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
             button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
             slider.GetComponent<Slider>().maxValue = 200;
@@ -103,12 +103,12 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(vm.Gold, Is.EqualTo(120)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
             node.ResumeBinding("Player.Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));
             vm.Items.Add(2); Assert.That(template.Items.Count, Is.EqualTo(1)); vm.Gold = 0; Assert.That(button.GetComponent<Button>().interactable, Is.False);
-            Assert.That(runtime.GetGlobalViewModel<NativePlayerVm>(template), Is.SameAs(vm));
+            Assert.That(runtime.GetGlobalViewModel<NativePlayerVm>(template.name), Is.SameAs(vm));
             var otherEvents = new GameObject("Other Events", typeof(EventSystem));
             var otherCanvas = new GameObject("Other Canvas", typeof(Canvas));
             var otherUi = EngineUI.UI.Create(otherCanvas.GetComponent<Canvas>(), otherEvents.GetComponent<EventSystem>());
             otherUi.GetMvvm().RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { template }));
-            var independent = otherUi.GetMvvm().GetGlobalViewModel<NativePlayerVm>(template);
+            var independent = otherUi.GetMvvm().GetGlobalViewModel<NativePlayerVm>(template.name);
             Assert.That(independent, Is.Not.SameAs(vm)); Assert.That(independent.Gold, Is.EqualTo(100));
             await otherUi.DisposeAsync();
             UnityEngine.Object.Destroy(otherCanvas); UnityEngine.Object.Destroy(otherEvents);

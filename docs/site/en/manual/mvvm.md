@@ -48,12 +48,12 @@ Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity
 
 ## Unity global VM catalogs
 
-Create a `GlobalViewModelCatalog` SO under `Assets/Resources/UIFramework/Mvvm/` and add SO VM references. Binding rows select global assets directly: no per-view source list, Creation setting, or Provider initialization code. Context initialization registers catalogs and first use creates a clone. Originals remain unchanged; global instances survive view closure and are released with the Context. Item and local injected objects are not catalog entries.
+Create a `GlobalViewModelCatalog` SO under `Assets/Resources/UIFramework/Mvvm/` and add SO VM references. The default provider uses asset names as keys (for example `Player`). Rows store `Player.Gold` without VM asset references: no per-view source list, Creation setting, or Provider initialization code. Context initialization registers catalogs and first use creates a clone. Originals remain unchanged; global instances survive view closure and are released with the Context. Item and local injected objects are not catalog entries.
 
 Business code can retrieve the Context instance when needed:
 
 ```csharp
-var player = ui.GetGlobalViewModel<PlayerVm>(playerAsset);
+var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
 ## Choose ownership

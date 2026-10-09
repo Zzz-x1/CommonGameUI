@@ -29,7 +29,7 @@ internal sealed class BindingScope : IAsyncDisposable
             if (source.IsGlobal)
             {
                 var request = $"node '{Node.Name}' ({Node.Owner.GetType().FullName}), source '{source.Name}'";
-                _sources.Add(source.Name, _runtime.GetGlobalViewModel<object>(source.Template!, request));
+                _sources.Add(source.Name, _runtime.GetGlobalViewModel<object>(source.Name, request));
                 continue;
             }
             if (source.Creation == ViewModelCreation.Manual) continue;

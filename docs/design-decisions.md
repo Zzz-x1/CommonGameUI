@@ -2025,7 +2025,7 @@ Unity MvvmBindings 移除窗口级 ViewModels 列表及 Creation 配置。新增
 
 Core MVVM 提供 IGlobalViewModelProvider（ViewModels、Assets）与 GlobalViewModelProviderAttribute；框架初始化自动注册程序集标记的项目 Provider 和适配器默认 Provider。Provider 不持有运行时实例，重复定义或不合法 VM 直接报错。自定义 Provider 无参构造入口需按引擎裁剪规则保留。用户无需手动初始化或释放 Runtime。
 
-Unity 每行 ViewBindingData 保存 ViewModel 原生资产引用和 IsGlobal。来源路径仍为节点内别名与成员路径，同一别名的资产及模式必须一致。全局引用必须已在 Provider 注册，不按名称查找其他资产保底。GUI 左侧只读浏览全局目录，拖动成员保存资产引用；本地来源可选择类型／预览资产，不在运行时克隆。集合 Item 始终由集合注入，禁止标为全局；父来源映射和业务 SetViewModel 保持借用。预览使用独立克隆，缺少预览来源明确显示原因，不执行命令或写回原资产。配置仍通过 SerializedObject 保存、Undo 和 Prefab Override；不引入 IMGUI。
+Unity 每行 ViewBindingData 仅保存 Source 字符串和 IsGlobal，不保存 VM 资产／类型引用。Provider 提供名称→资产定义字典，默认 Unity Provider 以资产名为键；名称区分大小写，禁止空名及点号，同名登记直接报错。全局来源路径为 Provider 名称与成员（Player.Gold），绑定和运行时 GetGlobalViewModel<T>(string name) 使用同一名称查找。原生资产引用只保留在目录。GUI 浏览目录及成员，拖放只保存来源路径；改名需更新路径，不按旧名称或资产身份保底。Item 和业务本地来源通过 SetViewModel 注入，不查询全局目录。目标控件继续保存组件引用。全局预览从目录取得资产并独立克隆；本地来源无样本时明确显示缺少预览来源，绑定行不再存预览资产。Undo、Prefab Override 和 UI Toolkit 工作流保留。
 
 本轮仅迁移 Unity 来源 GUI；Godot 保留既有 Resource 来源配置。两端共享的 Runtime 接口和程序集同步更新。无旧 Unity 来源类型或兼容读取层。
 
@@ -2040,3 +2040,8 @@ IUILog 提供同步 Error(string message) 与 Exception(Exception exception, str
 错误信息修订（2026-10-09）：全局 VM 未注册异常必须包含资产的原生文本身份（Unity 为资产名及类型）、完整 VM 类型，以及初始化请求的节点名、业务类型和来源别名；直接查询标明 direct lookup。空引用、重复注册与非法资产标明具体 Provider 或资产。仍在原失败位置创建对应异常，不包装、吞掉或默认补注册。
 
 修订检查：缺失全局 VM 信息专项测试通过，确认异常包含 VM 类型、MainMenu 节点及 Player 来源；Unity 本地包 MVVM DLL 与 Release 输出已同步，Godot Demo 已重新生成。未跑全量回归，未修改 Fruit-platter 业务配置。
+
+
+名称解析修订（2026-10-09）：移除 Unity 绑定行 VM 引用，统一 Provider 字符串查找。此规则替代第 31 节旧资产身份查找描述；缺失名称异常包含确切名称、节点、业务类型及来源，非法／重复目录项包含资产或 Provider。无需用户管理 Runtime。两端共享接口同步迁移，Godot 既有来源配置保持不变。
+
+修订检查：名称解析／Context 隔离及缺失名称信息 2 项核心专项通过，Unity 原生资产绑定与清理 1 项通过（绑定行不含 VM 引用）。Unity 批处理编译无 C# 错误；实际引用 MVVM DLL 与 Release SHA256 一致，Godot Demo 已重新生成。修改页中英文代码一致。未执行全量回归、编辑器交互／预览验收、Godot 原生测试或 IL2CPP 导出。

@@ -48,12 +48,12 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 ## Unity 全局 VM 目录
 
-创建 `GlobalViewModelCatalog` SO，保存到 `Assets/Resources/UIFramework/Mvvm/` 并添加 SO VM 引用。窗口绑定行直接选择全局资产；无需来源列表、Creation 或手动初始化 Provider。Context 初始化自动注册目录，首次绑定时创建克隆。原资产保持不变，窗口关闭保留全局实例，Context 释放时销毁；Item 与本地注入对象不进入目录。
+创建 `GlobalViewModelCatalog` SO，保存到 `Assets/Resources/UIFramework/Mvvm/` 并添加 SO VM 引用。默认 Provider 使用资产名作为名称（例如 `Player`）；绑定行保存 `Player.Gold`，不保存 VM 引用；无需来源列表、Creation 或手动初始化 Provider。Context 初始化自动注册目录，首次绑定时创建克隆。原资产保持不变，窗口关闭保留全局实例，Context 释放时销毁；Item 与本地注入对象不进入目录。
 
 业务需要直接修改全局状态时，可以取得该 Context 的实例：
 
 ```csharp
-var player = ui.GetGlobalViewModel<PlayerVm>(playerAsset);
+var player = ui.GetGlobalViewModel<PlayerVm>("Player");
 ```
 
 ## 选择实例方式
