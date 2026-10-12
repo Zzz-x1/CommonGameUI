@@ -24,7 +24,7 @@ public class ContainerReturnTests
     private static (UIContext UI, TestHost Host) Create()
     {
         var host = new TestHost(); var ui = new UIContext(host, host, host);
-        ui.Register<CounterView>(() => new CounterView(), "modal"); ui.Register<BoolDialog>(() => new BoolDialog());
+        ui.Register<CounterView>(() => new CounterView(), "modal", windowMode: WindowInstanceMode.Multiple); ui.Register<BoolDialog>(() => new BoolDialog());
         return (ui, host);
     }
     private static async Task<T> Attach<T>(UIContext ui) where T : UINode, new()
@@ -147,7 +147,7 @@ public class ContainerReturnTests
     {
         var (ui, _) = Create(); await using var scope = ui; var modals = await Attach<ModalContainerNode>(ui);
         var target = await modals.OpenAsync<CounterView>(); await modals.OpenAsync<CounterView>();
-        var disposal = new GatedDispose(); ui.Register(() => { var node = new ResultDialog(); node.AddLifecycle(disposal); return node; });
+        var disposal = new GatedDispose(); ui.Register(() => { var node = new ResultDialog(); node.AddLifecycle(disposal); return node; }, windowMode: WindowInstanceMode.Multiple);
         var result = modals.ShowDialogAsync<ResultDialog, bool>(); var dialog = (ResultDialog)modals.Current!;
         dialog.Complete(true); var close = modals.CloseToAsync(target, playAnimation: false);
         await disposal.Started.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.False(result.IsCompleted);
@@ -192,7 +192,7 @@ public class ContainerReturnTests
     {
         var host = new TestHost(); await using var ui = new UIContext(host, host, host);
         var records = new List<RecordingLifecycle>();
-        ui.Register(() => { var node = new CounterView(); var record = new RecordingLifecycle(); records.Add(record); node.AddLifecycle(record); return node; });
+        ui.Register(() => { var node = new CounterView(); var record = new RecordingLifecycle(); records.Add(record); node.AddLifecycle(record); return node; }, windowMode: WindowInstanceMode.Multiple);
         var modals = await Attach<ModalContainerNode>(ui);
         var target = await modals.OpenAsync<CounterView>(); var middle = await modals.OpenAsync<CounterView>(); var top = await modals.OpenAsync<CounterView>();
         records[1].Events.Clear(); var error = new IOException("target activation"); records[0].OnActive = _ => throw error;

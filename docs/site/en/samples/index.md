@@ -40,3 +40,5 @@ Godot includes characters, inventory, team, stages, shop, tasks, mail, friends, 
 [Recipes](game-ui-recipes.md) · [Timelines](../manual/timeline-animation.md)
 
 Both clients use MVVM for shared currency, private equipment details, two-way settings, purchase commands and inventory rows. See [MVVM setup](../manual/mvvm.md).
+
+Panel, Stack and Modal default to Single. Reopening returns the current instance; opening inventory already in history or settings below another modal returns to that original instance. Godot ClientModalView hosts parameterized menu variants and explicitly uses Multiple. Use Multiple when separate same-type content instances must coexist.

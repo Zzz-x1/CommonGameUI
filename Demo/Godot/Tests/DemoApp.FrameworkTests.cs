@@ -21,9 +21,10 @@ public partial class DemoApp
         pass(Floating.Children.Count == 0 && comparisons.All(node => node.State == NodeState.Disposed), "native comparison closes drain and duplicate close shares execution");
         await OpenAsync("Inventory");
         var inventory = (InventoryView)Shell.Pages.Current!;
+        pass(ReferenceEquals(inventory, await Shell.Pages.PushAsync<InventoryView>()), "single inventory push reuses the current page");
         await PressAsync(inventory.GetControl<Button>("Pages/装备/C0"));
         string itemId = ((ItemDetailsView)Shell.Pages.Current!).Parameters;
-        await Shell.Pages.PopAsync();
+        pass(ReferenceEquals(inventory, await Shell.Pages.PushAsync<InventoryView>()), "single inventory push returns to the retained page");
         var stack = Shell.Pages;
         using var cancel = new CancellationTokenSource();
         ItemDetailsView? canceledDetails = null;

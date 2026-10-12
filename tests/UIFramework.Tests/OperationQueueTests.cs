@@ -57,7 +57,7 @@ public sealed class OperationQueueTests
 
     [Fact] public async Task PendingCancellationDoesNotRunOrDelayFollowingRequest()
     {
-        await using var ui = Create(); ui.Register(() => new CounterView(), "page");
+        await using var ui = Create(); ui.Register(() => new CounterView(), "page", windowMode: WindowInstanceMode.Multiple);
         var stack = await Attach<StackContainerNode>(ui.Root); var first = await stack.PushAsync<CounterView>();
         var gate = new Gate(); first.Transition = gate;
         var active = stack.PopAsync(); using var cancel = new CancellationTokenSource();
@@ -169,7 +169,7 @@ public sealed class OperationQueueTests
 
     [Fact] public async Task DisposalCancelsActiveAndPendingAndWaitsForDrain()
     {
-        var ui = Create(); ui.Register(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui.Root);
+        var ui = Create(); ui.Register(() => new CounterView(), "page", windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         var host = (TestHost)ui.Host; host.LoadGate = new(); var active = stack.PushAsync<CounterView>(); var pending = stack.PushAsync<CounterView>();
         await ui.DisposeAsync(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => active); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         Assert.Equal(NodeState.Disposed, stack.State); Assert.Empty(host.Loaded);

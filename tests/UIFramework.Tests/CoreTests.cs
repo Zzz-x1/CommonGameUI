@@ -138,7 +138,7 @@ public class CoreTests
 
     [Fact] public async Task StackReturnsSameInstanceAndDisposesOnlyPoppedPage()
     {
-        var (ui, _) = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, _) = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui);
         var first = await stack.PushAsync<CounterView>(); var second = await stack.PushAsync<CounterView>();
         Assert.False(first.IsVisible); Assert.True(second.IsVisible);
         await stack.PopAsync(); Assert.Same(first, stack.Current); Assert.True(first.IsVisible);
@@ -189,7 +189,7 @@ public class CoreTests
 
     [Fact] public async Task ConcurrentOperationsExecuteInOrder()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page"); var stack = await Attach<StackContainerNode>(ui);
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), "page", windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui);
         host.LoadGate = new TaskCompletionSource<bool>(); var pending = stack.PushAsync<CounterView>();
         var next = stack.PushAsync<CounterView>(); Assert.False(next.IsCompleted);
         host.LoadGate.SetResult(true); await Task.WhenAll(pending, next); Assert.Equal(2, stack.History.Count); await ui.DisposeAsync();
@@ -205,7 +205,7 @@ public class CoreTests
 
     [Fact] public async Task NestedModalBlocksAllOtherInputAndRestoresFocus()
     {
-        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView());
+        var (ui, host) = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var panels = await Attach<PanelContainerNode>(ui); var page = await panels.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(ui); var initial = new object(); host.Focus = initial;
         var a = await modals.OpenAsync<CounterView>(); Assert.False(page.IsInteractive);

@@ -9,7 +9,7 @@ using UIFramework.Mvvm.Godot;
 
 namespace HierarchyDemo
 {
-[UIResource("res://Scenes/Client/Modal.tscn")]
+[UIResource("res://Scenes/Client/Modal.tscn", WindowMode = WindowInstanceMode.Multiple)]
 public partial class ClientModalView : EngineUI.UINode<ModalArgs>
 {
     private DemoApp App => DemoApp.Instance;

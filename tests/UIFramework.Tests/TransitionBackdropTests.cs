@@ -52,7 +52,7 @@ public class TransitionBackdropTests
     [Fact] public async Task ContextDefaultIsInheritedAndCanBeOverriddenDisabledAndRestored()
     {
         await using var ui = Create(); var global = new Factory(); var local = new Factory();
-        ui.DefaultBackdropFactory = global; ui.Register(() => new CounterView());
+        ui.DefaultBackdropFactory = global; ui.Register(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var modals = await Attach<ModalContainerNode>(ui.Root);
         var first = await modals.OpenAsync<CounterView>(); Assert.Same(global.Displays[0], modals.CurrentBackdrop);
         await modals.CloseAsync(first);
@@ -80,7 +80,7 @@ public class TransitionBackdropTests
     [Fact] public async Task ChangingDefaultRetainsExistingSharedBackdropUntilLastClose()
     {
         await using var ui = Create(); var old = new Factory(); var next = new Factory();
-        ui.DefaultBackdropFactory = old; ui.Register(() => new CounterView());
+        ui.DefaultBackdropFactory = old; ui.Register(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var modals = await Attach<ModalContainerNode>(ui.Root); var a = await modals.OpenAsync<CounterView>();
         var shared = modals.CurrentBackdrop; ui.DefaultBackdropFactory = null;
         var b = await modals.OpenAsync<CounterView>(); Assert.Same(shared, modals.CurrentBackdrop);
@@ -91,7 +91,7 @@ public class TransitionBackdropTests
 
     [Fact] public async Task AddingDefaultDuringUnshadedFlowSharesAndReleasesNewBackdrop()
     {
-        await using var ui = Create(); ui.Register(() => new CounterView());
+        await using var ui = Create(); ui.Register(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var modals = await Attach<ModalContainerNode>(ui.Root); var lower = await modals.OpenAsync<CounterView>();
         Assert.Null(modals.CurrentBackdrop); var factory = new Factory(); ui.DefaultBackdropFactory = factory;
         var upper = await modals.OpenAsync<CounterView>(); var shared = modals.CurrentBackdrop;
@@ -101,7 +101,7 @@ public class TransitionBackdropTests
 
     [Fact] public async Task PerModalUsesNewDefaultOnlyForNewDisplaysAndFailureIsNotReplaced()
     {
-        await using var ui = Create(); ui.Register(() => new CounterView()); var first = new Factory(); var second = new Factory();
+        await using var ui = Create(); ui.Register(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var first = new Factory(); var second = new Factory();
         ui.DefaultBackdropFactory = first; var modals = await Attach<ModalContainerNode>(ui.Root); modals.UseDefaultBackdrop(ModalBackdropMode.PerModal);
         var a = await modals.OpenAsync<CounterView>(); ui.DefaultBackdropFactory = second;
         var b = await modals.OpenAsync<CounterView>(); Assert.Same(second.Displays[0], modals.CurrentBackdrop);
@@ -155,7 +155,7 @@ public class TransitionBackdropTests
     public async Task ModalAnimationFailureCancelsPartnerAndWaitsForItsCleanup(bool opening, bool backdropFails)
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root);
-        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), "modal");
+        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), "modal", windowMode: WindowInstanceMode.Multiple);
         var view = opening ? null : await modals.OpenAsync<CounterView>();
         var failure = new IOException("modal animation"); var failed = new TaskCompletionSource<bool>();
         var canceled = new TaskCompletionSource<bool>(); var cleanup = new TaskCompletionSource<bool>();
@@ -194,7 +194,7 @@ public class TransitionBackdropTests
     public async Task ModalCancellationStopsBothAnimationsAndRestoresInput(bool opening)
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root);
-        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var view = opening ? null : await modals.OpenAsync<CounterView>();
         int stopped = 0;
         async Task Play(CancellationToken token)
@@ -257,7 +257,7 @@ public class TransitionBackdropTests
     [Fact] public async Task StackDirectionAndPopToOnlyAnimateSourceAndTarget()
     {
         await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); var recipe = new Recipe();
-        stack.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView());
+        stack.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); await stack.PushAsync<CounterView>(); var top = await stack.PushAsync<CounterView>();
         recipe.Runs.Clear(); await stack.PopToAsync(first);
         Assert.Equal(2, recipe.Runs.Count);
@@ -266,7 +266,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task PairedAnimationsStartTogetherAndHistoryCommitsOnlyAfterBothFinish()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); var recipe = new Recipe();
         var exit = new TaskCompletionSource<bool>(); var enter = new TaskCompletionSource<bool>();
         recipe.Play = (c, t) => (c.Entering ? enter.Task : exit.Task).WaitAsync(t); stack.ChildTransition = recipe;
@@ -277,7 +277,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task FirstAnimationFailureCancelsPartnerAndObservesAllOriginalFailures()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); var recipe = new Recipe();
         var primary = new IOException("exit"); var secondary = new InvalidOperationException("enter");
         recipe.Play = (c, _) => Task.FromException(c.Entering ? secondary : primary); stack.ChildTransition = recipe;
@@ -287,7 +287,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task FailedPartnerCancelsWaitingAnimationAndRestoresState()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); var recipe = new Recipe(); var primary = new IOException("enter");
         var canceled = false;
         recipe.Play = async (c, token) =>
@@ -319,7 +319,7 @@ public class TransitionBackdropTests
     [Theory] [InlineData(ModalBackdropMode.Shared, 1)] [InlineData(ModalBackdropMode.PerModal, 2)]
     public async Task BackdropOwnershipMatchesConfiguredMode(ModalBackdropMode mode, int count)
     {
-        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory, mode); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory, mode); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var a = await modals.OpenAsync<CounterView>(); var first = modals.CurrentBackdrop; var b = await modals.OpenAsync<CounterView>();
         Assert.Equal(count, factory.Displays.Count); Assert.Equal(mode == ModalBackdropMode.Shared, ReferenceEquals(first, modals.CurrentBackdrop));
         Assert.All(factory.Displays, display => Assert.Equal(1, display.Shows));
@@ -346,14 +346,14 @@ public class TransitionBackdropTests
     [Fact] public async Task FailedNestedOpenKeepsSharedBackdropAndOuterInput()
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory);
-        ui.Register<CounterView>(() => new CounterView()); var outer = await modals.OpenAsync<CounterView>(); var display = modals.CurrentBackdrop;
+        ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var outer = await modals.OpenAsync<CounterView>(); var display = modals.CurrentBackdrop;
         var original = new IOException("nested transition"); ui.Register(() => new ArgumentView { Transition = new FailureTransition(original) });
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => modals.OpenAsync<ArgumentView>("inner")));
         Assert.Same(display, modals.CurrentBackdrop); Assert.Single(factory.Displays); Assert.Equal(0, factory.Displays[0].Disposals); Assert.True(outer.IsInteractive);
     }
     [Fact] public async Task HideFailureRestoresBackdropAndLeavesModalOpen()
     {
-        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var modal = await modals.OpenAsync<CounterView>(); var backdrop = factory.Displays[0]; var primary = new IOException("hide"); backdrop.HideFailure = primary;
         Assert.Same(primary, await Assert.ThrowsAsync<IOException>(() => modals.CloseAsync(modal)));
         Assert.Same(modal, modals.Current); Assert.True(modal.IsVisible); Assert.True(backdrop.Visible); Assert.True(backdrop.Interactive);
@@ -361,14 +361,14 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task ForcedDisposalReleasesAllBackdropDisplaysEvenWhenContentCleanupFails()
     {
-        var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory, ModalBackdropMode.PerModal); ui.Register<CounterView>(() => new CounterView());
+        var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory, ModalBackdropMode.PerModal); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var a = await modals.OpenAsync<CounterView>(); var b = await modals.OpenAsync<CounterView>(); b.DisposeFailure = new IOException("content");
         Assert.Same(b.DisposeFailure, await Assert.ThrowsAsync<IOException>(async () => await ui.DisposeAsync()));
         Assert.All(factory.Displays, d => Assert.Equal(1, d.Disposals)); Assert.Null(ui.InputOwner); Assert.Equal(NodeState.Disposed, a.State);
     }
     [Fact] public async Task ContentAndBackdropCleanupFailuresRemainObservable()
     {
-        var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var node = await modals.OpenAsync<CounterView>(); var primary = new IOException("content"); var secondary = new InvalidOperationException("backdrop");
         node.DisposeFailure = primary; factory.Displays[0].DisposeFailure = secondary;
         Assert.Same(primary, await Assert.ThrowsAsync<IOException>(() => modals.CloseAsync(node)));
@@ -377,7 +377,7 @@ public class TransitionBackdropTests
 
     [Fact] public async Task RestoreFailuresDoNotHidePlaybackFailureOrSkipOtherRestores()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); var recipe = new Recipe(); stack.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); var recipe = new Recipe(); stack.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var page = await stack.PushAsync<CounterView>(); recipe.Runs.Clear();
         var primary = new IOException("animation"); var restore = new InvalidOperationException("restore");
         recipe.Play = (_, _) => Task.FromException(primary); recipe.RestoreFailure = restore;
@@ -388,14 +388,14 @@ public class TransitionBackdropTests
     public async Task BackdropCreateOrShowFailureDoesNotPublishModal(bool show)
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var original = new IOException("backdrop");
-        var factory = new Factory { Failure = show ? null : original, ShowFailure = show ? original : null }; modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        var factory = new Factory { Failure = show ? null : original, ShowFailure = show ? original : null }; modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => modals.OpenAsync<CounterView>()));
         Assert.Empty(modals.Children); Assert.Null(modals.Current); Assert.Null(ui.InputOwner);
         Assert.All(factory.Displays, d => Assert.Equal(1, d.Disposals));
     }
     [Fact] public async Task BackdropRestoreFailureIsSecondaryToOriginalHideFailure()
     {
-        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var node = await modals.OpenAsync<CounterView>(); var backdrop = factory.Displays[0];
         var original = new IOException("hide"); var secondary = new InvalidOperationException("restore"); backdrop.HideFailure = original; backdrop.RestoreFailure = secondary;
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => modals.CloseAsync(node)));
@@ -403,7 +403,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task DismissFailureAndConcurrentRequestAreObservable()
     {
-        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView()); var node = await modals.OpenAsync<CounterView>();
+        await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var node = await modals.OpenAsync<CounterView>();
         var gate = new TaskCompletionSource<bool>(); var original = new IOException("business dismiss");
         node.DismissRequested = async token => { await gate.Task.WaitAsync(token); throw original; };
         var pending = modals.RequestDismissAsync(); await Assert.ThrowsAsync<InvalidOperationException>(() => modals.RequestDismissAsync());
@@ -412,7 +412,7 @@ public class TransitionBackdropTests
     [Fact] public async Task ConfigurationCannotChangeWhileOpeningOrWhileModalsExist()
     {
         await using var ui = Create(); var modals = await Attach<ModalContainerNode>(ui.Root); var factory = new Factory(); modals.ConfigureBackdrop(factory);
-        var recipe = new Recipe(); var gate = new TaskCompletionSource<bool>(); recipe.Play = (_, t) => gate.Task.WaitAsync(t); modals.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView());
+        var recipe = new Recipe(); var gate = new TaskCompletionSource<bool>(); recipe.Play = (_, t) => gate.Task.WaitAsync(t); modals.ChildTransition = recipe; ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var pending = modals.OpenAsync<CounterView>(); Assert.Throws<InvalidOperationException>(() => modals.ConfigureBackdrop(new Factory()));
         Assert.Throws<InvalidOperationException>(() => modals.DisableBackdrop()); Assert.Throws<InvalidOperationException>(() => modals.UseDefaultBackdrop());
         gate.SetResult(true); var node = await pending; Assert.Throws<InvalidOperationException>(() => modals.ConfigureBackdrop(new Factory()));
@@ -421,7 +421,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task ParentInputLocksAlsoGateBackdropRequests()
     {
-        await using var ui = Create(); var panel = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView()); var shell = await panel.OpenAsync<CounterView>();
+        await using var ui = Create(); var panel = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var shell = await panel.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(shell); var factory = new Factory(); modals.ConfigureBackdrop(factory); await modals.OpenAsync<CounterView>();
         var recipe = new Recipe(); var gate = new TaskCompletionSource<bool>(); recipe.Play = (_, t) => gate.Task.WaitAsync(t); shell.Transition = recipe;
         var pending = panel.HideAsync(shell); Assert.False(factory.Displays[0].Interactive); gate.SetResult(true); await pending;
@@ -429,14 +429,14 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task ModalPreparationBlocksBackgroundInputWithoutPrematureDeactivation()
     {
-        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView()); var page = await panels.OpenAsync<CounterView>();
+        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var page = await panels.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(ui.Root); var recipe = new Recipe(); var gate = new TaskCompletionSource<bool>(); recipe.Play = (_, t) => gate.Task.WaitAsync(t); modals.ChildTransition = recipe;
         var pending = modals.OpenAsync<CounterView>(); Assert.True(page.IsActive); Assert.False(page.IsInteractive); Assert.Null(ui.InputOwner);
         gate.SetResult(true); var modal = await pending; Assert.False(page.IsActive); await modals.CloseAsync(modal); Assert.True(page.IsInteractive);
     }
     [Fact] public async Task CancelingModalAnimationReleasesGlobalInputBlock()
     {
-        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView()); var page = await panels.OpenAsync<CounterView>();
+        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var page = await panels.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(ui.Root); var recipe = new Recipe(); recipe.Play = (_, t) => Task.Delay(Timeout.Infinite, t); modals.ChildTransition = recipe;
         using var cancel = new CancellationTokenSource(); var pending = modals.OpenAsync<CounterView>(cancellationToken: cancel.Token);
         cancel.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
@@ -444,7 +444,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task DisposingModalContainerDuringAnimationDoesNotLeaveContextInputLocked()
     {
-        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView()); var page = await panels.OpenAsync<CounterView>();
+        await using var ui = Create(); var panels = await Attach<PanelContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var page = await panels.OpenAsync<CounterView>();
         var modals = await Attach<ModalContainerNode>(ui.Root); var recipe = new Recipe(); recipe.Play = (_, t) => Task.Delay(Timeout.Infinite, t); modals.ChildTransition = recipe;
         var pending = modals.OpenAsync<CounterView>(); Assert.False(page.IsInteractive);
         await modals.DisposeAsync(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
@@ -452,7 +452,7 @@ public class TransitionBackdropTests
     }
     [Fact] public async Task CompetingModalContainerIsRejectedBeforeChangingExistingInputAndFocus()
     {
-        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var first = await Attach<ModalContainerNode>(ui.Root); var second = await Attach<ModalContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var first = await Attach<ModalContainerNode>(ui.Root); var second = await Attach<ModalContainerNode>(ui.Root);
         var existing = await first.OpenAsync<CounterView>(); var focus = ((TestHost)ui.Host).Focus;
         await Assert.ThrowsAsync<InvalidOperationException>(() => second.OpenAsync<CounterView>());
         Assert.True(existing.IsInteractive); Assert.Same(focus, ((TestHost)ui.Host).Focus); Assert.Empty(second.Children);

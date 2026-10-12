@@ -112,7 +112,7 @@ public sealed class NativeIdentityTests
     {
         var loader = new Loader(() => new View()); var host = new TestHost();
         await using var ui = new UIContext(host, loader, host);
-        ui.Register<View>("native", view => view.Configured = true);
+        ui.Register<View>("native", view => view.Configured = true, windowMode: WindowInstanceMode.Multiple);
         var stack = await Container<StackContainerNode>(ui);
         var first = await stack.PushAsync<View>();
         var contexts = new List<TransitionContext>();

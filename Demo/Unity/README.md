@@ -96,3 +96,5 @@ Unity MVVM：窗口不再维护 ViewModels 列表。全局 SO VM 放入 GlobalVi
 
 
 全局 SO VM：ClientPlayerVm 继承 GlobalViewModel，通过 Resources/UIFramework/Mvvm/Client.asset 登记。首次获取时 OnInitialize 订阅本地玩家存档变化，Context 释放时 OnDisposeAsync 解除订阅；窗口关闭或缓存不释放玩家状态。独立详情、购买与列表条目继续使用普通 C# VM。缺少目录时可在编辑器执行 ClientSceneAuthoring.PrepareGlobalViewModels，不在运行时补建目录。
+
+Panel、Stack、Modal 默认 Single，重复打开复用当前实例；再次打开历史中的背包或下层设置，会直接返回原实例。Godot 通用 ClientModalView 承载不同参数菜单，显式注册 Multiple；需要同时存在不同内容的项目类型也应使用 Multiple。

@@ -40,3 +40,5 @@ Godot 包含角色、背包、编队、关卡、商店、任务、邮件、好�
 [场景组合](game-ui-recipes.md) · [时间轴](../manual/timeline-animation.md)
 
 两端客户端使用 MVVM 展示共享金币、独立装备详情、设置双向编辑、购买命令和背包条目，见 [MVVM 入门](../manual/mvvm.md)。
+
+Panel、Stack、Modal 默认 Single，重复打开复用当前实例；再次打开历史中的背包或下层设置，会直接返回原实例。Godot 通用 ClientModalView 承载不同参数菜单，显式注册 Multiple；需要同时存在不同内容的项目类型也应使用 Multiple。

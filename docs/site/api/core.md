@@ -128,7 +128,7 @@ protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? ente
 
 ## 容器与结果弹窗
 
-Panel Single 保留隐藏项，Stack 保留历史；Close／Pop 默认销毁，KeepAlive 缓存。Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收同容器存活实例，当前目标正常完成。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
+WindowInstanceMode 对 Panel、Stack、Modal 均生效，默认 Single，按同一容器中的注册类型去重。Panel 恢复隐藏项；Stack 已有项相当于 PopTo，Modal 已有项相当于 CloseTo；目标已在顶层直接返回，不重播入场。已打开 Single 不接受新的创建参数；Multiple 每次创建独立项。Close／Pop 默认销毁，KeepAlive 缓存。Tab 绑定保留控件；Modal 仅顶层输入。PopTo／CloseTo 接收同容器存活实例，当前目标正常完成。ShowDialog 等待结果和关闭清理；外部未回答关闭会取消。RequestDismiss 返回 false 表示未配置处理。
 
 ### `ContainerNode : UINode`
 

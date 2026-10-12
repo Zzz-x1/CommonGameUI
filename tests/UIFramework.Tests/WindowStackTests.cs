@@ -76,7 +76,7 @@ public class WindowStackTests
         Assert.Equal("first", window.Parameters);
     }
 
-    [Fact] public async Task MultipleQueryRejectsAmbiguityAndRegistrationModeDoesNotAffectStacksOrModals()
+    [Fact] public async Task MultipleQueryRejectsAmbiguityAndAllowsIndependentHistoryItems()
     {
         await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var panels = await Attach<PanelContainerNode>(ui.Root);
@@ -84,7 +84,7 @@ public class WindowStackTests
         Assert.NotSame(a, b); await panels.HideAsync(a);
         Assert.Throws<InvalidOperationException>(() => panels.TryGet<CounterView>(out _));
         await panels.CloseAsync(b); Assert.True(panels.TryGet<CounterView>(out var remaining)); Assert.Same(a, remaining);
-        ui.Register<ArgumentView>(() => new ArgumentView()); var stack = await Attach<StackContainerNode>(ui.Root);
+        ui.Register<ArgumentView>(() => new ArgumentView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         Assert.NotSame(await stack.PushAsync<ArgumentView>("a"), await stack.PushAsync<ArgumentView>("b"));
         var modals = await Attach<ModalContainerNode>(ui.Root);
         Assert.NotSame(await modals.OpenAsync<ArgumentView>("a"), await modals.OpenAsync<ArgumentView>("b"));
@@ -189,7 +189,7 @@ public class WindowStackTests
     {
         await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root);
         var disposal = new List<int>(); var behaviors = new List<RecordingLifecycle>();
-        ui.Register(() => { var n = new CounterView(); var b = new RecordingLifecycle(); n.AddLifecycle(b); n.AddLifecycle(new OrderBehavior(disposal, behaviors.Count)); behaviors.Add(b); return n; });
+        ui.Register(() => { var n = new CounterView(); var b = new RecordingLifecycle(); n.AddLifecycle(b); n.AddLifecycle(new OrderBehavior(disposal, behaviors.Count)); behaviors.Add(b); return n; }, windowMode: WindowInstanceMode.Multiple);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var c = await stack.PushAsync<CounterView>(); var d = await stack.PushAsync<CounterView>();
         for (var i = 0; i < behaviors.Count; i++) { behaviors[i].Events.Clear(); behaviors[i].DisposeFailure = null; }
@@ -204,7 +204,7 @@ public class WindowStackTests
 
     [Fact] public async Task PopToRejectsCurrentForeignMissingAndDisposedTargets()
     {
-        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var foreign = await Attach<CounterView>(ui.Root);
         await stack.PopToAsync(b);
@@ -218,7 +218,7 @@ public class WindowStackTests
 
     [Fact] public async Task PopToKeepsEarlierHistoryWhenTargetIsNotTheRootPage()
     {
-        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>();
         var c = await stack.PushAsync<CounterView>(); var d = await stack.PushAsync<CounterView>();
         await stack.PopToAsync(b);
@@ -231,7 +231,7 @@ public class WindowStackTests
 
     [Fact] public async Task FailedPopToPreparationRestoresEntireHistoryWithoutIntermediateCleanup()
     {
-        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>(); var c = await stack.PushAsync<CounterView>();
         var failure = new IOException("return target"); a.EnterFailure = failure;
         Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => stack.PopToAsync(a)));
@@ -246,11 +246,11 @@ public class WindowStackTests
 
     [Fact] public async Task ReturnCompletionAndMultipleCleanupFailuresPreserveOriginalAndReleaseEveryPage()
     {
-        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView()); var stack = await Attach<StackContainerNode>(ui.Root);
+        await using var ui = Create(); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple); var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<CounterView>(); var b = await stack.PushAsync<CounterView>(); var c = await stack.PushAsync<CounterView>();
         var original = new IOException("completion");
         var sourceBehavior = new RecordingLifecycle { OnExited = _ => throw original };
-        ui.Register(() => { var node = new ArgumentView(); node.AddLifecycle(sourceBehavior); return node; });
+        ui.Register(() => { var node = new ArgumentView(); node.AddLifecycle(sourceBehavior); return node; }, windowMode: WindowInstanceMode.Multiple);
         var d = await stack.PushAsync<ArgumentView>("source");
         var cleanup1 = new Exception("cleanup c"); var cleanup2 = new Exception("cleanup b"); c.DisposeFailure = cleanup1; b.DisposeFailure = cleanup2;
         Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => stack.PopToAsync(a)));

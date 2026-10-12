@@ -128,7 +128,7 @@ protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? ente
 
 ## Containers and result dialogs
 
-Panel Single retains hidden items and Stack retains history; Close/Pop destroy by default or cache with KeepAlive. Tab retains bound controls. Modal allows top-layer input. PopTo/CloseTo take live instances in their container; the current target completes without changes. ShowDialog waits for answer and cleanup; unanswered external closure cancels. RequestDismiss returns false when no handler is configured.
+WindowInstanceMode applies to Panel, Stack and Modal, defaults to Single, and deduplicates by registered type within one container. Panel restores hidden items; an existing Stack or Modal item follows PopTo or CloseTo. A current item returns immediately without replaying entry. Open Single instances reject new creation arguments; Multiple creates independent entries. Close/Pop destroy by default or cache with KeepAlive. Tab retains bound controls. Modal allows top-layer input. PopTo/CloseTo take live instances in their container; the current target completes without changes. ShowDialog waits for answer and cleanup; unanswered external closure cancels. RequestDismiss returns false when no handler is configured.
 
 ### `ContainerNode : UINode`
 

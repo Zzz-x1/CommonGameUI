@@ -42,7 +42,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task ConstructionIsLazyAndStackPhasesHaveStableSourceTarget()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var contexts = new List<TransitionContext>(); var recipe = new Recipe();
         stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return recipe; });
         Assert.Empty(contexts);
@@ -59,7 +59,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task PopToOnlySelectsTopAndDestination()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var a = await stack.PushAsync<CounterView>(); var skipped = await stack.PushAsync<CounterView>(); var top = await stack.PushAsync<CounterView>();
         var contexts = new List<TransitionContext>(); stack.ChildTransition = Transitions.Select(c => { contexts.Add(c); return new InstantTransition(); });
         await stack.PopToAsync(a);
@@ -125,7 +125,7 @@ public class TransitionSelectionTests
     [Theory] [InlineData("throw")] [InlineData("null")] [InlineData("cycle")] [InlineData("mutate")]
     public async Task SelectionErrorsPreserveStackAndNeverUseOtherRecipes(string mode)
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); var spare = new Recipe(); ui.DefaultTransition = spare;
         var original = new IOException("selector"); IUITransition? selector = null;
         selector = Transitions.Select(c => mode switch
@@ -199,7 +199,7 @@ public class TransitionSelectionTests
 
     [Fact] public async Task FalseIsPerOperationAndDoesNotModifySharedConfiguration()
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var recipe = new Recipe(); var selector = Transitions.Select(_ => recipe); stack.ChildTransition = selector;
         await stack.PushAsync<CounterView>(playAnimation: false); Assert.Empty(recipe.Created);
         await stack.PushAsync<CounterView>(); Assert.Equal(2, recipe.Created.Count); Assert.Same(selector, stack.ChildTransition);

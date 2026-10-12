@@ -117,7 +117,7 @@ public class AnimationCapabilityTests
     [Theory] [InlineData("preparing")] [InlineData("progress")] [InlineData("completed")] [InlineData("mutation")]
     public async Task ObserverFailureIsVisibleAndBothItemsFinish(string where)
     {
-        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView());
+        await using var ui = Create(); var stack = await Attach<StackContainerNode>(ui.Root); ui.Register<CounterView>(() => new CounterView(), windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(); var original = new IOException("observer failure");
         first.TransitionChanged += state =>
         {
@@ -162,7 +162,7 @@ public class AnimationCapabilityTests
     {
         var host = new TestHost(); var loader = new Loader(); await using var ui = new UIContext(host, loader, host);
         var stack = await Attach<StackContainerNode>(ui.Root); var count = 0;
-        ui.Register(() => new CounterView { TransitionOrder = count++ == 0 ? firstOrder : secondOrder }, "page");
+        ui.Register(() => new CounterView { TransitionOrder = count++ == 0 ? firstOrder : secondOrder }, "page", windowMode: WindowInstanceMode.Multiple);
         var first = await stack.PushAsync<CounterView>(playAnimation: false);
         var recipe = new Recipe { Play = (c, _) =>
         {

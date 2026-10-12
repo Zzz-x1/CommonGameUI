@@ -39,11 +39,24 @@ await pages.PopToAsync(lobby);
 
 `PopToAsync` 清理目标之上的全部窗口，只恢复原大厅，不逐层显示中间窗口。目标使用具体实例，必须仍在同一栈的历史中；目标已经是当前窗口时正常完成。
 
+## 避免重复页面
+
+注册默认 `Single`。同一容器、同一种注册类型只保留一个已打开实例：位于栈顶时直接返回；位于历史中时按 `PopToAsync` 返回，关闭它上面的页面，不重复插入历史。
+
+```csharp
+ui.Register<InventoryView>("inventory-resource");
+var inventory = await pages.PushAsync<InventoryView>();
+await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
+var same = await pages.PushAsync<InventoryView>();
+```
+
+same 是原背包，详情已关闭。已打开的 Single 再传创建参数会报错；更新内容使用业务方法。需要同类型多个历史项时，注册 `windowMode: WindowInstanceMode.Multiple`，例如逐层查看不同物品的详情。KeepAlive 只复用已关闭实例，与打开去重独立。
+
 ## 行为与边界
 
 | 操作／查询 | 行为 |
 | --- | --- |
-| PushAsync&lt;T&gt; | 新建窗口，完成切换后隐藏原窗口并加入历史 |
+| PushAsync&lt;T&gt; | Single 复用或返回已有窗口；无已有实例或 Multiple 时创建并加入历史 |
 | PopAsync | 移除当前窗口，按注册策略销毁或缓存，恢复前一个实例 |
 | PopToAsync(target) | 关闭目标之上的窗口，按注册策略销毁或缓存，直接恢复目标实例 |
 | Current | 当前窗口；空栈时为 null |

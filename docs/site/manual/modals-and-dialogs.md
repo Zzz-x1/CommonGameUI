@@ -136,9 +136,23 @@ await modals.CloseToAsync(shop);
 
 ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 保留原商店并清理其上的弹窗；跳过的中间层不会逐层恢复交互。
 
+## 避免重复弹窗
+
+BattlePass 从大厅和活动入口打开时，可使用默认 Single 注册，避免叠加同类型窗口：
+
+```csharp
+ui.Register<BattlePassWindow>("UI/BattlePass");
+var first = await modals.OpenAsync<BattlePassWindow>();
+var same = await modals.OpenAsync<BattlePassWindow>();
+```
+
+同一容器按注册类型去重：已在顶层直接返回；位于下层时按 `CloseToAsync` 关闭上层，恢复原实例、输入与焦点。不会重新初始化或重播目标入场。已打开 Single 不接受新的创建参数；内容更新使用业务方法。需要独立弹窗时注册 `windowMode: WindowInstanceMode.Multiple`。
+
+重复 ShowDialogAsync 共享已打开 Single 的同一结果会话，而不是创建新会话；任一调用取消后的关闭会结束这个共享会话。需要彼此独立的确认流程时使用 Multiple。KeepAlive 只复用已关闭实例，不负责去重。
+
 ## 行为与边界
 
-- `OpenAsync` 每次创建并叠加新弹窗；没有“自动隐藏上一层”的选项。
+- `OpenAsync` 遵守 Single／Multiple；新弹窗叠加显示，没有“自动隐藏上一层”的选项。
 - `CloseCurrentAsync` 关闭顶层，无需实例参数；`CloseAsync` 用于显式关闭当前顶层实例。`CloseToAsync` 目标必须是同一容器中存活的实例；当前目标正常完成。
 - 下层窗口保留显示和状态，但不接受输入；恢复时不重播进入生命周期和动画。
 - `Complete` 只能在可交互时调用一次。未回答就外部关闭会取消等待任务，不自动返回 false。
@@ -147,6 +161,6 @@ ShowDialogAsync 等待确认窗口关闭及清理后返回答案。CloseToAsync 
 
 [容器选择](concepts.md#按流程选择容器) · [Stack 历史](stacks.md) · [输入与焦点](input-and-focus.md) · [异步关闭](async-and-errors.md)
 
-KeepAlive 支持[关闭后缓存](resources.md#关闭后缓存)；遮罩仍按原规则释放，Dialog 每次打开使用独立结果会话。
+KeepAlive 支持[关闭后缓存](resources.md#关闭后缓存)；遮罩仍按原规则释放，Dialog 首次打开或缓存重开使用新结果会话，重复 Single 打开共享当前会话。
 
 同一次打开的重复 `CloseAsync` 共享关闭任务，首个请求决定动画与执行取消；后续取消只停止自己的等待。已正常关闭的实例再次 Close 成功，关闭失败仍传播原错误。`ShowDialogAsync` 等待答案期间不占容器队列，其他弹窗可以正常打开。详见[操作协调](async-and-errors.md)。

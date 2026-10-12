@@ -136,9 +136,23 @@ await modals.CloseToAsync(shop);
 
 ShowDialogAsync returns the answer after the confirmation window closes and cleanup completes. CloseToAsync retains the original shop and cleans the modals above it; skipped intermediate layers do not regain input one by one.
 
+## Avoid duplicate modals
+
+A BattlePass opened from both the lobby and an event entry can use the default Single registration:
+
+```csharp
+ui.Register<BattlePassWindow>("UI/BattlePass");
+var first = await modals.OpenAsync<BattlePassWindow>();
+var same = await modals.OpenAsync<BattlePassWindow>();
+```
+
+Identity is per container and registered type. A top instance is returned immediately. A lower instance follows `CloseToAsync`: close upper modals and restore the original instance, input and focus. Its initialization and entry animation do not repeat. Open Single instances reject new creation arguments; use business methods to update content. Register `windowMode: WindowInstanceMode.Multiple` for independent modals.
+
+Repeated ShowDialogAsync calls share an open Single dialog's result session, without starting another session. Cancellation cleanup by any caller closes that shared session. Use Multiple for independent confirmation flows. KeepAlive reuses closed instances; it does not deduplicate open ones.
+
 ## Behavior and boundaries
 
-- `OpenAsync` creates and layers a new modal each time; there is no automatic hide-previous-layer option.
+- `OpenAsync` follows Single/Multiple registration. New modals layer over existing ones; there is no automatic hide-previous-layer option.
 - `CloseCurrentAsync` closes the top without an instance argument; `CloseAsync` explicitly closes the current top instance. `CloseToAsync` requires a live instance in the same container; the current target completes without changes.
 - Lower windows retain their display and state but receive no input. Restoration does not replay entry lifecycle or animation.
 - `Complete` is allowed once while interactive. Closing an unanswered dialog cancels its waiter rather than returning false.
@@ -147,6 +161,6 @@ ShowDialogAsync returns the answer after the confirmation window closes and clea
 
 [Container selection](concepts.md#choose-by-the-flow) · [Stack history](stacks.md) · [Input and focus](input-and-focus.md) · [Async shutdown](async-and-errors.md)
 
-KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching); backdrops still follow normal release rules, and each Dialog opening uses its own result session.
+KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching); backdrops still follow normal release rules, and a first opening or cache reopening starts a new Dialog result session; repeated Single opens share the current session.
 
 Duplicate `CloseAsync` calls for one opening share execution. The first request owns animation and execution cancellation; later cancellation stops only that caller’s wait. Closing an already successfully closed instance succeeds; failed closure preserves the original error. `ShowDialogAsync` does not hold the container queue while waiting for an answer. See [operation coordination](async-and-errors.md).

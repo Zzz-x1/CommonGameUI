@@ -367,6 +367,18 @@ public class StackContainerNode : ContainerNode
     public Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode =>
         OperateAsync("Push", async ct =>
         {
+            ct.ThrowIfCancellationRequested();
+            if (Context.GetWindowMode<T>() == WindowInstanceMode.Single)
+            {
+                var index = _history.FindIndex(n => n.RegisteredType == typeof(T));
+                if (index >= 0)
+                {
+                    if (args != null) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
+                    var existing = _history[index];
+                    if (index != _history.Count - 1) await ReturnCoreAsync(index, playAnimation, ct);
+                    return (T)existing.Owner;
+                }
+            }
             var previous = CurrentNode;
             var node = await AcquireAsync<T>(args, ct);
             var enter = Describe(node, LifecycleReason.Push, previous, node);
@@ -638,8 +650,21 @@ public class ModalContainerNode : ContainerNode
         object? focus = null;
         return OperateAsync("OpenModal", async ct =>
         {
+            ct.ThrowIfCancellationRequested();
             if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
                 throw new InvalidOperationException("Independent modal containers cannot own input simultaneously.");
+            if (Context.GetWindowMode<T>() == WindowInstanceMode.Single)
+            {
+                var index = _modals.FindIndex(n => n.RegisteredType == typeof(T));
+                if (index >= 0)
+                {
+                    if (args != null) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
+                    var existing = _modals[index];
+                    if (index != _modals.Count - 1) await CloseRangeAsync(index + 1, LifecycleReason.Return, playAnimation, ct);
+                    opened?.Invoke((T)existing.Owner, _records[existing]);
+                    return (T)existing.Owner;
+                }
+            }
             var previous = CurrentNode;
             var backdropFactory = _backdropDisabled ? null : _backdropFactory ?? Context.DefaultBackdropFactory;
             var node = await AcquireAsync<T>(args, ct);

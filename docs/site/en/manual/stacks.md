@@ -39,11 +39,24 @@ await pages.PopToAsync(lobby);
 
 `PopToAsync` cleans all windows above the target and restores the original lobby without showing intermediate windows. Pass a concrete instance still in this stack’s history; targeting the current window completes without changes.
 
+## Avoid duplicate pages
+
+Registration defaults to `Single`. Each registered type has one open instance per container. Pushing the current instance returns it immediately. Pushing a type already in history follows `PopToAsync`, closing pages above it without inserting another history entry.
+
+```csharp
+ui.Register<InventoryView>("inventory-resource");
+var inventory = await pages.PushAsync<InventoryView>();
+await pages.PushAsync<ItemDetailsView>(new ItemArgs("sword-01"));
+var same = await pages.PushAsync<InventoryView>();
+```
+
+same is the original inventory; details is closed. Supplying creation arguments to an open Single instance fails; update its content through a business method. Register `windowMode: WindowInstanceMode.Multiple` for independent same-type history entries, such as following links between item details. KeepAlive reuses closed instances and is separate from open-instance deduplication.
+
 ## Behavior and boundaries
 
 | Operation/query | Behavior |
 | --- | --- |
-| PushAsync&lt;T&gt; | Creates or reuses a cached window; after switching, hides the previous window and adds the new one to history |
+| PushAsync&lt;T&gt; | Single reuses or returns to an open instance; otherwise creates or reuses a cached instance and adds it to history |
 | PopAsync | Removes the current window, then disposes or caches it according to registration; restores the preceding instance |
 | PopToAsync(target) | Closes windows above the target according to their cache policy and restores it directly |
 | Current | Current window; null when the stack is empty |

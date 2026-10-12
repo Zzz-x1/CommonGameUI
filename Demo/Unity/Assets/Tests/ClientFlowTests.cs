@@ -57,6 +57,15 @@ namespace StarCourt.UnityDemo.Tests
             await Task.WhenAll(close, duplicate, closeOther);
             Assert.That(_app.Windows.Children, Is.Empty);
             Assert.That(windows.All(window => window.State == NodeState.Disposed), Is.True);
+            var inventory = await _app.Pages.PushAsync<InventoryView>();
+            Assert.That(await _app.Pages.PushAsync<InventoryView>(), Is.SameAs(inventory));
+            await _app.Pages.PushAsync<CharactersView>();
+            Assert.That(await _app.Pages.PushAsync<InventoryView>(), Is.SameAs(inventory));
+            var settings = await _app.Modals.OpenAsync<SettingsView>();
+            Assert.That(await _app.Modals.OpenAsync<SettingsView>(), Is.SameAs(settings));
+            await _app.Modals.OpenAsync<GraphicsView>();
+            Assert.That(await _app.Modals.OpenAsync<SettingsView>(), Is.SameAs(settings));
+            await _app.Modals.CloseAsync(settings);
         }
         private async Task Frame() => await ((EngineUI.UIHost)_app.UI.Host).NextFrameAsync();
         private async Task Click(IUINode node, string path) => await Click(node.GetControl<Button>(path));

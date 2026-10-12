@@ -104,7 +104,7 @@ public sealed class CacheTests
 
     [Fact] public async Task PopToRetainsOnlyLastClosedTypeAndHistoryExcludesCache()
     {
-        await using var ui = Context(); ui.Register<Page>(() => new Page(), cacheMode: NodeCacheMode.KeepAlive);
+        await using var ui = Context(); ui.Register<Page>(() => new Page(), cacheMode: NodeCacheMode.KeepAlive, windowMode: WindowInstanceMode.Multiple);
         var stack = await Attach<StackContainerNode>(ui.Root);
         var a = await stack.PushAsync<Page>("A"); var b = await stack.PushAsync<Page>("B"); var c = await stack.PushAsync<Page>("C");
         await stack.PopToAsync(a); Assert.Same(a, Assert.Single(stack.History));
@@ -117,7 +117,7 @@ public sealed class CacheTests
     [Theory] [InlineData(ModalBackdropMode.Shared)] [InlineData(ModalBackdropMode.PerModal)]
     public async Task ModalCacheReleasesBackdropsAndRestoresFocus(ModalBackdropMode mode)
     {
-        await using var ui = Context(); ui.Register<Page>(() => new Page(), cacheMode: NodeCacheMode.KeepAlive);
+        await using var ui = Context(); ui.Register<Page>(() => new Page(), cacheMode: NodeCacheMode.KeepAlive, windowMode: WindowInstanceMode.Multiple);
         var host = (TestHost)ui.Host; var focus = new object(); host.Focus = focus;
         var modals = await Attach<ModalContainerNode>(ui.Root); var backdrops = new Backdrops(); modals.ConfigureBackdrop(backdrops, mode);
         var a = await modals.OpenAsync<Page>("A"); var b = await modals.OpenAsync<Page>("B");
@@ -160,7 +160,7 @@ public sealed class CacheTests
 
     [Fact] public async Task OldAnsweredWaiterCannotCloseTheReopenedDialog()
     {
-        await using var ui = Context(); ui.Register<Dialog>(() => new Dialog(), cacheMode: NodeCacheMode.KeepAlive);
+        await using var ui = Context(); ui.Register<Dialog>(() => new Dialog(), cacheMode: NodeCacheMode.KeepAlive, windowMode: WindowInstanceMode.Multiple);
         var modals = await Attach<ModalContainerNode>(ui.Root); var first = await modals.OpenAsync<Dialog>();
         var result = first.WaitForResultAsync(default); first.Complete(true);
         await modals.CloseAsync(first); var next = await modals.OpenAsync<Dialog>(); var pending = next.WaitForResultAsync(default);

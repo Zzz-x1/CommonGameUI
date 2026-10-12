@@ -103,3 +103,5 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 离开装备详情时，两张对比浮窗的关闭请求一次提交，由 Panel 按顺序执行；等待全部完成后继续页面返回。
 
 容器挂载：客户端保留场景中显式配置的内容区和绘制层序。简单全区域容器可用 `await ui.Root.CreateContainerAsync<PanelContainerNode>("Windows")` 自动创建挂载；完整示例见 `docs/examples` 两端入门工程。
+
+Panel、Stack、Modal 默认 Single，重复打开复用当前实例；再次打开历史中的背包或下层设置，会直接返回原实例。Godot 通用 ClientModalView 承载不同参数菜单，显式注册 Multiple；需要同时存在不同内容的项目类型也应使用 Multiple。
