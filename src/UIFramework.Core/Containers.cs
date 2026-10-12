@@ -80,8 +80,7 @@ public abstract class ContainerNode : UINode
     }
     protected void MarkClosed(UINode node)
     {
-        if (node.Presentation is { Ended: false } session)
-        { session.Ended = true; session.EndTask = Operations.CurrentTask; }
+        if (node.Presentation is { Ended: false } session) session.End(Operations.CurrentTask);
     }
 
     protected async Task<UINode> AcquireAsync<T>(object? args, CancellationToken token) where T : class, IUINode

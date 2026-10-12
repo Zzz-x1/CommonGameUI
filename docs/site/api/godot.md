@@ -97,3 +97,5 @@ ValueTask UIElement.DisposeAsync()
 - Animation 非循环，restore 恢复轨道属性。Dim 的 observe 必须观察返回任务。
 
 [适配说明](../integrations/godot.md) · [转场](../manual/transitions.md)
+
+引入 `using UIFramework` 后，引擎节点通过 Core 扩展使用 `node.WaitForCloseAsync(token)`，见[等待关闭](../manual/async-and-errors.md#打开页面等待关闭后继续)。

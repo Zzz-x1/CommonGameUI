@@ -7,6 +7,34 @@ internal sealed class PresentationSession(Guid containerId)
     internal readonly Guid ContainerId = containerId;
     internal bool Ended;
     internal Task? EndTask, CloseTask;
+    private readonly TaskCompletionSource<Task> _closed = new();
+
+    internal void End(Task completion)
+    {
+        if (Ended) return;
+        Ended = true; EndTask = completion;
+        _closed.SetResult(completion);
+    }
+
+    internal async Task WaitForCloseAsync(CancellationToken token)
+    {
+        if (!token.CanBeCanceled)
+        {
+            var completion = await _closed.Task;
+            await completion;
+            return;
+        }
+        var canceled = new TaskCompletionSource<bool>();
+        using (token.Register(() => canceled.TrySetResult(true)))
+        {
+            await Task.WhenAny(_closed.Task, canceled.Task);
+            token.ThrowIfCancellationRequested();
+            var completion = await _closed.Task;
+            await Task.WhenAny(completion, canceled.Task);
+            token.ThrowIfCancellationRequested();
+            await completion;
+        }
+    }
 }
 
 /// <summary>UI-thread FIFO, with request-local completion and active-call dependencies.</summary>

@@ -23,8 +23,12 @@ public partial class DemoApp
         var inventory = (InventoryView)Shell.Pages.Current!;
         pass(ReferenceEquals(inventory, await Shell.Pages.PushAsync<InventoryView>()), "single inventory push reuses the current page");
         await PressAsync(inventory.GetControl<Button>("Pages/装备/C0"));
-        string itemId = ((ItemDetailsView)Shell.Pages.Current!).Parameters;
+        var openedDetails = (ItemDetailsView)Shell.Pages.Current!;
+        string itemId = openedDetails.Parameters;
+        var detailsClosed = openedDetails.WaitForCloseAsync();
         pass(ReferenceEquals(inventory, await Shell.Pages.PushAsync<InventoryView>()), "single inventory push returns to the retained page");
+        await detailsClosed;
+        pass(openedDetails.IsCached, "detail close wait completes after returning the instance to cache");
         var stack = Shell.Pages;
         using var cancel = new CancellationTokenSource();
         ItemDetailsView? canceledDetails = null;

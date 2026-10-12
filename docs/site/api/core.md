@@ -53,6 +53,15 @@ Task<TResult> WaitForResultAsync(CancellationToken cancellationToken);
 IUINode GetNode(Type businessType);
 ```
 
+## WaitForCloseAsync
+
+```csharp
+// UINodeExtensions: using UIFramework;
+static Task WaitForCloseAsync(this IUINode node, CancellationToken cancellationToken = default)
+```
+
+捕获当前 Panel／Stack／Modal 打开会话，等待关闭及清理完成；隐藏和覆盖不算关闭，进入 KeepAlive 算关闭。取消仅影响调用方等待，缓存重开不改变已捕获会话。无打开会话或从相关活动生命周期内等待会报错。见[等待关闭](../manual/async-and-errors.md#打开页面等待关闭后继续)。
+
 ## UINode / `UINode<TArgs>`
 
 普通节点初始隐藏；Context 在未挂载时不可取。状态属性由框架维护；Transition=null 表示继承。AddLifecycle 仅挂载前，RemoveLifecycle 可在静止的 Ready 状态取消后续通知，但已初始化行为仍在销毁时清理。Attach 不支持重挂载。

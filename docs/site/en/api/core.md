@@ -53,6 +53,15 @@ Task<TResult> WaitForResultAsync(CancellationToken cancellationToken);
 IUINode GetNode(Type businessType);
 ```
 
+## WaitForCloseAsync
+
+```csharp
+// UINodeExtensions: using UIFramework;
+static Task WaitForCloseAsync(this IUINode node, CancellationToken cancellationToken = default)
+```
+
+Captures the current Panel/Stack/Modal opening and waits for closure including cleanup. Hide and covering do not end it; KeepAlive closure does. Cancellation affects only the caller. Cache reopening does not change the captured session. No opening session or waiting from a related active lifecycle fails. See [waiting for closure](../manual/async-and-errors.md#open-a-page-and-continue-after-it-closes).
+
 ## UINode / `UINode<TArgs>`
 
 Ordinary nodes start hidden. Context is unavailable before attach. Framework controls state properties; null Transition inherits. AddLifecycle is pre-attach only. RemoveLifecycle can unsubscribe while idle and Ready, but initialized behaviors still receive disposal. Attach does not reparent.

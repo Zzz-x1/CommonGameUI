@@ -15,6 +15,24 @@ await ui.DisposeAsync();
 // IReadOnlyList<Exception> secondary = UIFailure.GetSecondaryExceptions(error);
 ```
 
+## 打开页面，等待关闭后继续
+
+例如玩家关闭背包后，调用方继续刷新大厅。`OpenAsync／PushAsync` 只等待打开；`WaitForCloseAsync` 等待玩家或其他代码结束这次打开：
+
+```csharp
+using UIFramework;
+
+var inventory = await pages.PushAsync<InventoryView>();
+await inventory.WaitForCloseAsync(token);
+// Continue the caller's flow after inventory closes.
+```
+
+同一扩展适用于 Panel、Stack 和 Modal，两端引擎用法一致。等待包含退出动画、关闭通知及缓存归还／销毁清理；Hide、覆盖或失活不会完成它。KeepAlive 关闭也会完成，不能用 Lifetime 替代。
+
+调用时捕获当前打开会话；缓存重开是新会话，不改变旧等待。重复 Single 打开等待同一会话。取消 Token 只取消当前等待，不关闭界面或取消其他等待。关闭准备失败时窗口仍在，等待继续；关闭提交后的清理失败原样传播。直接销毁或父级清理也会在该窗口清理完成后结束等待。
+
+在外部流程中等待，不在自身、祖先或子节点的活动生命周期内等待自身关闭。未通过 Panel／Stack／Modal 打开的 Root、结构容器和内嵌 Tab 没有打开会话，不能使用此接口。需要业务答案时仍使用 `ShowDialogAsync`。
+
 ## 一次提交多个关闭请求
 
 离开装备详情时关闭两张对比浮窗。请求立即入队，按顺序关闭；`WhenAll` 等待全部结果，不吞异常。

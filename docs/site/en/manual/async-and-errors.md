@@ -15,6 +15,24 @@ await ui.DisposeAsync();
 // IReadOnlyList<Exception> secondary = UIFailure.GetSecondaryExceptions(error);
 ```
 
+## Open a page and continue after it closes
+
+For example, the caller refreshes the lobby after the player closes inventory. `OpenAsync/PushAsync` waits only for opening; `WaitForCloseAsync` waits for the player or other code to end that opening:
+
+```csharp
+using UIFramework;
+
+var inventory = await pages.PushAsync<InventoryView>();
+await inventory.WaitForCloseAsync(token);
+// Continue the caller's flow after inventory closes.
+```
+
+The same extension works for Panel, Stack and Modal in both engines. It includes exit animation, close notifications and cache return or disposal cleanup. Hide, covering and deactivation do not complete it. Closing into KeepAlive does complete it; Lifetime is not a substitute.
+
+The call captures the current opening session. Cache reopening starts a new session without changing old waits. Repeated Single opens share a session. Cancellation stops only this wait; it does not close the window or cancel other waits. Failed close preparation leaves the window open and the wait pending. Cleanup errors after closure commits propagate unchanged. Direct disposal and parent cleanup also finish the wait after this window's cleanup.
+
+Wait from an external flow, not from the window's own, ancestor or descendant active lifecycle. Root, structural containers and embedded Tabs not opened through Panel/Stack/Modal have no opening session. Use `ShowDialogAsync` when a business answer is required.
+
 ## Submit several close requests
 
 Leaving equipment details closes both comparison windows. Requests queue immediately and close in order; `WhenAll` observes all outcomes.

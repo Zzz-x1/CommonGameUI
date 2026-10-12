@@ -331,6 +331,7 @@ public class UINode : IUINode
         // Publish the shared task before cancellation can synchronously call back into disposal.
         var completion = new TaskCompletionSource<Task>();
         _disposeTask = completion.Task.Unwrap();
+        Presentation?.End(_disposeTask);
         completion.SetResult(DisposeCoreAsync());
         return new ValueTask(_disposeTask);
     }

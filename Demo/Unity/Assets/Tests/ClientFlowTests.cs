@@ -62,10 +62,13 @@ namespace StarCourt.UnityDemo.Tests
             await _app.Pages.PushAsync<CharactersView>();
             Assert.That(await _app.Pages.PushAsync<InventoryView>(), Is.SameAs(inventory));
             var settings = await _app.Modals.OpenAsync<SettingsView>();
+            var settingsClosed = settings.WaitForCloseAsync();
             Assert.That(await _app.Modals.OpenAsync<SettingsView>(), Is.SameAs(settings));
             await _app.Modals.OpenAsync<GraphicsView>();
             Assert.That(await _app.Modals.OpenAsync<SettingsView>(), Is.SameAs(settings));
             await _app.Modals.CloseAsync(settings);
+            await settingsClosed;
+            Assert.That(settings.State, Is.EqualTo(NodeState.Disposed));
         }
         private async Task Frame() => await ((EngineUI.UIHost)_app.UI.Host).NextFrameAsync();
         private async Task Click(IUINode node, string path) => await Click(node.GetControl<Button>(path));

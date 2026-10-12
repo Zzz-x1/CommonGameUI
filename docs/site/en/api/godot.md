@@ -97,3 +97,5 @@ ValueTask UIElement.DisposeAsync()
 - Animation is non-looping; restore resets tracks. Dim observe must inspect returned tasks.
 
 [Integration](../integrations/godot.md) · [Transitions](../manual/transitions.md)
+
+With `using UIFramework`, engine nodes support `node.WaitForCloseAsync(token)` through the Core extension. See [waiting for closure](../manual/async-and-errors.md#open-a-page-and-continue-after-it-closes).

@@ -101,3 +101,5 @@ ValueTask UIElement.DisposeAsync()
 Timeline 路径相对节点根，null 表示根 Director。要求组件启用、资产时长有限、关闭 Play On Awake，且没有已运行的播放图。restore 必须恢复所有轨道控制的属性。
 
 [适配说明](../integrations/unity.md) · [时间轴](../manual/timeline-animation.md)
+
+引入 `using UIFramework` 后，引擎节点通过 Core 扩展使用 `node.WaitForCloseAsync(token)`，见[等待关闭](../manual/async-and-errors.md#打开页面等待关闭后继续)。

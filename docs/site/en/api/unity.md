@@ -101,3 +101,5 @@ ValueTask UIElement.DisposeAsync()
 Timeline paths are relative to the node root; null selects the root director. Directors require an enabled component, an asset with finite duration, Play On Awake disabled, and no existing graph. Restore must reset every property owned by the tracks.
 
 [Integration](../integrations/unity.md) · [Timelines](../manual/timeline-animation.md)
+
+With `using UIFramework`, engine nodes support `node.WaitForCloseAsync(token)` through the Core extension. See [waiting for closure](../manual/async-and-errors.md#open-a-page-and-continue-after-it-closes).
