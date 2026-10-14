@@ -64,7 +64,7 @@ static Task WaitForCloseAsync(this IUINode node, CancellationToken cancellationT
 
 ## UINode / `UINode<TArgs>`
 
-普通节点初始隐藏；Context 在未挂载时不可取。状态属性由框架维护；Transition=null 表示继承。AddLifecycle 仅挂载前，RemoveLifecycle 可在静止的 Ready 状态取消后续通知，但已初始化行为仍在销毁时清理。Attach 不支持重挂载。
+普通节点初始隐藏；Context 在未挂载时不可取。状态属性由框架维护；Transition=null 表示继承。AddLifecycle 可在挂载前或初始化期间、处理器开始初始化前注册，集合条目工厂的配置回调属于后者；处理器开始初始化后注册直接报错。RemoveLifecycle 可在静止的 Ready 状态取消后续通知，但已初始化行为仍在销毁时清理。Attach 不支持重挂载。
 
 ```csharp
 Guid Id { get; }

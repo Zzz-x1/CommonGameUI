@@ -86,7 +86,7 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - Initialize 一次，进入／退出可重复；隐藏保留实例，销毁结束子树。
 - IsVisible 表示可见，IsActive 表示稳定激活，IsInteractive 还包含临时输入锁。
 - 同步通知只读框架；生命周期中不能销毁自己或祖先。
-- AddLifecycle 在挂载前注册；空闲时可移除通知，已初始化行为仍需最终清理。
+- AddLifecycle 在挂载前或初始化期间、处理器开始初始化前注册（集合条目工厂的配置回调在此窗口内）；空闲时可移除通知，已初始化行为仍需最终清理。
 
 [阶段签名](../api/core.md) · [错误与提交](async-and-errors.md)
 

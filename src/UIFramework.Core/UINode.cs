@@ -29,6 +29,7 @@ public class UINode : IUINode
     internal bool PublishedVisible, PublishedActive;
     private readonly List<INodeLifecycle> _handlers = new();
     private readonly List<INodeLifecycle> _initializedHandlers = new();
+    private bool _handlersStarted;
     private readonly List<IUINodeExtension> _initializedExtensions = new();
     private UIContext? _context;
 
@@ -50,6 +51,7 @@ public class UINode : IUINode
     public string Name { get; private set; } = "";
     public UINode? Parent { get; private set; }
     public IReadOnlyList<IUINode> Children => _children.Select(n => n.Owner).ToArray();
+    /// <summary>Available from attach onward, including while the node is still initializing. Null while detached.</summary>
     public UIContext Context => _context ?? throw new InvalidOperationException("Node is not attached to a UI context.");
     public IUIElement? Element { get; private set; }
     internal UIResourceLease? ResourceLease { get; set; }
@@ -104,11 +106,16 @@ public class UINode : IUINode
     protected virtual void OnDeactivated(StateChangeContext context) { }
     protected virtual void OnVisibilityChanged(StateChangeContext context) { }
 
+    /// <summary>
+    /// Registers a lifecycle behavior. The node accepts registrations until its handlers start initializing, which
+    /// includes configuration callbacks that run during initialization, such as collection item factories.
+    /// </summary>
     public void AddLifecycle(INodeLifecycle handler)
     {
         try
         {
-            if (State != NodeState.Detached) throw new InvalidOperationException("Register lifecycle behaviors before attachment.");
+            if (State != NodeState.Detached && !(State == NodeState.Initializing && !_handlersStarted))
+                throw new InvalidOperationException("Register lifecycle behaviors before they start initializing.");
             if (handler == null) throw new ArgumentNullException(nameof(handler));
             if (_handlers.Any(h => ReferenceEquals(h, handler))) throw new InvalidOperationException("Lifecycle behavior already registered.");
             _handlers.Add(handler);
@@ -189,6 +196,8 @@ public class UINode : IUINode
                     extension.BeforeInitialize(this);
                 }
                 await OnInitializeAsync(token);
+                // Snapshot registration: behaviors added afterwards have missed their initialization.
+                _handlersStarted = true;
                 foreach (var handler in _handlers)
                 {
                     _initializedHandlers.Add(handler);

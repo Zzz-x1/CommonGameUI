@@ -64,7 +64,7 @@ Captures the current Panel/Stack/Modal opening and waits for closure including c
 
 ## UINode / `UINode<TArgs>`
 
-Ordinary nodes start hidden. Context is unavailable before attach. Framework controls state properties; null Transition inherits. AddLifecycle is pre-attach only. RemoveLifecycle can unsubscribe while idle and Ready, but initialized behaviors still receive disposal. Attach does not reparent.
+Ordinary nodes start hidden. Context is unavailable before attach. Framework controls state properties; null Transition inherits. AddLifecycle registers before attach or during initialization before handlers start; a collection item factory's configure callback is the latter. Registering after handlers start fails. RemoveLifecycle can unsubscribe while idle and Ready, but initialized behaviors still receive disposal. Attach does not reparent.
 
 ```csharp
 Guid Id { get; }

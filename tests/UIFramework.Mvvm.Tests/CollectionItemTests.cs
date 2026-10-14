@@ -213,6 +213,59 @@ public sealed class CollectionItemTests
         var closing = owner.DisposeAsync().AsTask(); Assert.False(closing.IsCompleted); var resource = new Resource(); loader.Loaded.SetResult(resource); await closing;
         Assert.Empty(target.Ordered); Assert.Equal(1, resource.Releases); Assert.Equal(0, resource.Element.Releases);
     }
+    [Fact] public async Task ItemFactoryRegistersLifecycleBehaviorsDuringConfiguration()
+    {
+        var loader = new Loader(); await using var ui = new UIContext(new Host(), loader);
+        var owner = new UINode(); await owner.AttachAsync(ui.Root, "Owner", initiallyVisible: true); owner.SetViewModel("Player", new ParameterVm());
+        await using var target = new Target(owner); var item = new ParameterVm(); target.Gates[item] = new();
+        var behavior = new LifecycleProbe();
+        target.ConfigureItem = node => node.Node.AddLifecycle(behavior);
+        target.Insert(0, item);
+        try
+        {
+            Assert.False(target.Ordered.Any());
+            target.Gates[item].SetResult(true); await ui.WhenMvvmIdleAsync();
+        }
+        finally { target.Gates[item].TrySetResult(true); }
+
+        var row = target.Ordered.Single();
+        Assert.Same(item, row.GetViewModel<ParameterVm>("Item")); Assert.True(row.IsVisible);
+        Assert.Equal(1, behavior.Initialized); Assert.Same(row, behavior.Node); Assert.Equal(0, behavior.Disposed);
+        await target.DisposeAsync(); Assert.Equal(1, behavior.Disposed); Assert.Same(row, behavior.Node);
+    }
+
+    [Fact] public async Task ItemFactoryCreatesOwnedViewModelsThroughItsConfigureCallback()
+    {
+        var loader = new Loader(); await using var ui = new UIContext(new Host(), loader);
+        var owner = new UINode(); await owner.AttachAsync(ui.Root, "Owner"); owner.SetViewModel("Player", new ParameterVm());
+        await using var target = new Target(owner); var item = new ParameterVm(); target.Gates[item] = new();
+        target.ConfigureItem = node => node.CreateViewModel<ParameterVm>("Owned");
+        target.Insert(0, item);
+        try
+        {
+            Assert.False(target.Ordered.Any());
+            target.Gates[item].SetResult(true); await ui.WhenMvvmIdleAsync();
+        }
+        finally { target.Gates[item].TrySetResult(true); }
+
+        var row = target.Ordered.Single();
+        Assert.Same(item, row.GetViewModel<ParameterVm>("Item"));
+        Assert.NotNull(row.GetViewModel<ParameterVm>("Owned"));
+    }
+
+    [Fact] public async Task LifecycleRegistrationIsRejectedOnceHandlersStarted()
+    {
+        var loader = new Loader(); await using var ui = new UIContext(new Host(), loader);
+        var node = new UINode(); await node.AttachAsync(ui.Root, "Counter");
+        Assert.Throws<InvalidOperationException>(() => node.AddLifecycle(new LifecycleProbe()));
+    }
+
+    private sealed class LifecycleProbe : NodeLifecycle
+    {
+        public int Initialized; public int Disposed; public IUINode? Node;
+        public override Task InitializeAsync(IUINode node, CancellationToken token) { Initialized++; Node = node; return Task.CompletedTask; }
+        public override Task DisposeAsync(IUINode node) { Disposed++; Node = node; return Task.CompletedTask; }
+    }
 }
 [ViewModel] public class CollectionVm
 { [FieldNotify] public System.Collections.ObjectModel.ObservableCollection<ParameterVm> Items { get; set; } = new(); }

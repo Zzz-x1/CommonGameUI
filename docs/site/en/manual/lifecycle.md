@@ -86,7 +86,7 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - Initialize runs once; enter/exit may repeat. Hide retains; disposal ends the subtree.
 - Native scripts expose UIName / IsUIVisible to avoid engine name collisions. IsActive describes stable activity; IsInteractive also includes input locks.
 - Synchronous notifications are read-only toward the framework. Lifecycle cannot dispose its node/ancestors.
-- Register AddLifecycle before attach. Idle removal stops notifications; initialized behavior still needs disposal.
+- Register AddLifecycle before attach, or during initialization before handlers start (a collection item factory's configure callback runs in that window). Idle removal stops notifications; initialized behavior still needs disposal.
 
 [Signatures](../api/core.md) · [Errors and commit](async-and-errors.md)
 

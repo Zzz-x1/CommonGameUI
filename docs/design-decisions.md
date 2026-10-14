@@ -504,12 +504,12 @@ Panel 独立打开/关闭，V3 增加单实例与隐藏恢复；Stack Push 将�
 
 ```csharp
 var page = new UINode();
-page.AddLifecycle(new InventoryPreviewBehavior()); // 必须在 Attach/Bind 前
+page.AddLifecycle(new InventoryPreviewBehavior()); // 挂载前，或初始化期间、处理器开始初始化前
 await tabs.BindAsync("Equipment", page, equipmentDisplay);
 await tabs.SwitchAsync("Equipment");
 ```
 
-AddLifecycle 同步，仅 Detached 可调用；重复实例注册、空处理器报错。初始化前已注册的处理器在 Node 初始化成功后依次初始化，开始执行就加入清理所有权，部分失败仍清理。Node 自身初始化失败时不启动尚未执行的处理器。
+AddLifecycle 同步，Detached 或初始化期间、处理器开始初始化前可调用；处理器循环开始后注册报错。重复实例注册、空处理器报错。已注册的处理器在 Node 初始化成功后依次初始化，开始执行就加入清理所有权，部分失败仍清理。Node 自身初始化失败时不启动尚未执行的处理器。集合条目工厂只能通过 configure 回调拿到节点，而该回调在 Initializing 期间执行，因此必须允许这个窗口；首版严格限制为 Detached 属于接口时序缺陷，已修正。
 
 RemoveLifecycle 同步，禁止节点操作、初始化、派发和销毁中修改；缺失处理器报错。移除只停止后续通知，已初始化处理器的资源仍由节点最终清理，移除不异步释放、不补播过去阶段。处理器不应跨节点共享拥有资源的实例。
 
