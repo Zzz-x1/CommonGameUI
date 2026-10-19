@@ -14,11 +14,26 @@ await windows.CloseAsync(inventory);
 await ui.DisposeAsync();
 ```
 
+Warm up a hand-written type list with the non-generic overload:
+
+```csharp
+static readonly Type[] Warmup = { typeof(InventoryView), typeof(ShopView), typeof(SettingsView) };
+
+var leases = new List<UIResourceLease>();
+foreach (var nodeType in Warmup) leases.Add(await ui.PreloadAsync(nodeType, cancellationToken));
+
+// Release before a scene switch; warm up again on re-entry
+foreach (var lease in leases) lease.Dispose();
+```
+
+Both overloads mean the same thing: they hold resources only. Preloading creates no instance and runs no lifecycle, so instantiation and initialization still happen on first open.
+
 ## Key points
 
 - A Context shares loading by path. Leases/instances hold independent references; the last release returns the resource.
-- Canceling one waiter does not affect others. A resource path is required for preload.
+- Canceling one waiter does not affect others. A resource path is required for preload; null, unregistered and resource-less types fail explicitly.
 - Context disposal awaits load completion and resource cleanup. Non-cancelable native requests may delay cancellation.
+- Disposing a container (for example when switching scenes) returns its instance and resource holds, so caches do not survive a scene switch; hold preload leases yourself to keep resources across scenes.
 - Godot's default loader calls `ResourceLoader.Load` synchronously on the scene thread; `LoadAsync` does not mean background loading. Loading cannot be interrupted; cancellation is checked afterward.
 - Releasing framework references does not guarantee immediate texture/cache reclamation.
 

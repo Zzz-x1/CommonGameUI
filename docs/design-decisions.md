@@ -1093,11 +1093,12 @@ Demo 已迁移：项目默认 Fade；背包详情/手记栈 SlideHorizontal 自�
 
 流程为“取得可实例化资源 → 同步创建/挂载实例 → 节点初始化 → 容器流程”。后端实现资源句柄，核心不依赖 PackedScene/GameObject。普通 Open/Push 自动取得所需资源，使用者继续使用已有容器 API，不为普通开窗增加手动资源管理。
 
-预加载只持有资源，不调用节点工厂、不创建显示实例、不执行生命周期。公开入口如下，普通项目只需使用第一个入口和返回的句柄：
+预加载只持有资源，不调用节点工厂、不创建显示实例、不执行生命周期。公开入口如下，普通项目只需使用第一个入口和返回的句柄；清单驱动的批量预载使用非泛型重载，两者语义相同：
 
 ```csharp
 Task<UIResourceLease> UIContext.PreloadAsync<T>(CancellationToken cancellationToken = default)
-    where T : UINode;
+    where T : class, IUINode;
+Task<UIResourceLease> UIContext.PreloadAsync(Type nodeType, CancellationToken cancellationToken = default);
 
 // 适配器协议：加载不实例化，实例化不异步。
 Task<IUIResource> IUIResourceLoader.LoadAsync(string resource, CancellationToken cancellationToken);
@@ -1112,6 +1113,10 @@ prepared.Dispose();
 // backpack 仍可显示、隐藏、恢复；关闭时归还实例自己的持有。
 await windows.CloseAsync(backpack);
 ```
+
+非泛型重载按注册类型解析资源路径，接受手写 `Type[]` 清单；空类型报 `ArgumentNullException`，未注册类型与无资源节点沿用与泛型重载相同的错误。
+
+容器销毁会归还其**实例持有**与**资源持有**，因此切场景后缓存与资源都归零；跨场景需要保留的资源由调用方自行持有预加载句柄，框架不额外维护全局预热表。实例化与节点初始化仍在首次打开时发生，预加载不承诺首次开窗零成本。
 
 句柄同步、幂等释放；只能在宿主 UI 线程操作。未注册类型、没有资源的结构性类型、已销毁 Context 均明确报错，不返回空凭据。最后一个持有释放后移除资源记录，下一次显式请求重新取得；不缓存没有持有者的已完成资源。
 

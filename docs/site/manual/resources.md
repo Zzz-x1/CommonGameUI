@@ -14,11 +14,26 @@ await windows.CloseAsync(inventory);
 await ui.DisposeAsync();
 ```
 
+按类型清单预热时用非泛型重载，同一份列表可用于批量预载：
+
+```csharp
+static readonly Type[] Warmup = { typeof(InventoryView), typeof(ShopView), typeof(SettingsView) };
+
+var leases = new List<UIResourceLease>();
+foreach (var nodeType in Warmup) leases.Add(await ui.PreloadAsync(nodeType, cancellationToken));
+
+// Release before a scene switch; warm up again on re-entry
+foreach (var lease in leases) lease.Dispose();
+```
+
+两个重载语义相同：都只持有资源。预加载不创建实例、不执行生命周期，实例化与初始化仍在首次打开时发生。
+
 ## 要点
 
 - 同一 Context 按路径共享加载，各句柄／实例独立持有，最后持有释放后归还资源。
-- 一个等待者取消不影响其他等待者；无资源路径不能预加载。
+- 一个等待者取消不影响其他等待者；无资源路径不能预加载；未注册类型、空类型明确报错。
 - Context 销毁等待加载收尾并清理资源。底层请求不可取消时，取消可能延迟完成。
+- 容器销毁（例如切换场景时）会归还实例与资源持有，缓存不跨场景保留；需要跨场景保留时由调用方自己持有预加载句柄。
 - Godot 默认 loader 在场景线程同步调用 `ResourceLoader.Load`；`LoadAsync` 不代表后台加载。加载无法中断，结束后检查取消令牌。
 - 释放框架引用不保证引擎立即回收纹理或缓存。
 

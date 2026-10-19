@@ -208,18 +208,22 @@ public sealed class UIContext : IAsyncDisposable
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 
-    public async Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
+    public Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode =>
+        PreloadAsync(typeof(T), cancellationToken);
+
+    public async Task<UIResourceLease> PreloadAsync(Type nodeType, CancellationToken cancellationToken = default)
     {
+        if (nodeType == null) throw new ArgumentNullException(nameof(nodeType));
         try
         {
             Host.VerifyAccess(); VerifyMutation();
-            if (!_registrations.TryGetValue(typeof(T), out var registration))
-                throw new KeyNotFoundException($"Node {typeof(T).FullName} has not been registered.");
-            if (registration.Resource == null) throw new InvalidOperationException($"Node {typeof(T).FullName} has no resource to preload.");
+            if (!_registrations.TryGetValue(nodeType, out var registration))
+                throw new KeyNotFoundException($"Node {nodeType.FullName} has not been registered.");
+            if (registration.Resource == null) throw new InvalidOperationException($"Node {nodeType.FullName} has no resource to preload.");
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Root.Lifetime);
             return await _resources.AcquireAsync(registration.Resource, linked.Token);
         }
-        catch (Exception ex) { Report(ex, $"Preload {typeof(T).FullName}"); throw; }
+        catch (Exception ex) { Report(ex, $"Preload {nodeType.FullName}"); throw; }
     }
 
     internal async Task<UINode> CreateAsync<T>(UINode parent, object? args, CancellationToken token) where T : class, IUINode

@@ -120,6 +120,28 @@ public class ResourceTests
         await ui.DisposeAsync(); await Assert.ThrowsAsync<ObjectDisposedException>(() => ui.PreloadAsync<CounterView>());
     }
 
+    [Fact] public async Task PreloadByTypeMatchesTheGenericEntry()
+    {
+        var (ui, host) = Create(); await using var scope = ui;
+        var byType = await ui.PreloadAsync(typeof(CounterView));
+        using var byGeneric = await ui.PreloadAsync<CounterView>();
+        Assert.Single(host.Resources);
+        Assert.Empty(host.Loaded);
+        byType.Dispose();
+        Assert.Equal(0, host.Resources[0].Disposals);
+        byType.Dispose();
+        Assert.Equal(0, host.Resources[0].Disposals);
+    }
+
+    [Fact] public async Task PreloadingByTypeRejectsNullUnregisteredAndResourcelessTypes()
+    {
+        var (ui, _) = Create(); await using var scope = ui;
+        await Assert.ThrowsAsync<ArgumentNullException>(() => ui.PreloadAsync(null!));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => ui.PreloadAsync(typeof(ArgumentView)));
+        ui.Register<ArgumentView>(() => new ArgumentView());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ui.PreloadAsync(typeof(ArgumentView)));
+    }
+
     [Fact] public async Task OrphanedLoadFailureIsLoggedAndPropagatedByScopeDisposal()
     {
         var (ui, host) = Create(); host.LoadGate = new(TaskCreationOptions.RunContinuationsAsynchronously);

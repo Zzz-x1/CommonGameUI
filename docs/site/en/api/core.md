@@ -19,6 +19,7 @@ void Register<T>(string resource, Action<T>? configure = null, WindowInstanceMod
 void Register<T>(Func<T> factory, string? resource = null, WindowInstanceMode windowMode = WindowInstanceMode.Single, Action<T>? configure = null, NodeCacheMode cacheMode = NodeCacheMode.None) where T : class, IUINode
 Task ClearCacheAsync(CancellationToken cancellationToken = default)
 Task<UIResourceLease> PreloadAsync<T>(CancellationToken cancellationToken = default) where T : class, IUINode
+Task<UIResourceLease> PreloadAsync(Type nodeType, CancellationToken cancellationToken = default)
 ValueTask DisposeAsync()
 ```
 
