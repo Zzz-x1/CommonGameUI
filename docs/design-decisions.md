@@ -2121,3 +2121,8 @@ Godot ClientModalView 承载不同参数的菜单内容，显式 Multiple，避�
 PresentationSession 统一记录结束任务与关闭信号，容器提交关闭时指向所属操作任务；未正常关闭而直接销毁时指向节点销毁任务。已结束会话不覆盖任务，保持缓存和旧等待身份。结果 Dialog 保持原有结果与取消语义，不由这个纯关闭等待代替。
 
 验证：新增关闭等待 12 项及相关缓存／容器返回／操作队列／生命周期共 83 项通过，覆盖退出动画、销毁等待、隐藏与历史覆盖、缓存会话、取消等待／清理中取消、直接及父级销毁、关闭准备失败和清理异常身份。Unity Debug DLL／PDB 已生成并复制，Core DLL 与输出散列一致；Godot Demo 编译生成成功，0 警告、0 错误。中英文修改页 C# 示例和源码差异检查通过。两端 Demo 用例已补充等待关闭，未运行原生 Demo、全量回归、站点构建或平台导出。本轮本地提交，不推送。
+## 39. Unity Git 包发布（2026-11-20，已确认）
+
+`codex/upm` 是 Unity Package Manager 的独立发布分支。两个包保留原目录和包名，在发布提交中包含同次 Debug 编译产生的 Core、MVVM、Weaver DLL 和可移植 PDB。开发分支仍忽略这些生成文件。
+
+Unity 项目在 manifest 中显式设置两个 Git 依赖，以 `?path=/src/UIFramework.Unity#<commit>` 和 `?path=/src/UIFramework.Mvvm.Unity#<commit>` 指向同一个完整提交 SHA，并提交 lock 文件。发布分支可继续更新，已锁定的项目不会自动升级。现有 Beta 标签保持原位。
