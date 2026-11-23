@@ -1,4 +1,4 @@
-# 代码审查报告
+# 代码审查报告（复审）
 
 日期：2026-11-23。方式：静态源码与调用路径检查；未修改产品实现，未运行测试或引擎。以下问题为静态分析结论，复现步骤尚未执行。
 
@@ -8,7 +8,13 @@
 
 这不是全仓逐文件审查完成证明：Core 生命周期和容器的全部分支、IL Weaver、两端编辑器与绑定目标、Demo 全部业务和全部中英文文档尚未完成逐项核查。设计文档与版本计划首次读取发生输出截断，不能声称完整核对了所有契约。本报告只记录已有明确源码证据的问题，不以未发现问题表示通过。无构建、原生运行、导出或性能测试结果。
 
-## 发现
+## 复审标准
+
+用户于 2026-11-23 明确：不对任何用户使用导致的错误进行兜底。本次以遵守已公开契约的调用为前提；不将非法参数、错误配置、超出支持范围的类型或释放后继续使用等误用列为框架修复项。不建议增加自动纠正、容错分支、默认值、重试或扩展支持范围。合法调用中的资源管理、异步异常传播仍属于框架职责。
+
+本次重新检查前次五项发现及其源码调用链，并补查生成器中英文用法限制、集合正常销毁流程与对应测试源码。保留 R1–R3，撤回 R4/R5。未执行测试，以下为静态复核；本次不是全仓审查完成声明。
+
+## 保留的问题
 
 ### R1 · P2：长期存活页面永久保留已完成命令和集合任务
 
@@ -36,26 +42,28 @@
 
 生成器为 Push/Open 计算 argumentDeclaration 和 argumentCall，但为 IDialogNode<TResult> 生成 Show 方法时忽略它们，固定不接受 args，并向 ShowDialogAsync 传 null。
 
-触发：一个弹窗同时实现 IParameterizedNode<TArgs> 和 IDialogNode<TResult>，例如需要商品信息并返回购买确认的弹窗。生成的 ShowXAsync 无法传入商品；如果参数校验拒绝 null，会在打开时失败。手写 Core API 可传参，因此属于生成 API 与核心能力不一致。
+合法使用场景：公开、顶层、非泛型的原生弹窗节点同时实现 IParameterizedNode<TArgs> 和 IDialogNode<TResult>，例如需要商品信息并返回购买确认的弹窗。中英文生成器指南明确宣称生成调用透传参数；这里的问题是生成器未提供传参签名，不是要求框架在调用方漏传参数时填入默认值。生成的 ShowXAsync 无法传入商品；如果参数校验拒绝 null，会在打开时失败。手写 Core API 可传参，因此属于生成 API 与核心能力不一致。
 
 建议：Show 与 Open 使用同一参数推导；对需要参数的弹窗提供类型化参数。现有 GeneratorTests 只分别覆盖有参数普通节点与无参数弹窗，应补充两者组合的编译与参数转发验证。
 
-### R4 · P2：集合项上下文释放后仍可加载资源，产生无人释放的句柄
+## 撤回的发现
 
-位置：`src/UIFramework.Mvvm/CollectionItems.cs:33–44`。
+### R4：释放后使用集合项上下文
 
-LoadAsync 入口只检查 `_resource`/`_element`，不检查 `_dispose`；先加载并 Instantiate，随后 AttachAsync 才拒绝已释放上下文。空上下文 DisposeAsync 后再 LoadAsync 会成功获取资源并创建显示对象，然后抛异常；此时 DisposeAsync 返回先前已经完成的任务，不会再次清理新资源。加载尚未完成时调用 DisposeAsync 也存在同类问题。
+撤回原 P2 与增加生命周期检查、加载协调机制的修复建议。
 
-建议：加载开始前校验生命周期并标记正在创建，明确处置与进行中加载的协调关系；释放等待加载结束并清理最终所有权，避免只追加一个入口检查却遗漏跨 await 的竞态。验证先释放再加载、加载中释放均不遗留资源或显示对象。
+原复现直接在已释放上下文上调用 LoadAsync，属于误用。重新追踪正常集合移除流程：CollectionTargetBase.RemoveCore 取消条目，ReleaseAsync 在 CollectionItems.cs:133–138 先等待 entry.Completion，再释放 Context；创建失败路径也在创建结束后释放。正常窗口关闭不会按原报告假设的顺序提前释放正在加载的上下文。
 
-### R5 · P2：同命名空间中同名嵌套节点会生成重复方法
+现有 CollectionItemTests.OwnerCloseWaitsForIgnoredLoadCancellationAndReleasesAcquisition 以及 CancelingInitialCollectionDrainsIgnoredLoadAndNeverDisplaysWindow 已覆盖相关合法路径（本次只阅读，未重新运行）。原报告未证明框架正常流程会触发该泄漏，不应为该误用追加防御实现。
 
-位置：`src/UIFramework.Generators/UIResourceGenerator.cs:39–45`。
+### R5：同名嵌套节点生成冲突
 
-生成调用按 ContainingNamespace 分组，方法后缀只使用 Symbol.Name。两个公开嵌套类型 A.SettingsView 与 B.SettingsView 若都带 UIResource，生成的 OpenSettingsViewAsync 等方法参数完全相同，仅返回类型不同，C# 无法按返回类型重载，导致使用生成器的项目编译失败。
+撤回原 P2 与改变生成命名规则的修复建议。
 
-建议：方法命名包含必要的包含类型路径，或调整生成调用的归属，保持确定且不冲突的名称；不需要新增 Analyzer。现有测试仅覆盖不同 namespace 的同名类型，应补同 namespace 的嵌套类型用例。
+中英文 docs/site/manual/source-generator.md 与 docs/site/en/manual/source-generator.md 第 7 行明确要求 public top-level 节点。原复现采用嵌套类型，超出已支持用法。不得以此要求生成器兼容嵌套节点、自动改名或新增诊断机制。
 
-## 修复顺序
+## 后续处理建议与验证状态
 
-优先处理 R4 的资源所有权与 R2 的异常完整性，再处理 R1 的长期追踪对象积累；R3/R5 可作为生成器一次独立修复。以上均为建议，尚未实施或验收，不代表新增设计已获确认。
+建议先修 R2 的异常传播完整性，再处理 R1 的历史任务积累和 R3 的类型化参数生成。R2 应传播全部原始失败，不恢复业务、不吞异常、不伪造成功；R1 应调整任务所有权，不添加容量上限后丢任务之类兜底；R3 只生成正确的参数入口，不接受错误参数或提供默认业务数据。
+
+本次只修订审查报告和唯一设计文档中的审核原则，未修改框架、Demo、测试或 DLL。已做源码调用链、文档支持范围及差异检查；没有执行编译、测试或引擎验证。保留问题尚未修复和运行验收。前述全仓覆盖缺口仍然存在。
