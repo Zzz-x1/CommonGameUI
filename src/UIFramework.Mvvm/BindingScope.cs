@@ -119,13 +119,20 @@ internal sealed class BindingScope : IAsyncDisposable
     public IDisposable Command(string path, ICommandTarget target, CommandBindingOptions options) => Own(new CommandBinding(this, path, target, options));
     public IDisposable Collection(string path, ICollectionTarget target, bool oneTime) => Own(new CollectionBinding(this, path, target, oneTime));
     private T Own<T>(T binding) where T : IDisposable { _bindings.Add(binding); return binding; }
-    internal void Observe(Task task) { _tasks.Add(task); _runtime.Observe(task); }
+    internal void Observe(Task task) { RemoveCompletedTasks(); _tasks.Add(task); _runtime.Observe(task); }
     internal void ObserveCollection(Task task)
     {
         Observe(task);
         if (Node.State == NodeState.Initializing) _initialCollections.Add(task);
     }
     internal void Add(CommandExecution command) => _commands.Add(command);
+    internal void RemoveCompletedTasks() => _tasks.RemoveAll(task => task.IsCompletedSuccessfully);
+    internal void Remove(CommandExecution command)
+    {
+        _commands.Remove(command);
+        // Preserve failures for cleanup independently of active command tracking.
+        if (!command.Completion.IsCompletedSuccessfully) _tasks.Add(command.Completion);
+    }
     internal bool HasCaller => _commands.Any(command => command.IsCaller);
     internal Task Run(IMvvmObject vm, string command, object? parameter) => _runtime.Execute(this, vm, command, parameter);
     public ValueTask DisposeAsync()

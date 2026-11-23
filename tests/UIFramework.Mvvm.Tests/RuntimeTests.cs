@@ -238,6 +238,23 @@ public class RuntimeTests
         var old = vm.Items; vm.Items = new(); old.Add(new()); Assert.Empty(target.Items); vm.Items.Add(b); vm.Items[0] = a; Assert.Same(a, Assert.Single(target.Items)); vm.Items.Clear(); Assert.Empty(target.Items);
         binding.Dispose(); await node.DisposeAsync(); Assert.Equal(1, target.Disposals);
     }
+    [Fact] public async Task CompletedWorkDoesNotAccumulateOnALiveNode()
+    {
+        await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime);
+        var node = await Node(ui, "Persistent"); var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        vm.Action = _ => Task.CompletedTask;
+        var click = new Click(); node.BindCommand("Dialog.Close", click);
+        for (var i = 0; i < 100; i++) { click.Press(); node.ObserveMvvmTask(Task.CompletedTask); }
+        runtime.ObserveTasks();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var scopes = (System.Collections.IList)typeof(MvvmRuntime).GetField("_scopes", flags)!.GetValue(runtime)!;
+        var scope = scopes.Cast<object>().Single(value => ReferenceEquals(value.GetType().GetProperty("Node", flags)!.GetValue(value), node));
+        foreach (var owner in new[] { (object)runtime, scope })
+            foreach (var field in new[] { "_commands", "_tasks" })
+                Assert.Empty((System.Collections.IEnumerable)owner.GetType().GetField(field, flags)!.GetValue(owner)!);
+        Assert.Equal(0, vm.Disposals);
+    }
+
     [Fact] public async Task SharedCommandDisablesAllButtonsUntilCompletion()
     {
         await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime); var a = await Node(ui, "A"); var b = await Node(ui, "B"); var vm = new OwnedVm(); a.SetViewModel("Player", vm); b.SetViewModel("Player", vm);

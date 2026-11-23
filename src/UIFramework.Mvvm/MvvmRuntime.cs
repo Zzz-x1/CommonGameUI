@@ -38,6 +38,9 @@ public sealed class MvvmRuntime : IAsyncDisposable
             if (tasks.Length == 0) break;
             try { await Task.WhenAll(tasks); } catch (Exception error) { Failure(ref first, error); }
         }
+        RemoveCompletedCommands();
+        _tasks.RemoveAll(task => task.IsCompletedSuccessfully);
+        _releases.RemoveWhere(task => task.IsCompletedSuccessfully);
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     internal void ObserveRelease(Task task) { _releases.Add(task); Observe(task); }
@@ -146,6 +149,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
         if (!_running.Add((vm, command))) throw new InvalidOperationException("Command is already running: " + command);
+        RemoveCompletedCommands();
         var execution = new CommandExecution(scope);
         _commands.Add(execution); scope.Add(execution); _tasks.Add(execution.Completion);
         execution.Start(Run); return execution.Completion;
@@ -159,9 +163,21 @@ public sealed class MvvmRuntime : IAsyncDisposable
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }
     }
+    private void RemoveCompletedCommands()
+    {
+        for (var i = _commands.Count - 1; i >= 0; i--)
+        {
+            var command = _commands[i];
+            if (!command.Completion.IsCompleted) continue;
+            command.Scope.Remove(command);
+            _commands.RemoveAt(i);
+        }
+        foreach (var scope in _scopes) scope.RemoveCompletedTasks();
+    }
     /// <summary>Engine adapters call this from their persistent frame observer.</summary>
     public void ObserveTasks()
     {
+        RemoveCompletedCommands();
         foreach (var task in _tasks.ToArray())
         {
             if (!task.IsCompleted) continue;
