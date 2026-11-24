@@ -365,18 +365,21 @@ public class StackContainerNode : ContainerNode
                     return (T)existing.Owner;
                 }
             }
-            var previous = CurrentNode;
             var node = await AcquireAsync<T>(args, ct);
+            // A lifetime may end the old page while the new resource is loading.
+            var previous = CurrentNode;
             var enter = Describe(node, LifecycleReason.Push, previous, node);
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Covered, previous, node);
             try
             {
-                await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Forward);
-                ct.ThrowIfCancellationRequested();
+                using var participants = LinkPageLifetimes(ct, node, previous);
+                await PrepareChangeAsync(exit, enter, participants.Token, playAnimation, TransitionDirection.Forward);
+                participants.Token.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
-                if (previous != null) await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, true, true); return Task.CompletedTask; });
+                if (previous?.State == NodeState.Ready)
+                    await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, true, true); return Task.CompletedTask; });
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
                 throw;
             }
@@ -384,12 +387,7 @@ public class StackContainerNode : ContainerNode
             try { CompleteChange(enter, previous, exit, node, enter); }
             catch (Exception ex)
             {
-                if (node.CacheReuse)
-                {
-                    await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                    if (previous != null) await Context.CleanupAsync(ex, () =>
-                    { previous.SetLocalState(true, true); Context.PublishChanges(exit!); return Task.CompletedTask; });
-                }
+                if (node.CacheReuse) await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
                 throw;
             }
             return (T)node.Owner;
@@ -422,14 +420,17 @@ public class StackContainerNode : ContainerNode
         var enter = previous == null ? null : Describe(previous, LifecycleReason.Return, current, previous);
         try
         {
-            await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Backward);
-            ct.ThrowIfCancellationRequested();
+            using var participants = LinkPageLifetimes(ct, current, previous);
+            await PrepareChangeAsync(exit, enter, participants.Token, playAnimation, TransitionDirection.Backward);
+            participants.Token.ThrowIfCancellationRequested();
             if (!_history.SequenceEqual(snapshot)) throw new InvalidOperationException("History changed while preparing the return.");
         }
         catch (Exception ex)
         {
-            if (previous != null) await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, false, false); return Task.CompletedTask; });
-            await Context.CleanupAsync(ex, () => { RestoreNodeState(current, true, true); return Task.CompletedTask; });
+            if (previous?.State == NodeState.Ready && previous != CurrentNode)
+                await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, false, false); return Task.CompletedTask; });
+            if (current.State == NodeState.Ready)
+                await Context.CleanupAsync(ex, () => { RestoreNodeState(current, true, true); return Task.CompletedTask; });
             throw;
         }
         _history.RemoveRange(targetIndex + 1, _history.Count - targetIndex - 1);
@@ -449,7 +450,27 @@ public class StackContainerNode : ContainerNode
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 
-    protected override void OnChildRemoved(UINode child) { _history.Remove(child); base.OnChildRemoved(child); }
+    private static CancellationTokenSource LinkPageLifetimes(CancellationToken token, UINode page, UINode? other) =>
+        other == null ? CancellationTokenSource.CreateLinkedTokenSource(token, page.Lifetime)
+            : CancellationTokenSource.CreateLinkedTokenSource(token, page.Lifetime, other.Lifetime);
+
+    protected override void OnChildRemoved(UINode child)
+    {
+        base.OnChildRemoved(child);
+        var wasCurrent = CurrentNode == child;
+        if (!_history.Remove(child) || !wasCurrent || CurrentNode is not { State: NodeState.Ready } previous) return;
+        for (UINode? owner = this; owner != null; owner = owner.Parent)
+            if (owner.State == NodeState.Disposing) return;
+
+        // Ordinary pops remove history before disposal. A lifetime ending here
+        // exposes the underlying page immediately, preserving any ongoing operation's lock.
+        CommitState(() =>
+        {
+            previous.SetLocalState(true, true);
+            Context.ReconcileModalInput();
+        });
+        Context.PublishChanges(Describe(previous, LifecycleReason.Return, child, previous));
+    }
 }
 
 /// <summary>Switcher for existing embedded nodes. Names are ordinal and container-local.</summary>
