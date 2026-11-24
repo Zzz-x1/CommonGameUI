@@ -78,7 +78,7 @@ namespace StarCourt.UnityDemo
             }
             Navigation.SetActive(false);
             var wallet = new WalletNode(); await wallet.AttachToAsync(UI.Root, "Wallet", Wallet.rectTransform);
-            wallet.Bind("Player.Wallet", Wallet.TextTarget());
+            wallet.Bind("Player.Wallet", Wallet.Bindable().Text);
             await Pages.PushAsync<LoginView>();
         }
         public Task RunAsync(IUINode owner, Func<Task> action) => RunAsync(async () =>
@@ -90,7 +90,7 @@ namespace StarCourt.UnityDemo
             finally
             {
                 if (owner.State == NodeState.Ready)
-                { display.SetInteractive(owner.IsInteractive); owner.Context.Host.RestoreFocus(focus); }
+                { display.SetInteractive(owner.IsInteractive); if (focus != null && owner.IsInteractive) owner.Context.Host.TryFocus(display, focus); }
             }
         });
         private async Task RunAsync(Func<Task> action)

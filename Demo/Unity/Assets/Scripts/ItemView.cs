@@ -23,8 +23,8 @@ public sealed class ItemView : EngineUI.UINode<int>
         {
             _bindings = new ViewBindings(this);
             var vm = this.CreateViewModel<ClientItemVm>("Item"); vm.Initialize(UnityClient.Instance.Store, Parameters);
-            this.Bind("Item.Name", this.GetControl<Text>("Panel/Title").TextTarget());
-            this.Bind("Item.Description", this.GetControl<Text>("Panel/Text").TextTarget());
+            this.Bind("Item.Name", this.GetControl<Text>("Panel/Title").Bindable().Text);
+            this.Bind("Item.Description", this.GetControl<Text>("Panel/Text").Bindable().Text);
             _bindings.Button("Panel/Compare", () => UnityClient.Instance.CompareAsync(Parameters));
             _bindings.Button("Panel/Back", UnityClient.Instance.BackAsync);
             return Task.CompletedTask;

@@ -20,6 +20,7 @@ public sealed class WovenViewModelAttribute : Attribute { }
 /// <summary>Implemented by Cecil; application classes need no framework base class.</summary>
 public interface IMvvmObject : INotifyPropertyChanged
 {
+    void NotifyChanged(string propertyName);
     object? Read(string member);
     void Write(string member, object? value);
     bool CanExecute(string command);
@@ -42,6 +43,7 @@ public sealed class MvvmMember
 public enum ViewModelCreation { CreateInstance, Manual, SharedAsset }
 public enum ConverterInput { ViewModel, Constant }
 public enum BindingMode { OneTime, OneWay, OneWayToViewModel, TwoWay }
+public enum BindingUpdateTiming { EndOfFrame = 0, Immediate = 1 }
 public sealed class ViewModelSource
 {
     public string Name { get; set; } = "";
@@ -100,7 +102,9 @@ public interface ICollectionTarget : IDisposable
 }
 public sealed class BindingOptions
 {
+    internal ConverterInfo? ForwardConverter, BackwardConverter;
     public BindingMode Mode { get; set; } = BindingMode.OneWay;
+    public BindingUpdateTiming UpdateTiming { get; set; } = BindingUpdateTiming.EndOfFrame;
     public Func<object?, object?>? Convert { get; set; }
     public Func<object?, object?>? ConvertBack { get; set; }
     public bool HasConstantValue { get; set; }

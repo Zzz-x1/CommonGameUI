@@ -82,6 +82,7 @@ namespace UIFramework.Mvvm.EditorUnity
                 row.FindPropertyRelative("Target").objectReferenceValue = target;
                 row.FindPropertyRelative("Source").stringValue = source; row.FindPropertyRelative("Member").stringValue = "text";
                 row.FindPropertyRelative("Mode").intValue = (int)BindingMode.OneWay; row.FindPropertyRelative("Kind").intValue = 0;
+                row.FindPropertyRelative("UpdateTiming").intValue = (int)BindingUpdateTiming.EndOfFrame;
                 row.FindPropertyRelative("Converter").stringValue = ""; row.FindPropertyRelative("ConvertBack").stringValue = "";
                 row.FindPropertyRelative("ConverterInput").intValue = 0; row.FindPropertyRelative("ConverterConstant").stringValue = "";
                 row.FindPropertyRelative("HasNullValue").boolValue = false; row.FindPropertyRelative("NullValue").stringValue = "";
@@ -95,9 +96,8 @@ namespace UIFramework.Mvvm.EditorUnity
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
-            var missing = _view ? _view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command &&
-                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && !_sourceRows.Any(asset => asset.name == b.Source.Split('.')[0] && asset.name != "Item"))
-                .Select(b => b.Source).Distinct().ToArray() : Array.Empty<string>();
+            var missing = _view ? _view.Sources.Select(s => s.Name)
+                .Where(name => name == "Item" || !_sourceRows.Any(asset => asset.name == name)).ToArray() : Array.Empty<string>();
             rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
             if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
         }
@@ -122,7 +122,8 @@ namespace UIFramework.Mvvm.EditorUnity
             picker.RegisterValueChangedCallback(e => { Binding(b, "Source", property => property.stringValue = e.newValue + "." + string.Join(".", b.Source.Split('.').Skip(1))); Refresh(); BindingDetails(); });
             _details.Add(picker);
             Object("目标控件", typeof(Component), b.Target, true, v => { Binding(b, "Target", property => property.objectReferenceValue = v); Binding(b, "Member", property => property.stringValue = TargetMembers((Component)v).FirstOrDefault() ?? ""); BindingDetails(); });
-            var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member); member.RegisterValueChangedCallback(e => Binding(b, "Member", property => property.stringValue = e.newValue)); _details.Add(member);
+            var members = TargetMembers(b.Target); var member = new DropdownField("目标属性", members, -1); member.SetValueWithoutNotify(b.Member);
+            member.RegisterValueChangedCallback(e => { Binding(b, "Member", property => property.stringValue = e.newValue); BindingDetails(); }); _details.Add(member);
             if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel)
                 Text("来源路径", b.Source, v => Binding(b, "Source", property => property.stringValue = v));
             Choice("绑定类型", b.Kind, v => { Binding(b, "Kind", property => property.intValue = (int)v); BindingDetails(); });
@@ -154,7 +155,17 @@ namespace UIFramework.Mvvm.EditorUnity
             }
             if (b.Kind == ViewBindingKind.Property)
             {
-                Choice("方向", b.Mode, v => { Binding(b, "Mode", property => property.intValue = (int)v); if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) Binding(b, "ConverterInput", property => property.intValue = (int)ConverterInput.ViewModel); BindingDetails(); });
+                var definition = members.Contains(b.Member) ? BindingTargetRegistry.Find(b.Target.GetType(), b.Member) : null;
+                if (definition != null && !definition.Supports(b.Mode))
+                    _details.Add(new HelpBox($"{b.Target.GetType().Name}.{b.Member} 不支持已保存的方向 {b.Mode}。请选择其他方向。", HelpBoxMessageType.Error));
+                Choice("方向", b.Mode, v =>
+                {
+                    Binding(b, "Mode", property => property.intValue = (int)v);
+                    if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) Binding(b, "ConverterInput", property => property.intValue = (int)ConverterInput.ViewModel);
+                    BindingDetails();
+                }, mode => definition == null || definition.Supports(mode));
+                if (b.ConverterInput == ConverterInput.ViewModel && (b.Mode == BindingMode.OneWay || b.Mode == BindingMode.TwoWay))
+                    Choice("刷新时机", b.UpdateTiming, v => Binding(b, "UpdateTiming", property => property.intValue = (int)v));
                 if (b.Mode is BindingMode.OneWay or BindingMode.OneTime)
                     Choice("转换器输入", b.ConverterInput, v => { Binding(b, "ConverterInput", property => property.intValue = (int)v); BindingDetails(); });
                 Converter("正向转换", b.Converter, b, false, v => Binding(b, "Converter", property => property.stringValue = v));
@@ -199,8 +210,13 @@ namespace UIFramework.Mvvm.EditorUnity
         { var field = new ObjectField(label) { objectType = type, allowSceneObjects = scene, value = value }; field.RegisterValueChangedCallback(e => { set(e.newValue); Refresh(); }); _details.Add(field); }
         private void Toggle(string label, bool value, Action<bool> set)
         { var field = new Toggle(label) { value = value }; field.RegisterValueChangedCallback(e => set(e.newValue)); _details.Add(field); }
-        private void Choice<T>(string label, T value, Action<T> set) where T : Enum
-        { var field = new DropdownField(label, Enum.GetNames(typeof(T)).ToList(), Convert.ToInt32(value)); field.RegisterValueChangedCallback(e => { set((T)Enum.Parse(typeof(T), e.newValue)); Refresh(); }); _details.Add(field); }
+        private void Choice<T>(string label, T value, Action<T> set, Func<T, bool> include = null) where T : Enum
+        {
+            var values = ((T[])Enum.GetValues(typeof(T))).Where(v => include == null || include(v)).ToList();
+            var field = new DropdownField(label, values.Select(v => v.ToString()).ToList(), values.IndexOf(value));
+            field.RegisterValueChangedCallback(e => { set((T)Enum.Parse(typeof(T), e.newValue)); Refresh(); });
+            _details.Add(field);
+        }
         private void StopPreview() { _preview?.Dispose(); _preview = null; }
         private void OnProjectChange() { if (_sources != null) Refresh(); }
         private void OnDisable() { StopPreview(); Undo.undoRedoPerformed -= Refresh; }

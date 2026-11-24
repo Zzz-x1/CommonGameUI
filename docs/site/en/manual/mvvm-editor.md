@@ -23,9 +23,15 @@ Select the control and target property, then drag a member or enter a path such 
 | Buy button | Command, `Shop.Buy` |
 | Inventory list | Collection, item Prefab / PackedScene |
 
+For volume, select the slider, choose `value` in Unity or `Value` in Godot, set the source to `Settings.Volume`, and choose `TwoWay`. This uses the definition behind `slider.Bindable().Value`. A label's text offers OneTime and OneWay. Slider values publish changes, so they also offer TwoWay and OneWayToViewModel. If a saved row has an unsupported direction, the panel shows the reason and lets you choose a valid direction.
+
+For a OneWay or TwoWay property row with VM input, the timing field defaults to `EndOfFrame`. A price label displays the final value once per UI frame. Select `Immediate` when a control must reflect changes inside the current input handler. The first preview value appears immediately.
+
 Converters are filtered by input and output types. Item sources are named `Item`, for example `Item.Title`. Configure layout in resources: VBoxContainer / GridContainer in Godot, or LayoutGroup / project layout code in Unity.
 
 The table supports search, deletion and reordering. Unity disables reordering while searching; clear search to change the full order. Unity controls provide an Inspector entry. Godot provides binding buttons beneath common control properties.
+
+A shop can instantiate the same item template 30 times. Configure `Item.Price` on the template once. Within one Runtime, matching rows reuse the resolved member and converter. Each row connects its own VM and control. A Prefab override or a different PackedScene can point to another label. Removing a row releases its subscriptions while the remaining prices keep updating.
 
 ## Configure converters
 
@@ -42,13 +48,15 @@ Custom functions are static methods marked `[Converter]`, with one argument and 
 
 ## 3. Preview initial values
 
-Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.
+Select **Preview initial values**. The preview checks the saved direction, converter types and command parameters against temporary VM instances. A TwoWay slider displays the VM value and ignores edits. A View→VM row leaves the control untouched. Buttons stay disconnected. Stopping the preview restores the original controls and list. If a row fails, its error identifies the node, source and target. The preview releases the rows it already connected.
 
 Unity global preview resolves templates from the provider catalog and clones them independently. Local sources without samples cannot preview. Godot Manual sources still use explicit preview assets; runtime requires `SetViewModel`.
 
 ## Save
 
 Unity stores configuration in the component and saves it with the Prefab / scene, including Undo and Prefab Overrides. Godot stores binding Resources and a native control reference array on the scene component; the editor edits both together with native Undo. Targets do not depend on framework-maintained hierarchy paths. Renaming, reparenting and reopening preserve references.
+
+Saving persists the configured rows. Use preview to validate the complete set against sample VMs. When a Manual VM is supplied only at runtime, the framework checks its members against the actual instance as the view connects.
 
 Preview does not save the scene. Stop preview before editing configuration so display values remain separate from authored values.
 
@@ -60,6 +68,6 @@ For commands, choose None, Constant or SourcePath; the editor shows the business
 
 For collections, select an item resource and add parent-to-item source mappings. An optional factory references a Unity component or Godot node implementing `ICollectionItemFactory`. Factories also receive `IsPreview`: provide presentation-only preparation there. Preview never executes commands and restores controls when stopped. Item is supplied automatically.
 
-Custom control members registered through `IBindingTargetProvider` appear in the property picker and work in preview without a separate resolver.
+Project members added with `[BindProperty]` appear in the picker after compilation. For example, Unity's `slider.Bindable().MinValue()` appears as `minValue`. The row saves the native control reference and case-sensitive member key. Preview uses the same property definition. See [Declare control bindings](mvvm.md#declare-control-bindings).
 
 Godot factory node scripts need `[Tool]` for editor preview. When changing a command to one without a business parameter, explicitly clear any old parameter configuration using the editor action.

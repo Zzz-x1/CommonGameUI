@@ -8,8 +8,11 @@ using Godot;
 
 namespace UIFramework.Godot
 {
-public abstract partial class UINode : Control, IUINode
+public abstract partial class UINode : Control, IUINode, IPreferredFocus
 {
+    [Export] public Control? PreferredFocus { get; set; }
+    protected virtual Control? GetPreferredFocus() => PreferredFocus;
+    object? IPreferredFocus.PreferredFocus => GetPreferredFocus() is { } target && GodotObject.IsInstanceValid(target) ? target : null;
     private CoreNode? _node;
     private Action<Task>? _observe;
     public CoreNode Node

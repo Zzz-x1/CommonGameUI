@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UIFramework;
+using UIFramework.Mvvm;
 using UIFramework.Unity;
 using UnityEngine;
 using UnityEngine.Playables;
@@ -165,11 +166,31 @@ namespace StarCourt.UnityDemo.Tests
             await ClickAndWait(_app.Pages.Current, "Panel/Enter"); var home = _app.Home;
             Assert.That(_app.Pages.Current, Is.SameAs(home));
             await Route("Shop"); await ClickAndWait(_app.Pages.Current, "Cards/C0");
-            var purchase = _app.Modals.Current; int gold = _app.Store.State.Gold;
+            var purchase = _app.Modals.Current;
+            int gold = _app.Store.State.Gold;
+            int owned = _app.Store.State.Inventory[0];
+            int total = ClientStore.Prices[0] * 2;
+            var quantity = purchase.GetControl<Dropdown>("Panel/Quantity");
+            var quote = purchase.GetControl<Text>("Panel/Text");
+            Assert.That(quantity.value, Is.Zero);
+            string initialQuote = quote.text;
+            quantity.value = 1;
+            Assert.That(purchase.GetViewModel<ClientPurchaseVm>("Purchase").Quantity, Is.EqualTo(2));
+            _app.Store.Change(state => state.Gold = total - 1);
+            Assert.That(purchase.GetControl<Button>("Panel/Buy").interactable, Is.False);
+            Assert.That(quote.text, Is.EqualTo(initialQuote));
+            await Frame();
+            Assert.That(quote.text, Does.Contain($"合计 {total} 金币"));
+            Assert.That(quote.text, Does.Contain("还差 1 金币"));
+            _app.Store.Change(state => state.Gold = gold);
             await Click(purchase, "Panel/Buy"); await WaitFor<ConfirmView>();
+            Assert.That(_app.Modals.Current.GetControl<Text>("Panel/Text").text, Does.Contain($"花费 {total} 金币"));
             await ClickAndWait(_app.Modals.Current, "Panel/No"); Assert.That(_app.Store.State.Gold, Is.EqualTo(gold));
+            Assert.That(quantity.value, Is.EqualTo(1));
             await Click(purchase, "Panel/Buy"); await WaitFor<ConfirmView>();
             await ClickAndWait(_app.Modals.Current, "Panel/Yes"); Assert.That(_app.Modals.Current, Is.TypeOf<RewardView>());
+            Assert.That(_app.Store.State.Gold, Is.EqualTo(gold - total));
+            Assert.That(_app.Store.State.Inventory[0], Is.EqualTo(owned + 2));
             await ClickAndWait(_app.Modals.Current, "Panel/Close"); Assert.That(_app.Modals.Current, Is.SameAs(purchase));
             await ClickAndWait(purchase, "Panel/Close"); await Route("Characters");
             await ClickAndWait(_app.Pages.Current, "Cards/C0"); var hero = _app.Pages.Current;
@@ -180,7 +201,7 @@ namespace StarCourt.UnityDemo.Tests
             await Route("Quests"); await ClickAndWait(_app.Pages.Current, "Panel/Claim"); await ClickAndWait(_app.Modals.Current, "Panel/Close");
             Assert.That(_app.Pages.Current.GetControl<Button>("Panel/Claim").interactable, Is.False);
             var saved = new ClientStore(Path.Combine(Application.persistentDataPath, _save)).State;
-            Assert.That(saved.Gold, Is.EqualTo(_app.Store.State.Gold)); Assert.That(saved.Inventory[0], Is.EqualTo(3)); Assert.That(saved.QuestClaimed, Is.True);
+            Assert.That(saved.Gold, Is.EqualTo(_app.Store.State.Gold)); Assert.That(saved.Inventory[0], Is.EqualTo(owned + 2)); Assert.That(saved.QuestClaimed, Is.True);
             await Route("Home"); Assert.That(_app.Pages.Current, Is.SameAs(home));
         }
         [UnityTest] public IEnumerator TabsComparisonSettingsAndTeamRestrictions() => Await(ContainersFlow());
@@ -221,15 +242,24 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator ActualSourceAndSettingsSelectDifferentAnimations() => Await(AnimationBranches());
         private async Task AnimationBranches()
         {
-            await _app.EnterAsync(); await _app.OpenAsync("Shop");
-            var entering = _app.OpenAsync("Inventory");
-            while (!_app.Pages.Children.OfType<InventoryView>().Any(n => n.TransitionState?.Stage == TransitionStage.Playing && n.TransitionState.Progress > .05)) await Frame();
-            Assert.That(_app.Pages.Children.OfType<InventoryView>().Last().GetRoot().anchoredPosition.x, Is.LessThan(0));
-            await entering;
-            entering = _app.OpenAsync("Shop");
-            while (!_app.Pages.Children.OfType<ShopView>().Any(n => n.TransitionState?.Stage == TransitionStage.Playing && n.TransitionState.Progress > .05)) await Frame();
-            Assert.That(_app.Pages.Children.OfType<ShopView>().Last().GetRoot().anchoredPosition.x, Is.GreaterThan(0));
-            await entering; await _app.OpenPurchaseAsync(0);
+            await _app.EnterAsync();
+            await _app.OpenAsync("Shop");
+            var originalShop = _app.Pages.Current;
+            var inventoryEntry = await SamplePageEntry<InventoryView>("Inventory");
+            Assert.That(inventoryEntry.phase, Is.EqualTo(TransitionPhase.PushEnter));
+            Assert.That(inventoryEntry.x, Is.LessThan(0));
+
+            var shopReturn = await SamplePageEntry<ShopView>("Shop");
+            Assert.That(_app.Pages.Current, Is.SameAs(originalShop));
+            Assert.That(shopReturn.phase, Is.EqualTo(TransitionPhase.PopEnter));
+            Assert.That(shopReturn.x, Is.LessThan(0));
+
+            await _app.OpenAsync("Home");
+            await _app.OpenAsync("Inventory");
+            var shopEntry = await SamplePageEntry<ShopView>("Shop");
+            Assert.That(shopEntry.phase, Is.EqualTo(TransitionPhase.PushEnter));
+            Assert.That(shopEntry.x, Is.GreaterThan(0));
+            await _app.OpenPurchaseAsync(0);
             var reward = _app.RewardAsync("购买奖励"); await WaitForAnimation();
             Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetControl<PlayableDirector>("Transitions/Enter").state == PlayState.Playing, Is.True);
             await reward; await _app.BackAsync(); await _app.BackAsync(); await _app.OpenAsync("Quests");
@@ -241,6 +271,25 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetControl<PlayableDirector>("Transitions/Enter").playableGraph.IsValid(), Is.False);
             await reward;
         }
+        private async Task<(TransitionPhase phase, float x)> SamplePageEntry<T>(string route) where T : class, IUINode
+        {
+            var opening = _app.OpenAsync(route);
+            (TransitionPhase phase, float x)? sample = null;
+            while (!opening.IsCompleted)
+            {
+                var page = _app.Pages.Children.OfType<T>().SingleOrDefault();
+                if (page?.TransitionState is { Stage: TransitionStage.Playing, Progress: > .05f } state && state.Context.Entering)
+                {
+                    sample = (state.Context.Phase, page.GetRoot().anchoredPosition.x);
+                    break;
+                }
+                await Frame();
+            }
+            await opening;
+            Assert.That(sample.HasValue, Is.True, $"No entry animation sampled for {route}.");
+            return sample.Value;
+        }
+
         private async Task WaitForAnimation()
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 10;

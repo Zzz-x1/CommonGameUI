@@ -38,6 +38,6 @@ DLL 与 PDB 已复制到现有包的 Plugins 目录，不需安装源码包。�
 
 ## 验证状态
 
-当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。客户端、适配器、生命周期及已保存 Timeline／AnimationClip 资源通过 31 项原生 Play Mode 回归。MVVM 编辑器 Undo／Prefab Override 与预览通过验证。独立入门教程的 C# 示例已在 Unity 6000.3.24f1 batchmode 编译；教程 UI 尚未原生运行验证。Unity Source Generator 工作流尚未接入。
+当前环境为 Unity 6000.3.24f1 / uGUI 2.0.0。客户端、适配器、生命周期及已保存 Timeline／AnimationClip 资源通过 31 项原生 Play Mode 回归。MVVM 编辑器 Undo／Prefab Override 与预览通过验证。独立入门教程的 C# 示例已在 Unity 6000.3.24f1 batchmode 编译；教程 UI 尚未原生运行验证。Unity 的节点资源使用手写注册。可选 MVVM 包自带控件适配生成器，见[控件绑定](../manual/mvvm.md#声明控件绑定)。
 
 [Unity API](../api/unity.md) · [时间轴](../manual/timeline-animation.md)

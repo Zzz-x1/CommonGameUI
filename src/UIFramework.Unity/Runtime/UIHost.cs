@@ -27,29 +27,55 @@ namespace UIFramework.Unity
                 throw new InvalidOperationException("UI access must run on Unity's main thread.");
         }
         public Task NextFrameAsync() { VerifyAccess(); return _frames.NextFrameAsync(); }
-        public object CaptureFocus() { VerifyAccess(); VerifyEvents(); return _events.currentSelectedGameObject; }
-        private void VerifyEvents() { if (!_events) throw new ObjectDisposedException(nameof(EventSystem)); }
-        public void Focus(IUIElement element)
+        public object CaptureFocus()
         {
             VerifyAccess();
-            if (element == null) return;
+            if (_lifetimeEnding && !_events) return null;
             VerifyEvents();
-            if (!(element is UIElement display)) throw new ArgumentException("Expected a Unity display.", nameof(element));
-            foreach (var selectable in display.Rect.GetComponentsInChildren<Selectable>())
-                if (selectable.isActiveAndEnabled && selectable.IsInteractable())
-                { _events.SetSelectedGameObject(selectable.gameObject); return; }
-            _events.SetSelectedGameObject(null);
+            var target = _events.currentSelectedGameObject;
+            return target && target.activeInHierarchy && (!target.TryGetComponent<Selectable>(out var control)
+                || control.isActiveAndEnabled && control.IsInteractable()) ? target : null;
         }
-        public void RestoreFocus(object focus)
+        private void VerifyEvents() { if (!_events) throw new ObjectDisposedException(nameof(EventSystem)); }
+        private static GameObject FocusObject(object target) =>
+            target is Selectable selectable && selectable ? selectable.gameObject : target as GameObject;
+        public bool ContainsFocus(IUIElement scope, object target)
         {
             VerifyAccess();
-            // Closing a page normally destroys its previous focus target.
-            if (focus is GameObject target && target && target.activeInHierarchy
-                && target.TryGetComponent<Selectable>(out var selectable) && selectable.IsInteractable())
+            if (scope is not UIElement display || display.Host != this) return false;
+            var rect = display.Rect;
+            var candidate = FocusObject(target);
+            return rect && candidate && candidate.transform.IsChildOf(rect);
+        }
+        public bool TryFocus(IUIElement scope, object target)
+        {
+            VerifyAccess();
+            if (_lifetimeEnding && !_events) return false;
+            VerifyEvents();
+            if (scope != null && (!(scope is UIElement display) || display.Host != this)) return false;
+            var root = scope == null ? RootMount : ((UIElement)scope).Rect;
+            if (scope != null && !root) return false;
+            if (target != null)
             {
-                if (_lifetimeEnding && !_events) return;
-                VerifyEvents(); _events.SetSelectedGameObject(target);
+                var candidate = FocusObject(target);
+                if (!candidate || (root && !candidate.transform.IsChildOf(root))
+                    || !candidate.TryGetComponent<Selectable>(out var button) || !button.isActiveAndEnabled || !button.IsInteractable()) return false;
+                _events.SetSelectedGameObject(candidate);
+                return _events.currentSelectedGameObject == candidate;
             }
+            if (scope == null) return false;
+            foreach (var button in root.GetComponentsInChildren<Selectable>())
+                if (button.isActiveAndEnabled && button.IsInteractable())
+                { _events.SetSelectedGameObject(button.gameObject); return _events.currentSelectedGameObject == button.gameObject; }
+            return false;
+        }
+        public void ClearFocus()
+        {
+            VerifyAccess();
+            if (_lifetimeEnding && !_events) return;
+            VerifyEvents();
+            var selected = _events.currentSelectedGameObject;
+            if (selected && (!RootMount || selected.transform.IsChildOf(RootMount))) _events.SetSelectedGameObject(null);
         }
         public void Error(string message) => Debug.LogError("[UI] " + message);
         public void Exception(Exception exception, string context)

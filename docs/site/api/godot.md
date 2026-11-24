@@ -8,11 +8,13 @@
 
 ```csharp
 // UIFramework.Godot
-abstract class UINode : Control, IUINode
+abstract class UINode : Control, IUINode, IPreferredFocus
 abstract class UINode<TArgs> : UINode, IParameterizedNode<TArgs>
 abstract class DialogNode<TResult> : UINode, IDialogNode<TResult>
 string UIName { get; }
 bool IsUIVisible { get; }
+Control? PreferredFocus { get; set; } // Inspector
+protected virtual Control? GetPreferredFocus()
 protected void Observe(Task task)
 void Complete(TResult result) // DialogNode<TResult>
 Task<TResult> WaitForResultAsync(CancellationToken token) // DialogNode<TResult>
@@ -70,8 +72,9 @@ Control? RootMount { get; }
 void UIHost.VerifyAccess()
 Task UIHost.NextFrameAsync()
 object? UIHost.CaptureFocus()
-void UIHost.Focus(IUIElement? element)
-void UIHost.RestoreFocus(object? focus)
+bool UIHost.ContainsFocus(IUIElement scope, object target)
+bool UIHost.TryFocus(IUIElement? scope, object? target)
+void UIHost.ClearFocus()
 void UIHost.Error(string message)
 void UIHost.Exception(Exception exception, string context)
 UIResourceLoader(UIHost host)

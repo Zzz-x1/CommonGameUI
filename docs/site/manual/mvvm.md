@@ -4,7 +4,7 @@ MVVM 是可选模块。它把金币、设置、背包等界面数据放在 VM �
 
 ## 安装
 
-- **Unity**：运行 `scripts/Prepare-Mvvm.ps1`，通过本地 UPM 路径安装 `src/UIFramework.Mvvm.Unity`。项目 asmdef 引用 `UIFramework.Mvvm.Unity`；使用文本目标时同时引用 `Unity.TextMeshPro`。Unity 的 ILPostProcessor 自动织入项目程序集。
+- **Unity**：运行 `scripts/Prepare-Mvvm.ps1`，通过本地 UPM 路径安装 `src/UIFramework.Mvvm.Unity`。项目 asmdef 引用 `UIFramework.Mvvm.Unity`。普通 uGUI 使用 `UIFramework.Mvvm.Unity` 命名空间；绑定 TextMeshPro 控件时，再引用 `Unity.TextMeshPro` 并导入 `UIFramework.Mvvm.Unity.TMP`。Unity 的 ILPostProcessor 自动织入项目程序集。
 - **Godot**：运行 `scripts/Prepare-GodotMvvm.ps1 -Project <项目目录>`，安装源代码插件。项目引用 `UIFramework.Mvvm.csproj` 和现有 Godot 适配器，并导入 `build/UIFramework.Mvvm.targets`。在项目设置启用 **UIFramework MVVM**。
 - **普通 .NET**：引用 `UIFramework.Mvvm.csproj`，导入上述 targets。构建工具需要 .NET 10 SDK；游戏运行时模块仍为 `netstandard2.1`。
 
@@ -37,18 +37,36 @@ var ui = UI.Create(this); // Unity: UI.Create(canvas, events)
 
 ```csharp
 this.SetViewModel("Player", player);
-this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
+this.Bind("Player.Gold", goldLabel.Bindable().Text, new BindingOptions
 {
     Convert = Converters.Find("FormatNumber")
 });
-this.BindCommand("Player.Buy", buyButton.ClickTarget());
+this.BindCommand("Player.Buy", buyButton.Bindable().Click);
 ```
 
-控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
+导入 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`，在控件后输入 `.Bindable().` 即可补全可用成员。标签的 `Text` 用于显示，按钮的 `Click` 用于执行命令。纯 C# 项目自行提供目标接口。
+
+### 通知 UI 重读服务数据
+
+血量由战斗服务持有时，VM 可以直接读取服务。收到服务的血量事件后，在 UI 线程调用 `NotifyChanged`，已绑定的血条和依赖属性都会刷新。
+
+```csharp
+[FieldNotify]
+public int Health => combat.Health;
+
+[FieldNotify(nameof(Health))]
+public bool IsDefeated => Health <= 0;
+
+private void OnHealthChanged() => this.NotifyChanged(nameof(Health));
+```
+
+手动通知接受本 VM 的一个 `[FieldNotify]` 属性名，每次调用都会发布。通过已标记的 setter 修改值时，框架会自动比较新旧值并通知。
 
 ## 来源自动解析
 
 `GetViewModel`、代码绑定和 GUI 绑定使用同一规则：先查当前节点的本地来源，没有时按名称查询 Provider。无需提前注入全局 VM。`Item` 必须由集合或业务注入。已有本地实例类型错误时直接报错，不改用全局实例。
+
+背包列表绑定 `Inventory.Items`，详情面板绑定 `Selection`。调用 `SetViewModel("Selection", next)` 只刷新详情，现有列表行和正在加载的行都保留。替换嵌套 VM 时，绑定改为监听新对象；如果它仍提供同一个集合，列表行继续复用。更换集合实例或收到集合的 `Reset` 通知时才重建整表。
 
 ```csharp
 var shop = this.GetViewModel<ShopVm>("Shop");
@@ -108,7 +126,7 @@ public sealed class PlayerVm : GlobalViewModel
 
 | 方式 | 常见场景 | 释放时机 |
 |---|---|---|
-| Create Instance | 每张装备详情、每个购买流程 | 节点关闭 |
+| Create Instance | 每张装备详情、每个购买流程 | 节点销毁 |
 | Manual | 业务服务已经创建的玩家状态 | 项目负责 |
 | Shared Asset | 多个窗口共享金币或设置 | 最后一个共享 Context 关闭 |
 
@@ -126,17 +144,77 @@ this.SetViewModel("Player", player);
 ## 双向与嵌套绑定
 
 ```csharp
-this.Bind("Settings.Volume", volumeSlider.ValueTarget(), BindingMode.TwoWay);
-this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
+this.Bind("Settings.Volume", volumeSlider.Bindable().Value, BindingMode.TwoWay);
+this.Bind("Player.Selected.Name", nameLabel.Bindable().Text, new BindingOptions
 {
     HasNullValue = true,
     NullValue = "No selection"
 });
 ```
 
-双向初始以 VM 为准；控件写入 VM 后再次同步，显示 setter 归一化后的值。正向、反向转换分别配置 `Convert`、`ConvertBack`。
+双向绑定首次显示 VM 的值。玩家输入立即写入 VM。正向和反向转换分别配置 `Convert`、`ConvertBack`。
+
+### 选择控件的刷新时机
+
+首次显示和 `ResumeBinding` 同步执行。之后的属性变化默认使用 `EndOfFrame`。到了 UI 帧刷新点，每条待刷新的绑定只读取一次各来源的最新值，更新一次控件。手动通知、setter 校正后的回显也遵循这个时机。
+
+后续代码需要在当前调用内使用新的控件状态时，显式选择 `Immediate`，例如余额变化后立即禁用订单确认。购买命令在执行时依然读取最新的 VM。
+
+```csharp
+this.Bind<bool>("Order.CanConfirm", SetConfirmEnabled,
+    timing: BindingUpdateTiming.Immediate);
+```
 
 中间对象替换后重新订阅。响应路径的中间属性也需要 `FieldNotify`。空路径默认报错；显式空值不会隐藏成员缺失或类型错误，也不会创建缺失对象。
+
+## 使用多个 VM 计算报价
+
+购物车数量、单价或玩家余额在同一帧变化，下面的报价只计算一次。按 lambda 参数顺序列出来源路径。余额足够时显示总价，余额不足时显示还差多少金币。
+
+```csharp
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.Bindable().Text,
+    (int gold, int price, int quantity) =>
+    {
+        long total = (long)price * quantity;
+        return gold >= total ? $"{total}" : $"-{total - gold}";
+    });
+
+this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
+```
+
+传目标和返回值函数可以更新一个控件属性。传同步回调则由项目自由更新表现，`ShowCount` 是本例中角标的显示方法。首次绑定会立即显示；路径中的 VM 被替换后，绑定从当前实例读取全部来源。
+
+## 接入自定义控件的输入
+
+**数量选择器**只编辑一个属性。将控件的显示方法传给 `apply`，在 `subscribe` 中连接输入事件并返回解绑动作。这里的控件方法和事件由项目提供。
+
+```csharp
+this.BindTwoWay<int>("Cart.Quantity",
+    apply: quantityPicker.SetValueWithoutNotify,
+    subscribe: edited =>
+    {
+        quantityPicker.ValueEdited += edited;
+        return () => quantityPicker.ValueEdited -= edited;
+    }, timing: BindingUpdateTiming.Immediate);
+```
+
+打开窗口时，选择器立即显示 `Cart.Quantity`。玩家输入 120，如果 setter 将数量限制为 99，选择器最终显示 99。框架只订阅一次输入，初始化和回显时控件同步发出的事件不会写回 VM。
+
+**价格范围滑杆**同时显示两个属性。拖动时控件本地预览，松手时发出一个项目定义的 `PriceRange`。由 `commit` 一次提交最低价和最高价。回调中按名称获取当前 VM，替换筛选条件后，后续编辑会提交给新实例。
+
+```csharp
+this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
+    apply: rangeSlider.SetRangeWithoutNotify,
+    subscribe: committed =>
+    {
+        rangeSlider.RangeCommitted += committed;
+        return () => rangeSlider.RangeCommitted -= committed;
+    },
+    commit: range => this.GetViewModel<FilterVm>("Filter")
+                         .SetPriceRange(range.Min, range.Max));
+```
+
+默认情况下，一帧内多次提交只回显一次最终区间。其他绑定按各自的时机刷新。提交中途失败会立即传播原始异常，已生效的值按所选时机回显。编辑器配置见[声明控件绑定](#声明控件绑定)。
 
 ## 暂停绑定，让动画接管
 
@@ -153,13 +231,23 @@ this.ResumeBinding(nameof(HeroVm.Power));
 
 同一来源属性绑定到多个控件时一起暂停；不影响其他属性、子节点、命令或列表。同名属性来自不同路径时使用完整路径，例如 `"Hero.Power"`。重复暂停、未暂停就恢复、缺失绑定直接报错。
 
-这是同步配对 API，不提供动画包装或自动恢复。动画取消／失败时由项目决定恢复时机；节点已关闭则绑定已清理，不能继续恢复。
+多来源绑定可用任一参与的路径暂停整条绑定。暂停期间忽略输入，恢复时读取各来源的最新值并重绘一次。动画结束、取消或失败时，由项目决定何时恢复。隐藏和关闭后进入缓存的节点保留绑定。释放绑定或销毁节点时会解除输入订阅。
 
 ## 列表和命令
 
 动态列表使用 `ObservableCollection<T>` 或 `INotifyCollectionChanged`。通过 `BindCollection` 绑定到 `CollectionTarget`；条目场景或 Prefab 添加 `MvvmBindings`，`Item` 来源由框架自动提供，无需声明资产。条目可以是基础节点，无需业务 View 类。
 
 移动保留条目实例，删除解除绑定并释放条目。普通数组只能一次性展示。布局由项目资源决定，模块不提供虚拟化、排序或对象池。
+
+背包排序或收到服务器整表时，在 UI 线程对已绑定的集合调用 `ApplySnapshot`。用装备实例 ID 区分同型号物品。
+
+```csharp
+Equipment.ApplySnapshot(sortedItems,
+    row => row.InstanceId, item => item.InstanceId,
+    item => new EquipmentRowVm(item), (row, item) => row.UpdateFrom(item));
+```
+
+`create` 为新键创建并填充 VM。`update` 刷新保留行，其控件和进行中的加载沿用原实例。缺失的键触发移除。若同一 ID 可能改用另一种模板，将 `(InstanceId, LayoutKind)` 作为键。
 
 命令支持 `void`、`Task`，最多一个业务参数，异步命令可接收 `CancellationToken`。不支持 `async void`。`CanExecute` 和执行状态控制按钮，Runtime 持续观察同一个任务。业务先保存，再展示奖励；取消确认时不提交。
 
@@ -171,13 +259,66 @@ this.ResumeBinding(nameof(HeroVm.Power));
 await ui.DisposeAsync();
 ```
 
-原始错误会记录并传播。UI 绑定和通知在引擎线程执行；直接改字段不会产生通知。
+节点销毁或 `WhenMvvmIdleAsync()` 等待多个任务时，即使一个失败，也会等其余任务结束。调用方收到原始异常，通过 `UIFailure.GetSecondaryExceptions(error)` 可取得其他失败和取消原因。同一异常只列一次；同批次的失败优先于取消。
+
+命令和绑定会记录原始错误。UI 绑定和通知在引擎线程执行。直接修改字段不会产生通知。
 
 相关：[GUI 配置](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [生命周期](lifecycle.md)
 
-## 自定义控件属性
+## 声明控件绑定
 
-实现 `IBindingTargetProvider.GetTargets()`，在程序集中声明 `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`，返回强类型 `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)`。显示绑定可省略 `subscribe`；双向及 View→VM 必须提供通知和解绑。运行时、属性选择器和预览共用定义，查询成员不连接控件事件。
+### 适配新的引擎控件
+
+任务列表使用 Unity `Scrollbar` 记录滚动位置时，可在项目中为它声明主适配。将下面的类放入项目的 C# 程序集。
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ControlAdapter(typeof(Scrollbar))]
+    [BindProperty(nameof(Scrollbar.value),
+        Write = nameof(Scrollbar.SetValueWithoutNotify),
+        Changed = nameof(Scrollbar.onValueChanged))]
+    internal static class QuestScrollbarAdapter { }
+}
+```
+
+在界面脚本导入 `Game.UI.Bindings`，调用 `this.Bind("Quest.ScrollPosition", scrollbar.Bindable().Value, BindingMode.TwoWay)`。读取使用原生 `value` 属性，VM 回显调用无通知 setter，控件事件通知绑定重读当前值。纯显示属性可以省略 `Changed`。在 GUI 中选择注册名 `value` 即可使用同一属性。
+
+### 给已有适配追加成员
+
+Unity 的 `Slider` 已有主适配。设置页需要绑定允许的最低音量时，在项目中追加 `minValue`。
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ExtendControlAdapter(typeof(Slider))]
+    [BindProperty(nameof(Slider.minValue))]
+    internal static class SettingsSliderAdapter { }
+}
+```
+
+在界面脚本导入 `UIFramework.Mvvm.Unity` 和 `Game.UI.Bindings` 后即可绑定：
+
+```csharp
+this.Bind("Settings.MinVolume", slider.Bindable().MinValue());
+this.Bind("Settings.Volume", slider.Bindable().Value, BindingMode.TwoWay);
+```
+
+主适配暴露**属性**，例如 `Value`；追加声明暴露**扩展方法**，例如 `MinValue()`。在 View Bindings 里选择同一个滑杆，成员为 `minValue` 或 `value`。每种原生控件只能声明一个主适配。代码补全取决于变量的声明类型：声明为 `Slider` 可看到 `Value`；声明为 `Selectable` 时只显示该类型和已适配基类的成员。
+
+Godot 的声明方式相同。内置 `Range.Value` 绑定以 `float` 读写，回显调用 `SetValueNoSignal`。Godot Demo 为 `Godot.Range` 追加 `[BindProperty(nameof(Godot.Range.MinValue))]`，代码入口为 `slider.Bindable().MinValue()`，GUI 成员名为 `MinValue`。
+
+### 构建与注册
+
+Roslyn 生成可补全的 C# 入口及强类型属性 Provider，Cecil 织入 VM 访问和 Provider 的注册入口。两者都是构建工具。Unity 的 MVVM UPM 包内含标记为 `RoslynAnalyzer` 的生成器。Godot／.NET 的入口项目和每个声明适配或 Provider 的类库都要导入 `build/UIFramework.Mvvm.targets`；类库作为随项目复制的引用交付，启动和预览时会自动注册。
+
+运行时才能确定成员名时，使用引擎适配层的 `BindingTargets.Property(control, member)`。手工实现的 `IBindingTargetProvider` 也可向同一注册表提供定义。代码绑定、属性选择器和预览复用定义，每个控件实例独立持有订阅。
 
 ## 命令参数与条目工厂
 
@@ -186,7 +327,7 @@ await ui.DisposeAsync();
 条目映射在创建时借用父 VM 实例，不克隆，也不自动跟随父来源替换。
 
 ```csharp
-node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+node.BindCommand("Shop.Buy", buyButton.Bindable().Click,
     new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
 
 var target = new CollectionTarget(node, mount, itemResource,

@@ -33,4 +33,10 @@ Godot 引入 `UIFramework` 和 `UIFramework.Godot`，pageMount 为 `Control`；U
 - Root 只提供结构；项目决定容器名称、挂载、布局和绘制顺序。
 - 销毁容器或所属窗口时清理子树；KeepAlive 关闭保留整个子树，见[关闭后缓存](resources.md#关闭后缓存)。异步操作需要等待，并由项目观察错误。
 
+## 转场中的窗口归属
+
+从装备详情返回背包时，转场可以提前露出背包。此时 `Current` 和 `History` 仍指向已经提交的页面。动画完成后，容器一次更新历史、显隐和输入，再通知业务。若返回中途取消，则按仍然存活的历史恢复画面。正在批量关闭的中间页面被场景销毁时，该次返回取消，已销毁的页面退出历史。
+
+Panel 记录已打开窗口及各自的显示标记，Stack 记录打开顺序，Modal 记录弹窗顺序及各次打开的遮罩和焦点，Tab 记录内嵌页面及当前名称。直接派生 `ContainerNode` 的容器须实现 `protected override bool IsPresented(UINode child)`，从本容器已提交的记录返回子节点应有的局部可见性。提交、恢复和场景销毁使用同一规则。
+
 [层级](hierarchy.md) · [API](../api/core.md)

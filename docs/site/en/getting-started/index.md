@@ -7,7 +7,8 @@ Start by creating a window: build its engine resource, then write the business n
 | Core | netstandard2.1; source ProjectReference or a built DLL |
 | Godot | 4.7.2 .NET, .NET 10 SDK; reference Core and Godot projects |
 | Unity | Compiled with 6000.3.24f1 and uGUI 2.0.0; prepare DLL then add the local UPM package |
-| Generator | Optional Roslyn generator via an Analyzer project reference; not integrated into the Unity workflow |
+| Node resource generator | Optional `UIFramework.Generators`, referenced as an analyzer. Unity uses handwritten resource registration |
+| MVVM control generator | Included in the Unity MVVM package and the Godot / .NET MVVM targets. [Control bindings](../manual/mvvm.md#declare-control-bindings) |
 
 Both tutorials start with a window you can open and close, and walk through its resource, script and host attachment.
 

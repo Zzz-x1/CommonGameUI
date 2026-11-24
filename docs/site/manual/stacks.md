@@ -62,6 +62,7 @@ same 是原背包，详情已关闭。已打开的 Single 再传创建参数会�
 | Current | 当前窗口；空栈时为 null |
 | History | 从最早到当前的实例列表，包含当前窗口 |
 
+- 栈顶详情绑定的游戏对象或场景销毁时，栈会直接显示上一页，按实际状态变化发送可见性与激活通知。此时只恢复已有实例，不播放返回动画，也不执行 `OnEnteringAsync`／`OnEntered`；需要每次重新激活都运行的逻辑放在 `OnActivated`。直接销毁中间页只移除该条历史，父级整体销毁时不会重新激活页面。
 - 稳定状态只有当前窗口显示；过场动画可能同时显示前后窗口。无需切换动画时，对 Push／Pop 传 `playAnimation: false`。
 - `PopAsync` 可以移除最后一个窗口，此后栈为空；空栈再次 Pop 正常完成；连续提交两次 Pop 会依次返回两步，不合并请求。多级弹窗的首页返回通常关闭整个流程，见 [Modal 内的 Stack](modals-and-dialogs.md#单窗口多级菜单modal--stack)。
 - 默认出栈销毁；KeepAlive 启用[关闭后缓存](resources.md#关闭后缓存)，缓存实例不属于历史。

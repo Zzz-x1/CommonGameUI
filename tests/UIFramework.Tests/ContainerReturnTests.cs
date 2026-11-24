@@ -61,12 +61,66 @@ public class ContainerReturnTests
     [Theory]
     [InlineData(ModalBackdropMode.Shared)]
     [InlineData(ModalBackdropMode.PerModal)]
+    public async Task DestroyingAnIntermediateModalCancelsThePreparedBatch(ModalBackdropMode mode)
+    {
+        var (ui, _) = Create(); await using var scope = ui;
+        var modals = await Attach<ModalContainerNode>(ui);
+        var backdrops = new Backdrops();
+        modals.ConfigureBackdrop(backdrops, mode);
+        var target = await modals.OpenAsync<CounterView>();
+        var middle = await modals.OpenAsync<CounterView>();
+        var top = await modals.OpenAsync<CounterView>();
+        var gate = new ExitGate();
+        top.Transition = gate;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        var returning = modals.CloseToAsync(target, cancellationToken: timeout.Token);
+        await gate.Started.Task.WaitAsync(timeout.Token);
+        Assert.Same(top, modals.Current);
+        await middle.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => returning);
+        Assert.False(timeout.IsCancellationRequested);
+        Assert.Same(top, ui.InputOwner);
+        Assert.True(top.IsVisible && top.IsInteractive);
+        Assert.False(target.IsInteractive);
+        Assert.True(modals.CurrentBackdrop is Backdrop { Visible: true });
+        await modals.CloseToAsync(target, playAnimation: false);
+        await modals.CloseCurrentAsync(playAnimation: false);
+        Assert.All(backdrops.Created, backdrop => Assert.Equal(1, backdrop.Disposals));
+    }
+
+    [Fact]
+    public async Task DestroyingAnIntermediatePageCancelsThePreparedReturn()
+    {
+        var (ui, _) = Create(); await using var scope = ui;
+        var stack = await Attach<StackContainerNode>(ui);
+        var target = await stack.PushAsync<CounterView>();
+        var middle = await stack.PushAsync<CounterView>();
+        var top = await stack.PushAsync<CounterView>();
+        var gate = new ExitGate();
+        top.Transition = gate;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        var returning = stack.PopToAsync(target, cancellationToken: timeout.Token);
+        await gate.Started.Task.WaitAsync(timeout.Token);
+        Assert.Equal(new IUINode[] { target, middle, top }, stack.History);
+        await middle.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => returning);
+        Assert.False(timeout.IsCancellationRequested);
+        Assert.Equal(new IUINode[] { target, top }, stack.History);
+        Assert.True(top.IsVisible && top.IsInteractive);
+        Assert.False(target.IsVisible);
+        await stack.PopAsync(playAnimation: false);
+        Assert.Same(target, stack.Current);
+    }
+
+    [Theory]
+    [InlineData(ModalBackdropMode.Shared)]
+    [InlineData(ModalBackdropMode.PerModal)]
     public async Task ModalReturnKeepsTargetWithoutActivatingOrAnimatingIntermediateModal(ModalBackdropMode mode)
     {
         var (ui, host) = Create(); await using var scope = ui;
         var modals = await Attach<ModalContainerNode>(ui); var backdrops = new Backdrops(); modals.ConfigureBackdrop(backdrops, mode);
         var target = await modals.OpenAsync<CounterView>();
-        var focus = new object(); host.Focus = focus;
+        var focus = new MemoryFocus(target.Element!); host.Focus = focus;
         var middle = await modals.OpenAsync<CounterView>();
         var top = await modals.OpenAsync<CounterView>();
         var middleState = middle.TransitionState; var targetState = target.TransitionState;

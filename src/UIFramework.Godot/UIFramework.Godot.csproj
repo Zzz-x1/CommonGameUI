@@ -1,7 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The adapter exports properties; script resource paths belong to the consuming Godot project. -->
+    <GodotDisabledSourceGenerators>ScriptPathAttribute</GodotDisabledSourceGenerators>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../UIFramework.Core/UIFramework.Core.csproj" />
     <PackageReference Include="GodotSharp" Version="4.7.2" />
+    <PackageReference Include="Godot.SourceGenerators" Version="4.7.2" PrivateAssets="all" />
   </ItemGroup>
 </Project>

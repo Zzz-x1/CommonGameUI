@@ -4,6 +4,8 @@ Use it for windows that temporarily block background input, such as purchase con
 
 Use [Stack](stacks.md) for one current window with stepwise history. Combine one Modal shell with an internal Stack when you need both a backdrop and history, as shown below.
 
+A confirmation dialog inside the shop releases input when its panel is hidden, another page covers it, or its tab switches away. Returning to the shop restores input and focus to the same dialog. If another modal, such as a reconnect prompt, already has input, it keeps focus until it closes. Canceling a hide or switch preserves the original focus.
+
 ## Resources and backdrops
 
 Put window content in the resource. The container creates the backdrop; do not recreate it inside each window. modals is a mounted `ModalContainerNode`; `Observe` is the project's asynchronous task observer.

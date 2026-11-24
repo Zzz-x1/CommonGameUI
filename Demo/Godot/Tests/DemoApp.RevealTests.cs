@@ -22,14 +22,20 @@ public partial class DemoApp
         var shop = Shell.Pages.Children.OfType<ShopView>().Single();
         pass(SkipCinematic == null && shop.GetRoot().Position.X > 0, "inventory to shop chooses right-side slide");
         await right;
+        // The inventory is Single. Start from a fresh Shop history to exercise a forward push.
+        await Shell.Pages.PopToAsync(Shell.Home, playAnimation: false);
+        await OpenAsync("Shop");
+        shop = (ShopView)Shell.Pages.Current!;
         var left = OpenAsync("Inventory");
         await ToSignal(GetTree().CreateTimer(.1), SceneTreeTimer.SignalName.Timeout);
         var inventory = Shell.Pages.Children.OfType<InventoryView>().Last();
-        pass(SkipCinematic == null && inventory.GetRoot().Position.X < 0, "shop to inventory chooses left-side slide");
+        pass(inventory.CurrentTransitionPhase == TransitionPhase.PushEnter && SkipCinematic == null
+            && inventory.GetRoot().Position.X < 0, "shop to inventory chooses left-side slide");
         await left;
         var returning = Shell.Pages.PopAsync();
         await ToSignal(GetTree().CreateTimer(.1), SceneTreeTimer.SignalName.Timeout);
-        pass(SkipCinematic == null, "pop phase uses short return without replaying timeline");
+        pass(shop.CurrentTransitionPhase == TransitionPhase.PopEnter && SkipCinematic == null,
+            "pop returns to the original shop without replaying its timeline");
         await returning;
         await OpenAsync("Home");
         await ModalAsync(new ModalArgs("Mail", 0));

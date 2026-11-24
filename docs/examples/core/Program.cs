@@ -82,8 +82,9 @@ sealed class MemoryHost : IUIHost
 {
     public void VerifyAccess() { }
     public object? CaptureFocus() => null;
-    public void Focus(IUIElement? element) { }
-    public void RestoreFocus(object? focus) { }
+    public bool ContainsFocus(IUIElement scope, object target) => false;
+    public bool TryFocus(IUIElement? scope, object? target) => false;
+    public void ClearFocus() { }
 }
 sealed class MemoryLoader : IUIResourceLoader
 {

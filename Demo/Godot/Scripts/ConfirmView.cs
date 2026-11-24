@@ -41,6 +41,5 @@ public partial class ConfirmView : EngineUI.DialogNode<bool>
 
     private void Yes() => Complete(true);
     private void No() => Complete(false);
-    protected override void OnEntered(LifecycleContext context) => Root.GetNode<Button>("Center/Confirm").GrabFocus();
 }
 }

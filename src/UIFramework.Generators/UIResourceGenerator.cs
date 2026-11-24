@@ -70,8 +70,9 @@ public sealed class UIResourceGenerator : IIncrementalGenerator
                         {
                             var resultType = baseType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                             source.Append("public static global::System.Threading.Tasks.Task<").Append(resultType).Append("> Show")
-                                .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
-                                .Append(type).Append(", ").Append(resultType).Append(">(null, playAnimation, cancellationToken);\n");
+                                .Append(suffix).Append("Async(this global::UIFramework.ModalContainerNode container, ").Append(argumentDeclaration)
+                                .Append("bool playAnimation = true, global::System.Threading.CancellationToken cancellationToken = default) => container.ShowDialogAsync<")
+                                .Append(type).Append(", ").Append(resultType).Append(">(").Append(argumentCall).Append(", playAnimation, cancellationToken);\n");
                         }
                 }
                 source.Append("}\n");

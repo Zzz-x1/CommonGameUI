@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import assert from 'node:assert/strict'
 const { chromium } = createRequire(new URL('../docs/site/package.json', import.meta.url))('playwright')
-const browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] })
+const browser = await chromium.launch({ headless: true, executablePath: process.env.DOCS_BROWSER_PATH, args: ['--enable-unsafe-swiftshader'] })
 try {
   const page = await browser.newPage()
   const errors = []

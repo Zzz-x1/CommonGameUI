@@ -25,6 +25,12 @@ async Task BackAsync()
 // Call only after the project verifies that the current layer is interactive.
 ```
 
+## Preferred focus and returning to a page
+
+Drag a uGUI Selectable (Unity) or Control (Godot) into **Preferred Focus** on the window's root script. For a dynamic choice, override `GetPreferredFocus()` on the native node. The selected control must belong to the page.
+
+When a Stack page takes focus for the first time, it selects its preferred control. Returning from equipment details first tries the original inventory row. If the row was removed or disabled, focus moves to the preferred control, then to the first usable control on the page. A cached window starts a new focus history on reopening. A modal has priority, and displaying a HUD preserves focus elsewhere. A tab switch transfers focus when it was inside the outgoing content and preserves it on the category button otherwise.
+
 ## Key points
 
 - Submit only when the current layer is interactive; wait during initialization/transitions.

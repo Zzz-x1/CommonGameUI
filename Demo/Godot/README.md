@@ -56,6 +56,8 @@ Godot 4.7.2 .NET / .NET 10 的纯 UI 客户端，包含本地业务与存档。
 
 背包和商店在窗口入场前自动等待初始异步条目与布局完成；显示后的筛选、分类数据刷新继续增量更新。
 
+在背包反复切换排序和筛选，再点击移动后的物品。列表按物品 ID 应用快照；保留项使用原来的控件，详情仍显示该物品。
+
 ## 代码与资源
 
 - Scenes/Client：界面与内嵌页面；Themes/Client.tres：样式。
@@ -80,7 +82,7 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 
 生命周期：客户端 Context 绑定主场景节点；绑定与清理回归位于 Tests/DemoApp.LifetimeTests.cs。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
 
-仅运行生命周期回归：`./scripts/Run-Demo.ps1 -LifetimeTest -Headless`（独立测试档案）。
+在仓库根目录运行 `./scripts/Run-Demo.ps1 -LifetimeTest -Headless`，使用独立档案验证生命周期。背包用例会打开材料详情，将详情绑定到被查看的 Godot 节点，再销毁该节点。测试检查是否回到原背包、保留材料分类与条目，以及条目能否重新获得键盘焦点。
 
 ## MVVM 示例
 
@@ -88,11 +90,17 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 
 大厅金币使用 Shared Asset 克隆；设置和装备详情使用节点独立实例；背包使用 ObservableCollection 与条目场景，筛选／排序由项目 VM 维护。购买确认由单个命令提交业务、等待关闭自身确认窗口，再展示奖励；VM 在命令完成后释放。编辑器底部 View Bindings 可编辑条目绑定，原始玩家模板位于 Assets/Mvvm。
 
+在设置窗口拖动音量滑杆时，`volumeSlider.Bindable().Value` 将输入写回 `Settings.Volume`。在 View Bindings 选择同一个滑杆的 `Value` 和 `TwoWay` 即可配置相同的行为。代码补全依照控件的声明类型显示成员，例如 `HSlider` 可选 `Value`，`Label` 可选 `Text`，按钮命令使用 `button.Bindable().Click`。
+
 [模块入门与 GUI](../../docs/site/manual/mvvm.md)。
 
 角色培养：进入角色详情并点击培养，先保存等级和属性，再暂停 Hero.Power 绑定播放战力／攻击数值增长，动画完成后显式 ResumeBinding 同步最新值。简化演出使用较短计数动画。
 
 商店条目由异步资源工厂创建，借用共享金币与商店来源，点击时读取商品 ID 作为命令参数。金币不足时卡片变暗，仍可进入详情查看。列表移动／删除保持或释放对应实例。
+
+打开商店并选择商品，在数量框调整数量。`BindTwoWay<int>` 立即写入 `Order.Quantity`。报价默认使用 `EndOfFrame`，同一帧的数量和余额变化只计算一次。数量框回显和确认按钮显式使用 `Immediate`，金币不足时立刻禁用确认。余额足够时点击「确认订单」，下一层使用刚刚提交的数量。
+
+在编辑器的 **View Bindings** 中选择 OneWay 或 TwoWay 属性行，可用「刷新时机」设置相同的策略。首次显示和动画结束后调用 `ResumeBinding` 都立即读取当前值。
 
 ## 关闭后缓存
 

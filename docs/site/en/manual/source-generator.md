@@ -52,4 +52,6 @@ Task<InventoryView> OpenInventoryViewAsync(this PanelContainerNode container, bo
 Task<InventoryView> OpenInventoryViewAsync(this ModalContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
 
+For a purchase dialog implementing both `IParameterizedNode<int>` and `IDialogNode<bool>`, `bool confirmed = await dialogs.ShowPurchaseViewAsync(productId);` passes the product ID to the dialog and waits for its answer.
+
 [Node parameters](nodes-and-parameters.md) · [API](../api/core.md)

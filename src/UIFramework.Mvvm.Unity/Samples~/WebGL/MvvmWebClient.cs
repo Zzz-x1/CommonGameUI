@@ -13,6 +13,7 @@ using UIFramework.Unity;
 using UIFramework.Mvvm;
 using UIFramework.Mvvm.Unity;
 
+[assembly: GlobalViewModelProviderAttribute(typeof(MvvmWebSample.SampleGlobals))]
 [assembly: BindingTargetProvider(typeof(MvvmWebSample.SampleTargets))]
 
 namespace MvvmWebSample
@@ -33,7 +34,13 @@ namespace MvvmWebSample
     }
     public sealed class PlayerAsset : GlobalViewModel
     { [SerializeField] private int gold; [FieldNotify] public int Gold { get => gold; set => gold = value; } }
-    public static class TextConversions { [Converter] public static string Gold(int value) => "Gold " + value; }
+    public sealed class SampleGlobals : IGlobalViewModelProvider
+    {
+        public static PlayerAsset Template;
+        private readonly GlobalViewModelProvider _provider = new GlobalViewModelProvider(new[] { Template });
+        public System.Collections.Generic.IReadOnlyDictionary<string, object> ViewModels => _provider.ViewModels;
+        public IViewModelAssets Assets => _provider.Assets;
+    }
     public sealed class SamplePresentation { public float Delay; public bool Visible; public int Count; public Vector2 Request; }
     public sealed class SampleTargets : IBindingTargetProvider
     {
@@ -75,32 +82,40 @@ namespace MvvmWebSample
         private void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); _checks++; Debug.Log("MVVM CHECK " + _checks + ": " + message); }
         private async Task Run()
         {
+            var asset = ScriptableObject.CreateInstance<PlayerAsset>();
+            asset.name = "SharedPlayer"; asset.Gold = 42; SampleGlobals.Template = asset;
             var canvas = new GameObject("Canvas", typeof(Canvas)); canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var events = new GameObject("Events", typeof(EventSystem)); var views = new Views(); var ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>(), views); views.Host = (EngineUI.UIHost)ui.Host;
             var runtime = ui.GetMvvm(); var node = new UINode(); await node.AttachAsync(ui.Root, "Bindings");
             var vm = node.CreateViewModel<PlayerVm>("Player"); vm.Gold = 100; var label = new GameObject("Gold", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); label.transform.SetParent(canvas.transform);
-            node.Bind("Player.Gold", BindingTargets.Property(label, "text"), new BindingOptions { Convert = Converters.Find("MvvmWebSample.TextConversions.Gold") });
-            Check(label.text == "Gold 100", "Woven getter/converter"); vm.Gold = 80; Check(label.text == "Gold 80", "Notification");
-            var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)).GetComponent<Button>(); node.BindCommand("Player.Buy", button.ClickTarget()); button.onClick.Invoke(); Check(vm.Gold == 70, "Command dispatch"); vm.Gold = 0; Check(!button.interactable, "Computed CanExecute");
+            node.Bind("Player.Gold", label.Bindable().Text, new BindingOptions { Convert = Converters.Find("MvvmWebSample.TextConversions.Gold") });
+            Check(label.text == "Gold 100", "Woven getter/converter");
+            var host = (EngineUI.UIHost)ui.Host;
+            await host.NextFrameAsync();
+            vm.Gold = 79; vm.Gold = 80;
+            await host.NextFrameAsync();
+            Check(label.text == "Gold 80", "End-of-frame notification");
+            var button = new GameObject("Buy", typeof(RectTransform), typeof(Button)).GetComponent<Button>(); node.BindCommand("Player.Buy", button.Bindable().Click); button.onClick.Invoke(); Check(vm.Gold == 70, "Command dispatch"); vm.Gold = 0; Check(!button.interactable, "Computed CanExecute");
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)).GetComponent<Slider>(); slider.maxValue = 100;
-            node.Bind("Player.Gold", slider.ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") }); slider.value = 25; Check(vm.Gold == 25, "Two-way write");
+            node.Bind("Player.Gold", slider.Bindable().Value, new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") }); slider.value = 25; Check(vm.Gold == 25, "Two-way write");
+            await host.NextFrameAsync();
             node.PauseBinding(nameof(PlayerVm.Gold)); vm.Gold = 55; slider.value = 8;
             Check(vm.Gold == 55 && label.text == "Gold 25", "Paused property group blocks both directions");
             node.ResumeBinding("Player.Gold"); Check(label.text == "Gold 55" && slider.value == 55, "Resume latest VM value");
             var nested = new GameObject("Selected", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); vm.Selected = new PlayerVm { Gold = 3 };
-            node.Bind("Player.Selected.Gold", BindingTargets.Property(nested, "text"), new BindingOptions { Convert = Converters.Find("FormatNumber"), HasNullValue = true, NullValue = "none" }); vm.Selected = new PlayerVm { Gold = 7 }; Check(nested.text == "7", "Nested replacement"); vm.Selected = null; Check(nested.text == "none", "Null presentation");
-            var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.name = "SharedPlayer"; asset.Gold = 42; runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { asset })); var clone = runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer"); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer")), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
+            node.Bind("Player.Selected.Gold", nested.Bindable().Text, new BindingOptions { UpdateTiming = BindingUpdateTiming.Immediate, Convert = Converters.Find("FormatNumber"), HasNullValue = true, NullValue = "none" }); vm.Selected = new PlayerVm { Gold = 7 }; Check(nested.text == "7", "Nested replacement"); vm.Selected = null; Check(nested.text == "none", "Null presentation");
+            var clone = runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer"); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer")), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
             var described = ((IMvvmObject)(object)vm).Describe(); Check(Array.Exists(described, p => p.Name == "Gold" && p.Observable), "Generated metadata");
             await ((IMvvmObject)(object)vm).Execute("Wait", null, default); Check(true, "Async command");
             var presentation = new SamplePresentation();
             var definitions = BindingTargetRegistry.Members(typeof(SamplePresentation));
             Check(definitions.Count == 4, "Preserved custom target provider");
             using (var target = BindingTargetRegistry.Find(typeof(SamplePresentation), "Request").CreateTarget(presentation)) { target.Write(new Vector2(3, 4)); Check(presentation.Request == new Vector2(3, 4), "Strong typed struct target"); }
-            using (var enabled = BindingTargets.Property(label, "enabled")) { enabled.Write(false); Check(!label.enabled, "Inherited Behaviour enabled target"); enabled.Write(true); }
+            using (var enabled = label.Bindable().Enabled) { enabled.Write(false); Check(!label.enabled, "Inherited Behaviour enabled target"); enabled.Write(true); }
             var spend = new GameObject("Spend", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
-            node.BindCommand("Player.Spend", spend.ClickTarget(), new CommandBindingOptions { Mode = CommandParameterMode.Constant, ConstantText = "5" }); vm.Gold = 40; spend.onClick.Invoke(); Check(vm.Gold == 35, "Configured constant command parameter");
+            node.BindCommand("Player.Spend", spend.Bindable().Click, new CommandBindingOptions { Mode = CommandParameterMode.Constant, ConstantText = "5" }); vm.Gold = 40; spend.onClick.Invoke(); Check(vm.Gold == 35, "Configured constant command parameter");
             var dynamicSpend = new GameObject("DynamicSpend", typeof(RectTransform), typeof(Button)).GetComponent<Button>(); vm.Selected = new PlayerVm { Gold = 2 };
-            node.BindCommand("Player.Spend", dynamicSpend.ClickTarget(), new CommandBindingOptions { ParameterPath = "Player.Selected.Gold" }); vm.Selected = new PlayerVm { Gold = 3 }; dynamicSpend.onClick.Invoke(); Check(vm.Gold == 32, "Latest nested command parameter");
+            node.BindCommand("Player.Spend", dynamicSpend.Bindable().Click, new CommandBindingOptions { ParameterPath = "Player.Selected.Gold" }); vm.Selected = new PlayerVm { Gold = 3 }; dynamicSpend.onClick.Invoke(); Check(vm.Gold == 32, "Latest nested command parameter");
             var listMount = new GameObject("List", typeof(RectTransform)); listMount.transform.SetParent(canvas.transform);
             var itemTemplate = new GameObject("Item", typeof(RectTransform), typeof(Text), typeof(MvvmBindings)); itemTemplate.SetActive(false);
             itemTemplate.GetComponent<MvvmBindings>().Bindings.Add(new ViewBindingData { Target = itemTemplate.GetComponent<Text>(), Source = "Item.Gold", Converter = "FormatNumber" });
@@ -121,7 +136,7 @@ namespace MvvmWebSample
                 await Task.Yield(); Check(closing.Disposals == 0, "VM retained through command continuation");
             };
             var closeButton = new GameObject("Close", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
-            window.BindCommand("Dialog.Close", closeButton.ClickTarget()); closeButton.onClick.Invoke();
+            window.BindCommand("Dialog.Close", closeButton.Bindable().Click); closeButton.onClick.Invoke();
             await runtime.WhenIdleAsync(); Check(closing.Disposals == 1, "Deferred VM release observed");
             await ui.DisposeAsync(); UnityEngine.Object.Destroy(asset); Check(runtime.IsDisposed, "Cleanup");
         }

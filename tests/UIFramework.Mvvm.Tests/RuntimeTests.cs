@@ -37,7 +37,13 @@ public class ClosingVm : IDisposable, IAsyncDisposable
 public class RuntimeTests
 {
     private sealed class Host : IUIHost
-    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? e) { } public void RestoreFocus(object? e) { } }
+    {
+        public void VerifyAccess() { }
+        public object? CaptureFocus() => null;
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
+    }
     private sealed class Loader : IUIResourceLoader
     { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
     private sealed class Log : IUILog
@@ -159,7 +165,8 @@ public class RuntimeTests
         Assert.Same(runtime.GetGlobalViewModel<OwnedVm>("Player"), node.Model);
         var displayed = 0;
         node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
-        Assert.Equal(42, displayed); node.Model.Gold = 60; Assert.Equal(60, displayed);
+        Assert.Equal(42, displayed); node.Model.Gold = 60;
+        runtime.FlushBindings(); Assert.Equal(60, displayed);
         var items = new ListTarget(); node.BindCollection("Player.Items", items);
         node.Model.Items.Add(new OwnedVm()); Assert.Single(items.Items);
         await node.DisposeAsync(); Assert.Equal(0, node.Model.Disposals);
@@ -174,8 +181,10 @@ public class RuntimeTests
         var shared = node.GetViewModel<OwnedVm>("Player"); var displayed = 0;
         node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
         var local = new OwnedVm { Gold = 20 }; node.SetViewModel("Player", local);
-        Assert.Same(local, node.GetViewModel<OwnedVm>("Player")); Assert.Equal(20, displayed);
-        shared.Gold = 99; Assert.Equal(20, displayed); local.Gold = 30; Assert.Equal(30, displayed);
+        Assert.Same(local, node.GetViewModel<OwnedVm>("Player"));
+        runtime.FlushBindings(); Assert.Equal(20, displayed);
+        shared.Gold = 99; runtime.FlushBindings(); Assert.Equal(20, displayed);
+        local.Gold = 30; runtime.FlushBindings(); Assert.Equal(30, displayed);
         await node.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(0, shared.Disposals);
         await ui.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(1, shared.Disposals);
     }
@@ -238,12 +247,128 @@ public class RuntimeTests
         var old = vm.Items; vm.Items = new(); old.Add(new()); Assert.Empty(target.Items); vm.Items.Add(b); vm.Items[0] = a; Assert.Same(a, Assert.Single(target.Items)); vm.Items.Clear(); Assert.Empty(target.Items);
         binding.Dispose(); await node.DisposeAsync(); Assert.Equal(1, target.Disposals);
     }
+    [Fact] public async Task CompletedWorkDoesNotAccumulateOnALiveNode()
+    {
+        await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime);
+        var node = await Node(ui, "Persistent"); var vm = node.CreateViewModel<ClosingVm>("Dialog");
+        vm.Action = _ => Task.CompletedTask;
+        var click = new Click(); node.BindCommand("Dialog.Close", click);
+        for (var i = 0; i < 100; i++) { click.Press(); node.ObserveMvvmTask(Task.CompletedTask); }
+        runtime.ObserveTasks();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var scopes = (System.Collections.IList)typeof(MvvmRuntime).GetField("_scopes", flags)!.GetValue(runtime)!;
+        var scope = scopes.Cast<object>().Single(value => ReferenceEquals(value.GetType().GetProperty("Node", flags)!.GetValue(value), node));
+        foreach (var owner in new[] { (object)runtime, scope })
+            foreach (var field in new[] { "_commands", "_tasks" })
+                Assert.Empty((System.Collections.IEnumerable)owner.GetType().GetField(field, flags)!.GetValue(owner)!);
+        Assert.Equal(0, vm.Disposals);
+    }
+
     [Fact] public async Task SharedCommandDisablesAllButtonsUntilCompletion()
     {
         await using var runtime = new MvvmRuntime(); await using var ui = Context(runtime); var a = await Node(ui, "A"); var b = await Node(ui, "B"); var vm = new OwnedVm(); a.SetViewModel("Player", vm); b.SetViewModel("Player", vm);
         var first = new Click(); var second = new Click(); a.BindCommand("Player.Wait", first); b.BindCommand("Player.Wait", second); first.Press(); await vm.Started.Task;
         Assert.False(first.Enabled); Assert.False(second.Enabled); vm.Finish.SetResult(); await Task.Yield(); runtime.ObserveTasks(); Assert.True(first.Enabled); Assert.True(second.Enabled);
     }
+    [Theory]
+    [InlineData("idle")]
+    [InlineData("node")]
+    [InlineData("context")]
+    public async Task ParallelFailuresKeepAllOriginalErrorsAcrossObservationAndCleanup(string wait)
+    {
+        var runtime = new MvvmRuntime();
+        var ui = Context(runtime);
+        var node = await Node(ui, "Shop");
+        var cancellation = new CancellationToken(canceled: true);
+        var first = new IOException("prices");
+        var second = new IOException("images");
+        var third = new IOException("rows");
+        var late = new TaskCompletionSource();
+        var prices = Task.FromException(first);
+        var imagesAndRows = Task.WhenAll(Task.FromException(second), Task.FromException(third));
+        node.ObserveMvvmTask(Task.FromCanceled(cancellation));
+        node.ObserveMvvmTask(prices);
+        node.ObserveMvvmTask(prices);
+        node.ObserveMvvmTask(imagesAndRows);
+        node.ObserveMvvmTask(late.Task);
+
+        var waiting = wait switch
+        {
+            "node" => node.DisposeAsync().AsTask(),
+            "context" => ui.DisposeAsync().AsTask(),
+            _ => ui.WhenMvvmIdleAsync()
+        };
+        Assert.False(waiting.IsCompleted);
+        late.SetResult();
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => waiting));
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
+        Assert.Collection(UIFailure.GetSecondaryExceptions(first),
+            error => Assert.Same(second, error),
+            error => Assert.Same(third, error),
+            error => Assert.Equal(cancellation, Assert.IsAssignableFrom<OperationCanceledException>(error).CancellationToken));
+    }
+
+    [Fact]
+    public async Task ContextShutdownIncludesFailuresFromEachNodeAndTheRuntimeOnlyOnce()
+    {
+        var ui = Context(new MvvmRuntime());
+        var shop = await Node(ui, "Shop");
+        var bag = await Node(ui, "Bag");
+        var failures = new[] { new IOException("prices"), new IOException("offers"), new IOException("items"), new IOException("icons") };
+        shop.ObserveMvvmTask(Task.FromException(failures[0]));
+        shop.ObserveMvvmTask(Task.FromException(failures[1]));
+        bag.ObserveMvvmTask(Task.FromException(failures[2]));
+        bag.ObserveMvvmTask(Task.FromException(failures[3]));
+        var primary = await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask());
+        var others = UIFailure.GetSecondaryExceptions(primary);
+        Assert.Contains(primary, failures);
+        Assert.Equal(3, others.Count);
+        Assert.All(failures.Where(error => !ReferenceEquals(error, primary)), error => Assert.Contains(error, others));
+    }
+
+    [Fact]
+    public async Task RepeatedObservationOfCancelledTaskPreservesCancellation()
+    {
+        var runtime = new MvvmRuntime();
+        var token = new CancellationToken(canceled: true);
+        var canceled = Task.FromCanceled(token);
+        runtime.Observe(canceled);
+        runtime.Observe(canceled);
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(runtime.WhenIdleAsync);
+        Assert.Equal(token, error.CancellationToken);
+        Assert.Same(error, await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()));
+        Assert.Empty(UIFailure.GetSecondaryExceptions(error));
+    }
+
+    [Fact]
+    public async Task CommandReturningWhenAllRetainsAllBusinessFailures()
+    {
+        var runtime = new MvvmRuntime();
+        var ui = Context(runtime);
+        var node = await Node(ui, "Shop");
+        var first = new IOException("order");
+        var second = new IOException("receipt");
+        node.SetViewModel("Cart", new ClosingVm { Action = _ => Task.WhenAll(Task.FromException(first), Task.FromException(second)) });
+        var button = new Click();
+        node.BindCommand("Cart.Close", button);
+        button.Press();
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(runtime.WhenIdleAsync));
+        Assert.Same(second, Assert.Single(UIFailure.GetSecondaryExceptions(first)));
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
+    }
+
+    [Fact]
+    public async Task FrameObserverPreservesEveryFaultFromAnObservedWhenAll()
+    {
+        await using var runtime = new MvvmRuntime();
+        var first = new IOException("primary");
+        var second = new IOException("secondary");
+        runtime.Observe(Task.WhenAll(Task.FromException(first), Task.FromException(second)));
+        Assert.Same(first, Assert.Throws<IOException>(runtime.ObserveTasks));
+        Assert.Same(second, Assert.Single(UIFailure.GetSecondaryExceptions(first)));
+        runtime.ObserveTasks();
+    }
+
     [Fact] public async Task AsyncFailureKeepsIdentityInObserverAndCleanup()
     {
         var log = new Log(); var runtime = new MvvmRuntime(log); var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); node.SetViewModel("Player", vm); var button = new Click(); node.BindCommand("Player.Fail", button); button.Press();

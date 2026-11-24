@@ -30,8 +30,9 @@ public interface IUIHost
 {
     void VerifyAccess();
     object? CaptureFocus();
-    void Focus(IUIElement? element);
-    void RestoreFocus(object? focus);
+    bool ContainsFocus(IUIElement scope, object target);
+    bool TryFocus(IUIElement? scope, object? target);
+    void ClearFocus();
 }
 public interface IUILog
 {
@@ -52,6 +53,18 @@ await ui.DisposeAsync();
 ```
 
 host、loader、logger、mountElement 是项目实现。
+
+## 驱动可选的 MVVM 模块
+
+宿主接入 MVVM 时，在游戏逻辑更新后、UI 布局前提供一个固定提交点。下面的 `BeforeUILayout` 是示例引擎的主线程事件，暂停菜单打开时也应触发。为该引擎循环注册一次驱动。
+
+```csharp
+var frames = new MvvmFrameDriver();
+MvvmModule.RegisterAdapter(typeof(GameUIHost), assets, findBindings, frames.Attach);
+gameLoop.BeforeUILayout += frames.Tick;
+```
+
+`Attach` 会对共享 Runtime 去重。每次 `Tick` 刷新排队的属性绑定并观察异步错误。Unity 和 Godot 适配器自动完成此接入。[MVVM API](../api/mvvm.md)
 
 ## 必须保证
 

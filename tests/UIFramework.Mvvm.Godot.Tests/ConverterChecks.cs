@@ -15,6 +15,19 @@ public partial class ConverterChecks : Node
         var view = new MvvmBindings { Name = "MvvmBindings" }; root.AddChild(view); view.Owner = root;
         using var template = new ConverterVm();
         Check(ResourceSaver.Save(template, "res://Player.tres") == Error.Ok, "VM asset save");
+        await using (var context = UIFramework.Godot.UI.Create(root))
+        {
+            var control = new TargetPresentation();
+            root.AddChild(control);
+            var target = BindingTargetRegistry.Find(typeof(TargetPresentation), "Delay").CreateTarget(control);
+            var rowNode = new UIFramework.UINode();
+            await rowNode.AttachAsync(context.Root, "Offer");
+            rowNode.Bind("Shop.Gold", target, new BindingOptions { Convert = Converters.Find("NativeMvvm.Tests.ShopConverters.Price") });
+            Check(control.Delay == 20, "first binding resolves custom global, target and converter");
+            await using var second = UIFramework.Godot.UI.Create(root);
+            Check(!ReferenceEquals(context.GetMvvm().GetGlobalViewModel<ConverterVm>("Shop"),
+                second.GetMvvm().GetGlobalViewModel<ConverterVm>("Shop")), "global clones belong to their own context");
+        }
         view.ViewModels.Add(new ViewModelSourceResource { Name = "Player", Template = template });
         view.AddBinding(label, new ViewBindingResource { Member = "Text", Source = "Player.Gold", Converter = "FormatNumber", ConverterInput = ConverterInput.Constant, ConverterConstant = "125" });
         await using (var preview = new BindingPreview(view)) Check(label.Text == "125", "constant preview");
@@ -51,12 +64,28 @@ public partial class ConverterChecks : Node
         await using (var preview = new BindingPreview(view))
         { Check(presentation.Delay == 10, "custom target preview"); Check(items.GetChildCount() == 1 && items.GetChild<Label>(0).Text == "10", "mapped item preview"); buy.EmitSignal(BaseButton.SignalName.Pressed); Check(template.Gold == 10, "preview executed parameter command"); }
         Check(presentation.Delay == 7 && items.GetChildCount() == 0, "custom target / list preview restore");
+        while (template.Items.Count < 30) template.Items.Add(template);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await using (var preview = new BindingPreview(view))
+        {
+            clock.Stop();
+            Check(items.GetChildCount() == 30, "30 preview rows created");
+            foreach (var product in items.GetChildren().Cast<Label>())
+                Check(product.Text == "10", "each row resolves its own target");
+        }
+        Check(items.GetChildCount() == 0, "30 preview rows released");
+        var invalid = view.Bindings.Single(b => b.Kind == ViewBindingKind.Command);
+        invalid.ParameterConstant = "bad";
+        try { await using (new BindingPreview(view)) { } throw new InvalidOperationException("invalid preview command accepted"); }
+        catch (FormatException) { }
+        Check(presentation.Delay == 7 && items.GetChildCount() == 0, "invalid command preview did not restore the view");
+        invalid.ParameterConstant = "2";
         using var extended = new PackedScene(); Check(extended.Pack(root) == Error.Ok, "extended scene pack"); Check(ResourceSaver.Save(extended, "res://Extended.tscn") == Error.Ok, "extended scene save");
         using var savedExtended = ResourceLoader.Load<PackedScene>("res://Extended.tscn", cacheMode: ResourceLoader.CacheMode.Ignore);
         var reopened = savedExtended.Instantiate<Control>();
         var reopenedBindings = reopened.GetNode<MvvmBindings>("MvvmBindings"); Check(reopenedBindings.Bindings.Last().ItemSources.Single().ItemSource == "Player", "mapped source scene reload"); Check(reopenedBindings.Bindings.Single(b => b.Kind == ViewBindingKind.Command).ParameterConstant == "2", "command parameter scene reload"); reopened.Free(); template.Items.Clear();
         root.QueueFree(); clone.QueueFree(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        File.WriteAllText("converter-checks.txt", "Passed: asset save, constant preview, restoration, original asset, scene save/reload, cloned scene preview/restoration");
+        File.WriteAllText("converter-checks.txt", $"30 preview rows created/released, first open {clock.Elapsed.TotalMilliseconds:F2} ms. Passed: asset save, constant preview, restoration, original asset, scene save/reload, cloned scene preview/restoration");
     }
     private static void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
 }

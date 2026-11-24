@@ -62,6 +62,7 @@ same is the original inventory; details is closed. Supplying creation arguments 
 | Current | Current window; null when the stack is empty |
 | History | Instances from the earliest to the current window, including the current one |
 
+- When the top page is destroyed with its bound game object or scene, the stack reveals the previous instance and publishes changes in visibility and activation. This restoration skips return animations and the `OnEnteringAsync`/`OnEntered` pair. Use `OnActivated` for work that must run whenever a page becomes active again. Destroying a middle entry only removes that entry. Parent teardown does not reactivate pages.
 - Only the current window is visible in a stable state; transitions may show both windows. Pass `playAnimation: false` to Push/Pop when no switching animation is needed.
 - `PopAsync` can remove the last window, leaving an empty stack. Popping an empty stack succeeds. Two submitted Pop requests return two steps in order; they are not merged. Back from the first window of a modal menu usually closes the whole flow; see [Stack inside Modal](modals-and-dialogs.md#one-window-with-multiple-menu-levels-modal--stack).
 - Popped windows are destroyed by default; KeepAlive enables [closed-instance caching](resources.md#closed-instance-caching). Cached windows are not history entries.

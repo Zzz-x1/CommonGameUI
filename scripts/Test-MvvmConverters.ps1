@@ -21,6 +21,8 @@ if (Test-Path -LiteralPath $taskUnityResult) { Remove-Item -LiteralPath $taskUni
 & unity run $taskUnityProject --editor-path $UnityPath --timeout 180 --format json -- -nographics -executeMethod NativeMvvm.Tests.ConverterEditorChecks.Run -logFile (Join-Path $taskWorkspace 'artifacts/unity-converter-editor.log')
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $taskUnityResult)) { throw 'Unity converter editor checks failed.' }
 Get-Content -LiteralPath $taskUnityResult
+& $UnityPath -batchmode -nographics -projectPath $taskUnityProject -executeMethod NativeMvvm.Tests.RegistrationPlayChecks.Run -logFile (Join-Path $taskWorkspace 'artifacts/registration-play.log') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Unity registration checks with Domain Reload disabled failed.' }
 $taskGodotProject = Join-Path $taskWorkspace 'artifacts/godot-converter-tests'
 New-Item -ItemType Directory -Force $taskGodotProject | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $taskWorkspace 'tests/UIFramework.Mvvm.Godot.Tests') -Filter '*.cs' | Copy-Item -Destination $taskGodotProject

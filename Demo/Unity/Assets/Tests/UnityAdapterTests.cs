@@ -136,6 +136,75 @@ namespace StarCourt.UnityDemo.Tests
             await modals.CloseAsync(first); Assert.That(_events.GetComponent<EventSystem>().currentSelectedGameObject, Is.SameAs(original.gameObject));
             Assert.That(_mount.childCount, Is.EqualTo(0));
         }
+        [UnityTest] public IEnumerator HidingAndShowingPanelRestoresNestedModalInput() => Await(HideModalParentAsync());
+        [UnityTest] public IEnumerator StackRestoresOriginalOrPreferredFocus() => Await(StackFocusAsync());
+        [UnityTest] public IEnumerator ModalWithoutSelectableClearsAndRestoresBackgroundFocus() => Await(EmptyModalFocusAsync());
+        private async Task EmptyModalFocusAsync()
+        {
+            var pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages");
+            var modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs");
+            var events = _events.GetComponent<EventSystem>();
+            var page = await pages.PushAsync<Other>(playAnimation: false);
+            var opener = page.GetRoot().Find("Panel/Yes").gameObject;
+            events.SetSelectedGameObject(opener);
+            _ui.Register(() => new WaitingWindow(), "UI/Confirm", configure: window =>
+            {
+                foreach (var button in window.GetRoot().GetComponentsInChildren<Button>(true)) button.interactable = false;
+            });
+            var waiting = await modals.OpenAsync<WaitingWindow>(playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.Null);
+            await modals.CloseAsync(waiting, playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(opener));
+        }
+        private sealed class WaitingWindow : UINode { }
+
+        private async Task StackFocusAsync()
+        {
+            _ui.Register<ConfirmView>("UI/Confirm");
+            var pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", _mount);
+            var page = await pages.PushAsync<ConfirmView>("Choose", playAnimation: false);
+            var events = _events.GetComponent<EventSystem>();
+            var yes = page.transform.Find("Panel/Yes").GetComponent<Button>();
+            var no = page.transform.Find("Panel/No").GetComponent<Button>();
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(no.gameObject));
+            events.SetSelectedGameObject(yes.gameObject);
+            await pages.PushAsync<Other>(playAnimation: false);
+            await pages.PopAsync(playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(yes.gameObject));
+            var details = await pages.PushAsync<Other>(playAnimation: false);
+            yes.interactable = false;
+            await details.DisposeAsync();
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(no.gameObject));
+        }
+        private async Task HideModalParentAsync()
+        {
+            var panels = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", _mount);
+            var lobby = await panels.OpenAsync<Other>();
+            var shop = await panels.OpenAsync<Plain>();
+            var lobbyButton = lobby.GetRoot().GetComponentInChildren<Button>();
+            var events = _events.GetComponent<EventSystem>();
+            events.SetSelectedGameObject(lobbyButton.gameObject);
+            var dialogs = await shop.CreateContainerAsync<ModalContainerNode>("Dialogs");
+            dialogs.ConfigureBackdrop(EngineUI.Backdrops.Dim(_ => Assert.Fail("Unexpected dismissal")));
+            var confirm = await dialogs.OpenAsync<Other>(playAnimation: false);
+            var backdrop = dialogs.GetRoot().Find("ModalBackdrop").GetComponent<CanvasGroup>();
+
+            Assert.That(lobbyButton.IsInteractable(), Is.False);
+            Assert.That(events.currentSelectedGameObject.transform.IsChildOf(confirm.GetRoot()), Is.True);
+
+            await panels.HideAsync(shop);
+            Assert.That(confirm.GetRoot().gameObject.activeInHierarchy, Is.False);
+            Assert.That(backdrop.gameObject.activeInHierarchy, Is.False);
+            Assert.That(lobbyButton.IsInteractable(), Is.True);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(lobbyButton.gameObject));
+
+            await panels.ShowAsync(shop);
+            Assert.That(dialogs.Current, Is.SameAs(confirm));
+            Assert.That(confirm.GetRoot().GetComponentInChildren<Button>().IsInteractable(), Is.True);
+            Assert.That(backdrop.gameObject.activeInHierarchy && backdrop.blocksRaycasts, Is.True);
+            Assert.That(lobbyButton.IsInteractable(), Is.False);
+            Assert.That(events.currentSelectedGameObject.transform.IsChildOf(confirm.GetRoot()), Is.True);
+        }
         [UnityTest] public IEnumerator NativeTransitionCancellationAndRawFailure() => Await(TransitionBoundariesAsync());
         private async Task TransitionBoundariesAsync()
         {

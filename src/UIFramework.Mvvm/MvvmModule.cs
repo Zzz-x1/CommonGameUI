@@ -8,6 +8,11 @@ public static class MvvmModule
     private static readonly Dictionary<Type, Adapter> Adapters = new();
     internal static readonly ConditionalWeakTable<UIContext, ContextService> Contexts = new();
     private static readonly ConditionalWeakTable<MvvmRuntime, RuntimeLease> Leases = new();
+    private static readonly Dictionary<Type, Func<IGlobalViewModelProvider>> GlobalFactories = new();
+    public static void RegisterGlobalFactory(Type type, Func<IGlobalViewModelProvider> factory)
+    {
+        lock (GlobalFactories) GlobalFactories.TryAdd(type, factory);
+    }
     public static void Install()
     {
         if (_installed) return;
@@ -48,9 +53,9 @@ public static class MvvmModule
             SetRuntime(new MvvmRuntime(ui.Log));
             foreach (var provider in _adapter?.GlobalProviders?.Invoke() ?? Enumerable.Empty<IGlobalViewModelProvider>())
                 Runtime.RegisterGlobalViewModelProvider(provider);
-            foreach (var attribute in AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(assembly => assembly.GetCustomAttributes(typeof(GlobalViewModelProviderAttribute), false).Cast<GlobalViewModelProviderAttribute>()))
-                Runtime.RegisterGlobalViewModelProvider((IGlobalViewModelProvider)Activator.CreateInstance(attribute.ProviderType)!);
+            Func<IGlobalViewModelProvider>[] factories;
+            lock (GlobalFactories) factories = GlobalFactories.Values.ToArray();
+            foreach (var factory in factories) Runtime.RegisterGlobalViewModelProvider(factory());
             _nodes = new MvvmNodeExtension(Runtime, _adapter?.Configuration, _adapter?.Assets);
             ui.AddNodeExtension(_nodes);
         }
@@ -65,8 +70,7 @@ public static class MvvmModule
         }
         public async ValueTask DisposeAsync()
         {
-            Exception? first = null;
-            try { await Task.WhenAll(_retired); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+            var first = await MvvmRuntime.WaitForTasksAsync(_retired);
             try { await _lease.Release(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }

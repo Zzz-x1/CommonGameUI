@@ -16,6 +16,7 @@ T GetGlobalViewModel<T>(string name) where T : class;
 Task WhenIdleAsync();
 void Observe(Task task);
 void ObserveTasks();
+void FlushBindings();
 ValueTask DisposeAsync();
 ```
 
@@ -24,6 +25,8 @@ Factories create fresh instances with project-provided constructor dependencies.
 Engine frame observers call `ObserveTasks`, which rethrows completed failures unchanged. `WhenIdleAsync` waits for observed tasks and deferred release created while they run. Projects must also await their UI operations and finish cleanup before exiting.
 
 When a command awaits Runtime disposal, bindings end first and its VM remains alive until the command returns. External `DisposeAsync` awaits complete release; `IsDisposed` indicates that complete phase has ended.
+
+Unity and Godot advance bindings automatically. A custom host attaches each runtime to a `MvvmFrameDriver` using `Attach(runtime)` and calls `Tick()` once at its UI frame boundary. A headless test can call `runtime.FlushBindings()` to present pending properties. Delayed conversion and display errors propagate from the frame call after the remaining bindings run.
 
 ## Context and Node
 
@@ -36,10 +39,12 @@ MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
     Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
 void SetViewModel(this IUINode node, string name, object vm);
+void NotifyChanged<TVm>(this TVm vm, string propertyName) where TVm : class;
 T GetViewModel<T>(this IUINode node, string name) where T : class;
 T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
-    BindingMode mode = BindingMode.OneWay);
+    BindingMode mode = BindingMode.OneWay,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
 void PauseBinding(this IUINode node, string propertyName);
 void ResumeBinding(this IUINode node, string propertyName);
@@ -50,9 +55,47 @@ IDisposable BindCollection(this IUINode node, string path, ICollectionTarget tar
 void ObserveMvvmTask(this IUINode node, Task task);
 ```
 
-Enable MVVM before creating business nodes. `SetViewModel` borrows an object; `CreateViewModel` gives ownership to the node. Returned bindings can be detached early and are also cleaned up with the node. Hiding retains them; closing cleans them up.
+`SetViewModel` borrows an existing object. The node owns instances created by `CreateViewModel`. Call `Dispose()` on a returned binding to detach it early. Bindings survive hiding or closing into the `KeepAlive` cache and are released when the node is disposed.
 
 Paths use `Source.Member` and may traverse woven intermediate VMs. Modes are `OneTime`, `OneWay`, `OneWayToViewModel` and `TwoWay`. `BindingOptions` also provides `Convert`, `ConvertBack`, `HasNullValue` and `NullValue`.
+
+## Typed callbacks and multi-source projections
+
+```csharp
+IDisposable Bind<T>(this IUINode node, string path, Action<T> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2, TResult>(this IUINode node, string path1, string path2,
+    IBindingTarget target, Func<T1, T2, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string path2, string path3,
+    IBindingTarget target, Func<T1, T2, T3, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+```
+
+Sources must support change notification. Arguments follow path order, and the result must be assignable to the target. Pause with any participating path, then resume with that same path for a single refresh. Disposing the binding or its node releases all subscriptions. Hiding or caching the window keeps them connected.
+
+## Two-way input from custom controls
+
+```csharp
+IDisposable BindTwoWay<T>(this IUINode node, string path, Action<T> apply,
+    Func<Action<T>, Action> subscribe,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable BindTwoWay<T1, TEdit>(this IUINode node, string path, Action<T1> apply,
+    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable BindTwoWay<T1, T2, TEdit>(this IUINode node, string path1, string path2,
+    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable BindTwoWay<T1, T2, T3, TEdit>(this IUINode node, string path1, string path2, string path3,
+    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+```
+
+`apply` receives the current source values. `subscribe` connects the input handler it receives and returns an unsubscribe action. The overload with one type parameter writes edits to the current writable property. With `commit`, the project handles one `TEdit` input and the display sources can be read-only. Input is synchronous. Display uses `timing` (or `BindingOptions.UpdateTiming` on property targets). `EndOfFrame` coalesces changes; `Immediate` updates before the call returns.
 
 ## Attributes and conversions
 
@@ -77,7 +120,7 @@ Built-in names: `FormatNumber`, `PercentText`, `InvertBoolean`, `IntToFloat`, `F
 
 `Converters.Configure` is shared by GUI and preview. ViewModel input uses the binding source path; Constant input parses the literal as the function's input type. Constants support OneWay / OneTime only. `BindingOptions.HasConstantValue` / `ConstantValue` can also explicitly configure a constant without a VM source.
 
-The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `Describe` and `PropertyChanged`. `Describe` returns `MvvmMember[]` containing names, types, member kinds, notification and writable flags. Business code usually does not call these generated entry points.
+The Weaver implements `Read`, `Write`, `CanExecute`, `Execute`, `Describe`, `NotifyChanged` and `PropertyChanged` on `IMvvmObject`. Handwritten implementations must also implement `void NotifyChanged(string propertyName)`. Recompile assemblies containing VMs with the matching Weaver after upgrading.
 
 ## Engine integration
 
@@ -85,21 +128,44 @@ The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `
 |---|---|---|
 | Enable configuration and observer | Automatic | Automatic |
 | Shared asset | `ui.GetSharedViewModel(resource)` | `ui.GetGlobalViewModel<PlayerVm>("Player")` |
-| Text | Label / LineEdit `.TextTarget()` | Text / TMP / InputField `.TextTarget()` |
-| Slider | Range `.ValueTarget()` | Slider `.ValueTarget()` |
-| Toggle | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
-| Command | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
+| Text | Label / LineEdit `.Bindable().Text` | Text / TMP / InputField `.Bindable().Text` |
+| Slider | Range `.Bindable().Value` | Slider `.Bindable().Value` |
+| Toggle | BaseButton `.Bindable().ButtonPressed` | Toggle `.Bindable().IsOn` |
+| Command | BaseButton `.Bindable().Click` | Button `.Bindable().Click` |
 | Collection | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
+
+Import `UIFramework.Mvvm.Godot` for Godot or `UIFramework.Mvvm.Unity` for uGUI. For `TMP_Text` and `TMP_InputField`, import `UIFramework.Mvvm.Unity.TMP` and reference `Unity.TextMeshPro` from your asmdef. Declared properties return `IBindingTarget` and commands return `ICommandTarget`. Unity's `.Bindable().Text`, `.Value` and `.IsOn` use the serialized keys `text`, `value` and `isOn`. Godot keeps `Text`, `Value` and `ButtonPressed`. Both adapters offer `BindingTargets.Property(control, member)` for member names resolved at runtime. The optional `mode` argument defaults to `BindingMode.OneWay`.
 
 Godot `MvvmBindings` stores named sources and bindings; Unity stores only binding rows. Godot uses `ViewModelSourceResource` / `ViewBindingResource`; Unity uses `ViewBindingData` with source strings. Binding kinds are Property, Command and Collection.
 
 Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTarget`, `ICollectionTarget`, or use `BindingValueTarget<T>`. Targets handle native control access and events; the module handles subscriptions, paths, conversions, ownership and tasks.
 
-`ViewBindingData` / `ViewBindingResource.GetOptions(bool preview = false)` validates conversion settings; preview only updates displays. Unity sources use `ViewBindingData.Source`, resolving local sources first and then provider names; Godot uses `ViewModelSourceResource.Template`, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
+`ViewBindingData.Rule` (Unity) and `ViewBindingResource.Rule` (Godot) expose the saved row as a `BindingRule`. Adapters implement `IViewBindingSlots` to supply the target control and collection factory for each instance. `ViewBindingPlans.Apply(UINode, IViewBindingSlots, ...)` connects the rows. Preview uses the same rules and validates commands without executing them. Unity sources use `ViewBindingData.Source`, resolving local sources first and then provider names; Godot uses `ViewModelSourceResource.Template`, without type names. Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` adds the reference and configuration together; `GetTarget(ViewBindingResource binding)` returns the native control. GUI edits maintain matching `Targets` and `Bindings` rows.
 
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 
+## Keyed collection snapshots
+
+```csharp
+void ApplySnapshot<TRow, TData, TKey>(
+    this ObservableCollection<TRow> rows, IReadOnlyList<TData> snapshot,
+    Func<TRow, TKey> rowKey, Func<TData, TKey> dataKey,
+    Func<TData, TRow> create, Action<TRow, TData> update)
+    where TRow : class where TKey : notnull;
+```
+
+Call `UIFramework.Mvvm.CollectionSnapshotExtensions.ApplySnapshot` on the UI thread. Keys in each input must be unique and non-null. Both inputs are validated before mutation. `create` returns a row with the requested key. `update` preserves the key. Callbacks must not reenter the collection. Callback or observer failures propagate with previously notified changes intact. The collection owner manages VM disposal.
+
 ## Extensible targets and collection creation
+
+Apply these attributes from `UIFramework.Mvvm` to a separate declaration class. The property member name is also the GUI key. See [Declare control bindings](../manual/mvvm.md#declare-control-bindings).
+
+| Attribute | Generated API |
+|---|---|
+| `[ControlAdapter(typeof(TControl))]` | The primary adapter, `control.Bindable()` and typed properties. Includes members of adapted base classes |
+| `[ExtendControlAdapter(typeof(TControl))]` | Extension methods on an existing adapter. Import the declaration namespace to use them |
+| `[BindProperty(member, Read = ..., Write = ..., Changed = ...)]` | Reads and writes the named native property by default. Supports explicit accessors and a native change event. An observable property supports input |
+| `[BindCommand(member, Factory = nameof(CreateClick))]` | A factory receives the control and returns an `ICommandTarget` for `BindCommand` |
 
 ```csharp
 BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
@@ -107,6 +173,7 @@ BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
     Func<TTarget, Action, Action>? subscribe = null) where TTarget : class;
 IReadOnlyList<BindingTargetDefinition> BindingTargetRegistry.Members(Type targetType);
 BindingTargetDefinition BindingTargetRegistry.Find(Type targetType, string member);
+bool BindingTargetDefinition.Supports(BindingMode mode);
 IBindingTarget BindingTargetDefinition.CreateTarget(object target,
     BindingMode mode = BindingMode.OneWay);
 IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,
@@ -119,7 +186,9 @@ Task<IUINode> CollectionItemContext.LoadAsync(string resource,
 
 `BindingTargetDefinition` exposes TargetType, Member, ValueType and Observable. Providers implement `GetTargets()` and are declared with the assembly attribute `BindingTargetProvider`. Subscribe returns a disconnect action. `CommandBindingOptions` exposes Mode (None/Constant/SourcePath), ConstantValue, ConstantText and ParameterPath; assigning ParameterPath selects SourcePath. `MvvmMember.ParameterType` is null for commands without a business argument.
 
-Both engine CollectionTarget constructors add optional preview, factory and sources arguments. `CollectionItemContext.CreateAsync` is an engine extension accepting GameObject or PackedScene, the configure callback and token. Factory returns the node created by that context. Built-in targets implement IAsyncDisposable; custom ICollectionTarget implementations may do so for awaited cleanup. `Changed` signals layout changes.
+Both engine CollectionTarget constructors accept optional preview, factory and sources arguments. `CollectionItemContext.CreateAsync` is an engine extension accepting GameObject or PackedScene, the configure callback and token. Return the node created by that context. Built-in targets implement IAsyncDisposable. Custom ICollectionTarget implementations can also implement it for awaited cleanup.
+
+When a shop row finishes loading, the target inserts it at its position in the collection. Moving a row repositions that row alone. Removing a row preserves the order of the remaining rows. Subscribe to `Changed` to update layout. Clearing a nonempty list raises the event once.
 
 Built-in targets and `CollectionTargetBase` include item creation and removal cleanup in the owning node's initialization wait, including nested collections. Changes after the node is ready remain incremental updates. Implement `ICollectionTarget` for synchronous targets; derive asynchronous targets from `CollectionTargetBase` for preparation, cancellation and release. `ObserveMvvmTask` observes tasks rather than acting as an initialization barrier.
 
@@ -145,7 +214,7 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 }
 ```
 
-Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
+Unity automatically registers its default Provider. Custom providers require an assembly attribute and a public parameterless constructor. The weaver generates a factory that calls the constructor directly, and the Unity startup entry survives IL2CPP stripping. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
 
 
 ## Unity global SO VMs

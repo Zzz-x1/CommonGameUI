@@ -4,6 +4,7 @@ using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
@@ -46,6 +47,39 @@ namespace StarCourt.UnityDemo.Tests
     }
     public sealed class MvvmNativeTests
     {
+        [Test]
+        public void SliderBindableIncludesInheritedAndProjectMembers()
+        {
+            var owner = new GameObject("Price slider", typeof(RectTransform), typeof(Slider));
+            try
+            {
+                var slider = owner.GetComponent<Slider>();
+                var targets = slider.Bindable();
+                var registered = BindingTargetRegistry.Members(typeof(Slider));
+                CollectionAssert.IsSubsetOf(new[] { "activeSelf", "enabled", "interactable", "value", "minValue" },
+                    registered.Select(definition => definition.Member));
+                using var minimum = targets.MinValue();
+                using var value = targets.Value;
+                using var interactable = targets.Interactable;
+                minimum.Write(-2f);
+                Assert.That(slider.minValue, Is.EqualTo(-2f));
+                interactable.Write(false);
+                Assert.That(slider.interactable, Is.False);
+
+                int changes = 0;
+                value.Changed += () => changes++;
+                value.Write(.5f);
+                Assert.That(slider.value, Is.EqualTo(.5f));
+                Assert.That(changes, Is.Zero);
+                slider.value = .75f;
+                Assert.That(changes, Is.EqualTo(1));
+                value.Dispose();
+                slider.value = 1f;
+                Assert.That(changes, Is.EqualTo(1));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(owner); }
+        }
+
         [UnityTest] public IEnumerator GlobalOwnershipAndLifecycle() => Wait(GlobalRulesRun());
         private static async Task GlobalRulesRun()
         {
@@ -155,7 +189,19 @@ namespace StarCourt.UnityDemo.Tests
             owner.BindCollection("Player.Items", target); var first = new ClientInventoryItemVm { Id = 1 }; var second = new ClientInventoryItemVm { Id = 2 };
             player.Items.Add(first); player.Items.Add(second); player.Items.Move(0, 1); await ui.WhenMvvmIdleAsync();
             var row = root.transform.GetChild(0).GetComponent<CollectionRowNode>(); Assert.That(row.ItemAtInitialize, Is.SameAs(second)); Assert.That(row.PlayerAtInitialize, Is.SameAs(player)); Assert.That(row.State, Is.EqualTo(NodeState.Ready));
-            player.Items.RemoveAt(0); await ui.WhenMvvmIdleAsync(); Assert.That(root.transform.childCount, Is.EqualTo(1));
+            var select = row.gameObject.AddComponent<Button>();
+            int selected = 0;
+            second.Open = () => { selected = second.Id; return Task.CompletedTask; };
+            row.BindCommand("Item.Select", select.Bindable().Click);
+            player.Items.ApplySnapshot(new[] { 1, 2 }, item => item.Id, id => id,
+                id => new ClientInventoryItemVm { Id = id }, (item, id) => item.Text = "Item " + id);
+            await ui.WhenMvvmIdleAsync();
+            Assert.That(root.transform.GetChild(1).GetComponent<CollectionRowNode>(), Is.SameAs(row));
+            select.onClick.Invoke();
+            await ui.WhenMvvmIdleAsync();
+            Assert.That(selected, Is.EqualTo(2));
+            Assert.That(second.Text, Is.EqualTo("Item 2"));
+            player.Items.Remove(second); await ui.WhenMvvmIdleAsync(); Assert.That(root.transform.childCount, Is.EqualTo(1));
             player.Items.Add(second); await owner.DisposeAsync(); Assert.That(root.transform.childCount, Is.EqualTo(0)); await ui.DisposeAsync(); Assert.That(log.Errors.TrueForAll(error => error is OperationCanceledException), Is.True);
             UnityEngine.Object.Destroy(template); UnityEngine.Object.Destroy(root); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events);
         }
@@ -174,10 +220,28 @@ namespace StarCourt.UnityDemo.Tests
             config.Bindings.Add(new ViewBindingData { Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
             var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm.InitializationCount, Is.EqualTo(1)); Assert.That(template.InitializationCount, Is.EqualTo(0)); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
-            button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
+            var host = (EngineUI.UIHost)ui.Host;
+            await host.NextFrameAsync();
+            var amounts = new List<int>();
+            node.Bind<int>(template.name + ".Gold", amounts.Add);
+            var previousScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0;
+                vm.Gold = 50;
+                vm.Gold = 100;
+                button.GetComponent<Button>().onClick.Invoke();
+                Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
+                Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
+                Assert.That(amounts, Is.EqualTo(new[] { 100 }));
+                await host.NextFrameAsync();
+                Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
+                Assert.That(amounts, Is.EqualTo(new[] { 100, 90 }));
+            }
+            finally { Time.timeScale = previousScale; }
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
             slider.GetComponent<Slider>().maxValue = 200;
-            node.Bind(template.name + ".Gold", slider.GetComponent<Slider>().ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
+            node.Bind(template.name + ".Gold", slider.GetComponent<Slider>().Bindable().Value, new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
             node.PauseBinding(nameof(NativePlayerVm.Gold)); vm.Gold = 120; slider.GetComponent<Slider>().value = 15;
             Assert.That(vm.Gold, Is.EqualTo(120)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
             node.ResumeBinding(template.name + ".Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));
@@ -198,7 +262,11 @@ namespace StarCourt.UnityDemo.Tests
             }
             await otherUi.DisposeAsync();
             UnityEngine.Object.Destroy(otherCanvas); UnityEngine.Object.Destroy(otherEvents);
-            await node.DisposeAsync(); vm.Gold = 50; Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
+            await host.NextFrameAsync();
+            vm.Gold = 30;
+            await node.DisposeAsync(); vm.Gold = 50;
+            await host.NextFrameAsync();
+            Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
             await ui.DisposeAsync(); await runtime.DisposeAsync();
             UnityEngine.Object.Destroy(rect); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events); UnityEngine.Object.Destroy(template);
         }

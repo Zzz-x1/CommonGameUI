@@ -30,8 +30,9 @@ public interface IUIHost
 {
     void VerifyAccess();
     object? CaptureFocus();
-    void Focus(IUIElement? element);
-    void RestoreFocus(object? focus);
+    bool ContainsFocus(IUIElement scope, object target);
+    bool TryFocus(IUIElement? scope, object? target);
+    void ClearFocus();
 }
 public interface IUILog
 {
@@ -52,6 +53,18 @@ await ui.DisposeAsync();
 ```
 
 host, loader, logger and mountElement are project implementations.
+
+## Drive the optional MVVM module
+
+Choose one UI-thread point after game logic and before UI layout. In this example the engine exposes a `BeforeUILayout` event that also runs while the pause menu is open. Register one driver per engine loop.
+
+```csharp
+var frames = new MvvmFrameDriver();
+MvvmModule.RegisterAdapter(typeof(GameUIHost), assets, findBindings, frames.Attach);
+gameLoop.BeforeUILayout += frames.Tick;
+```
+
+`Attach` deduplicates shared runtimes. Each `Tick` flushes pending property bindings and observes asynchronous errors. Unity and Godot install their drivers automatically. [MVVM API](../api/mvvm.md)
 
 ## Required behavior
 

@@ -2,9 +2,10 @@ using System.Runtime.CompilerServices;
 
 namespace UIFramework.Mvvm;
 
-public sealed class MvvmRuntime : IAsyncDisposable
+public sealed partial class MvvmRuntime : IAsyncDisposable
 {
     static MvvmRuntime() => MvvmModule.Install();
+    internal readonly BindingPlans Plans = new();
     private readonly Dictionary<string, (object Definition, IGlobalViewModelProvider Provider)> _globals = new(StringComparer.Ordinal);
     private readonly Dictionary<Type, Func<object>> _factories = new();
     private readonly HashSet<object> _preparing = new(ReferenceComparer.Instance);
@@ -25,20 +26,24 @@ public sealed class MvvmRuntime : IAsyncDisposable
     public void Observe(Task task) => _tasks.Add(task);
     public async Task WhenIdleAsync()
     {
-        await DrainTasksAsync();
-        if (_dispose != null) await _dispose;
+        var first = await DrainTasksAsync();
+        if (_dispose != null)
+            try { await _dispose; } catch (Exception error) { Failure(ref first, error); }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
-    private async Task DrainTasksAsync()
+    private async Task<Exception?> DrainTasksAsync(Exception? first = null)
     {
         var waited = new HashSet<Task>();
-        Exception? first = null;
         while (true)
         {
             var tasks = _tasks.Where(task => waited.Add(task)).ToArray();
             if (tasks.Length == 0) break;
-            try { await Task.WhenAll(tasks); } catch (Exception error) { Failure(ref first, error); }
+            first = await WaitForTasksAsync(tasks, first);
         }
-        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+        RemoveCompletedCommands();
+        _tasks.RemoveAll(task => task.IsCompletedSuccessfully);
+        _releases.RemoveWhere(task => task.IsCompletedSuccessfully);
+        return first;
     }
     internal void ObserveRelease(Task task) { _releases.Add(task); Observe(task); }
     public MvvmRuntime(IUILog? log = null) => Log = log ?? new ConsoleUILog();
@@ -146,32 +151,62 @@ public sealed class MvvmRuntime : IAsyncDisposable
     {
         if (_dispose != null) throw new ObjectDisposedException(nameof(MvvmRuntime));
         if (!_running.Add((vm, command))) throw new InvalidOperationException("Command is already running: " + command);
+        RemoveCompletedCommands();
         var execution = new CommandExecution(scope);
         _commands.Add(execution); scope.Add(execution); _tasks.Add(execution.Completion);
         execution.Start(Run); return execution.Completion;
         async Task Run()
         {
             Exception? first = null;
-            try { CommandStateChanged?.Invoke(); await vm.Execute(command, parameter, execution.Token); }
-            catch (Exception error) { first = error; Report(error, "MVVM command " + command); }
+            Task? action = null;
+            try
+            {
+                CommandStateChanged?.Invoke();
+                action = vm.Execute(command, parameter, execution.Token);
+                await action;
+            }
+            catch (Exception error)
+            {
+                first = error;
+                if (action != null) CollectFaults(action, ref first);
+                Report(error, "MVVM command " + command);
+            }
             _running.Remove((vm, command));
             try { CommandStateChanged?.Invoke(); } catch (Exception error) { Failure(ref first, error); }
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }
     }
+    private void RemoveCompletedCommands()
+    {
+        for (var i = _commands.Count - 1; i >= 0; i--)
+        {
+            var command = _commands[i];
+            if (!command.Completion.IsCompleted) continue;
+            command.Scope.Remove(command);
+            _commands.RemoveAt(i);
+        }
+        foreach (var scope in _scopes) scope.RemoveCompletedTasks();
+    }
     /// <summary>Engine adapters call this from their persistent frame observer.</summary>
     public void ObserveTasks()
     {
+        Exception? first = null;
+        RemoveCompletedCommands();
         foreach (var task in _tasks.ToArray())
         {
             if (!task.IsCompleted) continue;
-            _tasks.Remove(task); _releases.Remove(task); task.GetAwaiter().GetResult();
+            _tasks.Remove(task); _releases.Remove(task);
+            if (task.IsFaulted) CollectFaults(task, ref first);
+            else if (task.IsCanceled)
+                try { task.GetAwaiter().GetResult(); }
+                catch (OperationCanceledException error) { Failure(ref first, Cancellations.GetValue(task, _ => error)); }
         }
         if (_observeDisposal && _dispose?.IsCompleted == true)
         {
             _observeDisposal = false;
-            _dispose.GetAwaiter().GetResult();
+            try { _dispose.GetAwaiter().GetResult(); } catch (Exception error) { Failure(ref first, error); }
         }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     public ValueTask DisposeAsync()
     {
@@ -182,6 +217,8 @@ public sealed class MvvmRuntime : IAsyncDisposable
             var closed = new TaskCompletionSource<Task>();
             var disposed = new TaskCompletionSource<Task>();
             _close = closed.Task.Unwrap(); _dispose = disposed.Task.Unwrap();
+            _pendingBindings.Clear();
+            _frameBindings.Clear();
             closed.SetResult(CloseAsync()); disposed.SetResult(DisposeCoreAsync());
         }
         return new ValueTask(caller ? _close! : _dispose);
@@ -194,34 +231,53 @@ public sealed class MvvmRuntime : IAsyncDisposable
         foreach (var scope in _scopes.ToArray())
             try { await scope.DisposeAsync(); } catch (Exception error) { Failure(ref first, error); }
         var callers = new HashSet<Task>(_commands.Where(command => command.IsCaller).Select(command => command.Completion));
-        try { await Task.WhenAll(_tasks.Where(task => !callers.Contains(task) && !_releases.Contains(task)).ToArray()); }
-        catch (Exception error) { Failure(ref first, error); }
+        first = await WaitForTasksAsync(_tasks.Where(task => !callers.Contains(task) && !_releases.Contains(task)), first);
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     private async Task DisposeCoreAsync()
     {
         Exception? first = null;
         try { await _close!; } catch (Exception error) { Failure(ref first, error); }
-        try { await DrainTasksAsync(); } catch (Exception error) { Failure(ref first, error); }
+        first = await DrainTasksAsync(first);
         foreach (var owned in _owned.AsEnumerable().Reverse())
             try { await Release(owned.Value, owned.Assets); } catch (Exception error) { Report(error, "MVVM shared VM release"); Failure(ref first, error); }
         _owned.Clear(); _shared.Clear(); _globals.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
+        Plans.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
+    // A canceled Task can synthesize a new TaskCanceledException on every await.
+    private static readonly ConditionalWeakTable<Task, OperationCanceledException> Cancellations = new();
+    internal static async Task<Exception?> WaitForTasksAsync(IEnumerable<Task> tasks, Exception? first = null)
+    {
+        var batch = tasks.Distinct().ToArray();
+        var completion = Task.WhenAll(batch);
+        try { await completion; }
+        catch
+        {
+            foreach (var task in batch) CollectFaults(task, ref first);
+            foreach (var task in batch)
+            {
+                if (!task.IsCanceled) continue;
+                try { await task; }
+                catch (OperationCanceledException canceled)
+                { Failure(ref first, Cancellations.GetValue(task, _ => canceled)); }
+            }
+        }
+        return first;
+    }
+    private static void CollectFaults(Task task, ref Exception? first)
+    {
+        if (task.Exception is { } faults)
+            foreach (var error in faults.InnerExceptions) Failure(ref first, error);
     }
     internal static void Failure(ref Exception? first, Exception error)
     {
-        if (ReferenceEquals(first, error)) return;
         if (first == null) first = error;
-        else
-        {
-            if (first.Data[UIFailure.SecondaryExceptionsKey] is not List<Exception> secondary)
-                first.Data[UIFailure.SecondaryExceptionsKey] = secondary = new List<Exception>();
-            secondary.Add(error);
-        }
+        else UIFailure.AddSecondary(first, error);
     }
     internal void Report(Exception error, string context)
     { try { Log.Exception(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
-    private sealed class ReferenceComparer : IEqualityComparer<object>
+    internal sealed class ReferenceComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceComparer Instance = new();
         public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
@@ -249,7 +305,7 @@ public sealed class MvvmNodeExtension : IUINodeExtension
     public Task AfterInitializeAsync(UINode node, CancellationToken token) => MvvmExtensions.Scope(node).InitializeAsync(token);
     public ValueTask DisposeAsync(UINode node) => MvvmExtensions.Scope(node).DisposeAsync();
 }
-public static class MvvmExtensions
+public static partial class MvvmExtensions
 {
     internal static readonly ConditionalWeakTable<UINode, BindingScope> Scopes = new();
     internal static readonly ConditionalWeakTable<UINode, Action<IUINode>> Initializers = new();
@@ -265,8 +321,9 @@ public static class MvvmExtensions
     public static void SetViewModel(this IUINode node, string name, object vm) => Scope(node.Node).Set(name, vm);
     public static T GetViewModel<T>(this IUINode node, string name) where T : class => (T)Scope(node.Node).Get(name, typeof(T));
     public static T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class => Scope(node.Node).Create<T>(name, template);
-    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
-        Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode });
+    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay,
+        BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame) =>
+        Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode, UpdateTiming = timing });
     public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options) => Scope(node.Node).Bind(path, target, options);
     public static void PauseBinding(this IUINode node, string propertyName) => Scope(node.Node).PauseBinding(propertyName);
     public static void ResumeBinding(this IUINode node, string propertyName) => Scope(node.Node).ResumeBinding(propertyName);

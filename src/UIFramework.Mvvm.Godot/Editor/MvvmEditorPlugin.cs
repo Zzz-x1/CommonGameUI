@@ -150,18 +150,28 @@ public partial class MvvmEditorPlugin : EditorPlugin
         ClearDetails(); if (_bindings.GetSelected()?.GetMetadata(0).AsGodotObject() is not ViewBindingResource b) return;
         Target(b);
         var selectedTarget = _view!.Targets[_view.Bindings.IndexOf(b)];
+        BindingTargetDefinition? targetProperty = null;
         if (GodotObject.IsInstanceValid(selectedTarget) && b.Kind == ViewBindingKind.Property)
         {
             var definitions = BindingTargetRegistry.Members(selectedTarget.GetType());
+            targetProperty = definitions.FirstOrDefault(d => d.Member == b.Member);
             var picker = new OptionButton(); foreach (var definition in definitions) picker.AddItem(definition.Member);
             picker.Selected = definitions.ToList().FindIndex(d => d.Member == b.Member);
             picker.ItemSelected += index => Edit(b.Member, definitions[(int)index].Member, value => b.Member = value);
             _details.AddChild(new Label { Text = "目标属性" }); _details.AddChild(picker);
+            if (targetProperty == null && b.Member.Length != 0)
+                _details.AddChild(new Label { Text = $"{selectedTarget.GetType().Name} 未注册属性 {b.Member}。" });
+            if (targetProperty != null && !targetProperty.Supports(b.Mode))
+                _details.AddChild(new Label { Text = $"{selectedTarget.GetType().Name}.{b.Member} 不支持已保存的方向 {b.Mode}。请选择其他方向。" });
         }
         if (b.Kind != ViewBindingKind.Property || b.ConverterInput == ConverterInput.ViewModel) Text("来源路径", b.Source, v => Edit(b.Source, v, value => b.Source = value));
-        Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value)); Choice("方向", b.Mode, v => { var oldMode = b.Mode; var oldInput = b.ConverterInput; Change("Change Binding Direction", () => { b.Mode = v; if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) b.ConverterInput = ConverterInput.ViewModel; }, () => { b.Mode = oldMode; b.ConverterInput = oldInput; }); });
-        var sourceType = SourceType(b.Source); var target = _view!.Targets[_view.Bindings.IndexOf(b)]; Type? targetType = null;
-        if (target != null && b.Kind == ViewBindingKind.Property) { targetType = BindingTargetRegistry.Find(target.GetType(), b.Member).ValueType; }
+        Choice("绑定类型", b.Kind, v => Edit(b.Kind, v, value => b.Kind = value));
+        Choice("方向", b.Mode, v =>
+        {
+            var oldMode = b.Mode; var oldInput = b.ConverterInput;
+            Change("Change Binding Direction", () => { b.Mode = v; if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) b.ConverterInput = ConverterInput.ViewModel; }, () => { b.Mode = oldMode; b.ConverterInput = oldInput; });
+        }, mode => targetProperty == null || targetProperty.Supports(mode));
+        var sourceType = SourceType(b.Source); var targetType = targetProperty?.ValueType;
         if (b.Kind != ViewBindingKind.Property)
         {
             if (b.Kind == ViewBindingKind.Command)
@@ -201,6 +211,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
             }
             return;
         }
+        if (b.Mode is BindingMode.OneWay or BindingMode.TwoWay && b.ConverterInput == ConverterInput.ViewModel)
+            Choice("刷新时机", b.UpdateTiming, timing => Edit(b.UpdateTiming, timing, value => b.UpdateTiming = value));
         if (b.Mode is BindingMode.OneWay or BindingMode.OneTime) Choice("转换器输入", b.ConverterInput, v => Edit(b.ConverterInput, v, value => b.ConverterInput = value));
         Converter("正向转换", b.Converter, sourceType, targetType, b.ConverterInput == ConverterInput.Constant, v => Edit(b.Converter, v, value => b.Converter = value));
         if (b.Converter.Length != 0)
@@ -255,7 +267,16 @@ public partial class MvvmEditorPlugin : EditorPlugin
         void Commit() { if (field.Text == committed) return; committed = field.Text; set(committed); }
         field.TextSubmitted += _ => Commit(); field.FocusExited += Commit; _details.AddChild(field);
     }
-    private void Choice<T>(string label, T value, Action<T> set) where T : Enum { _details.AddChild(new Label { Text = label }); var field = new OptionButton(); foreach (var name in Enum.GetNames(typeof(T))) field.AddItem(name); field.Selected = Convert.ToInt32(value); field.ItemSelected += index => set((T)Enum.ToObject(typeof(T), index)); _details.AddChild(field); }
+    private void Choice<T>(string label, T value, Action<T> set, Func<T, bool>? include = null) where T : Enum
+    {
+        _details.AddChild(new Label { Text = label });
+        var values = ((T[])Enum.GetValues(typeof(T))).Where(v => include == null || include(v)).ToArray();
+        var field = new OptionButton();
+        foreach (var item in values) field.AddItem(item.ToString());
+        field.Selected = Array.IndexOf(values, value);
+        field.ItemSelected += index => set(values[index]);
+        _details.AddChild(field);
+    }
     private void Asset(string label, Resource? resource, string type, Action<Resource?> set) { _details.AddChild(new Label { Text = label }); var field = new EditorResourcePicker { BaseType = type, EditedResource = resource }; field.ResourceChanged += v => set(v); _details.AddChild(field); }
     private static void Button(Control parent, string label, Action action) { var b = new global::Godot.Button { Text = label }; b.Pressed += action; parent.AddChild(b); }
 }

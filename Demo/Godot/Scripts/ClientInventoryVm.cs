@@ -12,17 +12,6 @@ public class ClientInventoryVm
 {
     [FieldNotify] public ObservableCollection<ClientInventoryItemVm> Equipment { get; set; } = new();
     [FieldNotify] public ObservableCollection<ClientInventoryItemVm> Materials { get; set; } = new();
-    public void Update(ObservableCollection<ClientInventoryItemVm> list, int[] ids, Func<int, ClientInventoryItemVm> create, Action<ClientInventoryItemVm> refresh)
-    {
-        foreach (var item in list.Where(item => !ids.Contains(item.Id)).ToArray()) list.Remove(item);
-        for (int i = 0; i < ids.Length; i++)
-        {
-            var item = list.FirstOrDefault(item => item.Id == ids[i]);
-            if (item == null) { item = create(ids[i]); list.Insert(i, item); }
-            else { var current = list.IndexOf(item); if (current != i) list.Move(current, i); }
-            refresh(item);
-        }
-    }
 }
 [ViewModel]
 public class ClientInventoryItemVm

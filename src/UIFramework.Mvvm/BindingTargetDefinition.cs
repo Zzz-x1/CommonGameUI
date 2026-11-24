@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace UIFramework.Mvvm;
 
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
@@ -8,6 +6,11 @@ public sealed class BindingTargetProviderAttribute(Type type) : Attribute
 
 public interface IBindingTargetProvider
 { IEnumerable<BindingTargetDefinition> GetTargets(); }
+
+internal interface IRegisteredBindingTarget
+{
+    void ValidateMode(BindingMode mode);
+}
 
 public sealed class BindingTargetDefinition
 {
@@ -21,65 +24,122 @@ public sealed class BindingTargetDefinition
     public static BindingTargetDefinition Create<TTarget, TValue>(string member, Func<TTarget, TValue> read,
         Action<TTarget, TValue> write, Func<TTarget, Action, Action>? subscribe = null) where TTarget : class =>
         new(typeof(TTarget), member, typeof(TValue), subscribe != null,
-            value => new Target<TValue>(() => read((TTarget)value), v => write((TTarget)value, v),
+            value => new Target<TValue>(member, () => read((TTarget)value), v => write((TTarget)value, v),
                 subscribe == null ? null : callback => subscribe((TTarget)value, callback)));
+
+    public bool Supports(BindingMode mode) => Supports(mode, Observable);
+
+    private static bool Supports(BindingMode mode, bool observable) => mode switch
+    {
+        BindingMode.OneTime or BindingMode.OneWay => true,
+        BindingMode.OneWayToViewModel or BindingMode.TwoWay => observable,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode))
+    };
+
     public IBindingTarget CreateTarget(object target, BindingMode mode = BindingMode.OneWay)
     {
         if (!TargetType.IsInstanceOfType(target)) throw new InvalidCastException("Binding target type mismatch: " + TargetType.FullName);
-        if (!Observable && mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
-            throw new InvalidOperationException("Binding target does not provide change notifications: " + Member);
+        if (!Supports(mode)) throw MissingNotifications(Member);
         return _create(target);
     }
-    private sealed class Target<T> : IBindingTarget
+
+    private static InvalidOperationException MissingNotifications(string member) =>
+        new("Binding target does not provide change notifications: " + member);
+
+    private sealed class Target<T>(string member, Func<T> read, Action<T> write,
+        Func<Action, Action>? subscribe) : IBindingTarget, IRegisteredBindingTarget
     {
-        private readonly Func<T> _read; private readonly Action<T> _write; private Action? _disconnect;
-        public Target(Func<T> read, Action<T> write, Func<Action, Action>? subscribe)
-        { _read = read; _write = write; _disconnect = subscribe?.Invoke(() => Changed?.Invoke()); }
+        private Action? _changed;
+        private Action? _disconnect;
+        private bool _disposed;
+
         public Type ValueType => typeof(T);
-        public object? Read() => _read();
-        public void Write(object? value) => _write((T)value!);
-        public event Action? Changed;
-        public void Dispose() { var disconnect = _disconnect; _disconnect = null; disconnect?.Invoke(); }
+        public object? Read() => read();
+        public void Write(object? value) => write((T)value!);
+
+        public void ValidateMode(BindingMode mode)
+        {
+            if (!Supports(mode, subscribe != null)) throw MissingNotifications(member);
+        }
+
+        public event Action? Changed
+        {
+            add
+            {
+                if (value == null) return;
+                if (_disposed) throw new ObjectDisposedException(nameof(IBindingTarget));
+                if (subscribe == null) throw MissingNotifications(member);
+                // A control may report its initial value while the listener is being installed.
+                if (_changed == null) _disconnect = subscribe(() => _changed?.Invoke());
+                _changed += value;
+            }
+            remove
+            {
+                _changed -= value;
+                if (_changed == null) Disconnect();
+            }
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            _changed = null;
+            Disconnect();
+        }
+
+        private void Disconnect()
+        {
+            var disconnect = _disconnect;
+            _disconnect = null;
+            disconnect?.Invoke();
+        }
     }
 }
 
 public static class BindingTargetRegistry
 {
-    private static readonly Dictionary<Assembly, BindingTargetDefinition[]> Providers = new();
+    private static readonly List<BindingTargetDefinition> Definitions = new();
+    private static readonly HashSet<Type> Providers = new();
+    private static readonly Dictionary<(Type, string), BindingTargetDefinition> Cache = new();
+    internal static int Version => System.Threading.Volatile.Read(ref _version);
+    private static int _version;
+
+    public static void Register(IBindingTargetProvider provider)
+    {
+        lock (Definitions)
+        {
+            if (Providers.Contains(provider.GetType())) return;
+            var added = provider.GetTargets().ToArray();
+            var duplicate = Definitions.Concat(added).GroupBy(d => (d.TargetType, d.Member)).FirstOrDefault(g => g.Count() > 1);
+            if (duplicate != null) throw new InvalidOperationException("Duplicate binding target: " + duplicate.Key);
+            Definitions.AddRange(added);
+            Providers.Add(provider.GetType());
+            Cache.Clear();
+            System.Threading.Interlocked.Increment(ref _version);
+        }
+    }
     public static IReadOnlyList<BindingTargetDefinition> Members(Type targetType)
     {
-        var definitions = Discover().Where(d => d.TargetType.IsAssignableFrom(targetType)).ToArray();
-        return definitions.Select(d => d.Member).Distinct(StringComparer.Ordinal)
-            .Select(member => Resolve(targetType, member, definitions)).ToArray();
+        lock (Definitions)
+            return Definitions.Where(d => d.TargetType.IsAssignableFrom(targetType)).Select(d => d.Member)
+                .Distinct(StringComparer.Ordinal).Select(member => Find(targetType, member)).ToArray();
     }
-    public static BindingTargetDefinition Find(Type targetType, string member) => Resolve(targetType, member, Discover());
+    public static BindingTargetDefinition Find(Type targetType, string member)
+    {
+        lock (Definitions)
+        {
+            var key = (targetType, member);
+            if (!Cache.TryGetValue(key, out var definition))
+                Cache.Add(key, definition = Resolve(targetType, member, Definitions));
+            return definition;
+        }
+    }
     private static BindingTargetDefinition Resolve(Type type, string member, IEnumerable<BindingTargetDefinition> definitions)
     {
         var matches = definitions.Where(d => d.Member == member && d.TargetType.IsAssignableFrom(type)).ToArray();
-        if (matches.GroupBy(d => d.TargetType).Any(g => g.Count() != 1))
-            throw new InvalidOperationException("Duplicate binding target definition: " + type.FullName + "." + member);
         var mostSpecific = matches.Where(d => !matches.Any(other => other != d && d.TargetType.IsAssignableFrom(other.TargetType))).ToArray();
         if (mostSpecific.Length == 0) throw new MissingMemberException(type.FullName, member);
         if (mostSpecific.Length != 1) throw new InvalidOperationException("Ambiguous binding target: " + type.FullName + "." + member);
         return mostSpecific[0];
-    }
-    private static IEnumerable<BindingTargetDefinition> Discover()
-    {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            BindingTargetDefinition[] targets;
-            lock (Providers)
-            {
-                if (!Providers.TryGetValue(assembly, out targets!))
-                {
-                    targets = assembly.GetCustomAttributes<BindingTargetProviderAttribute>()
-                        .SelectMany(a => ((IBindingTargetProvider)Activator.CreateInstance(a.Type)!).GetTargets()).ToArray();
-                    if (targets.GroupBy(d => (d.TargetType, d.Member)).Any(g => g.Count() != 1))
-                        throw new InvalidOperationException("Duplicate binding target definition in " + assembly.FullName);
-                    Providers.Add(assembly, targets);
-                }
-            }
-            foreach (var target in targets) yield return target;
-        }
     }
 }

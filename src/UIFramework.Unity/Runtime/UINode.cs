@@ -5,13 +5,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using CoreNode = global::UIFramework.UINode;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UIFramework.Unity
 {
 [DisallowMultipleComponent]
 [RequireComponent(typeof(RectTransform))]
-public abstract class UINode : MonoBehaviour, IUINode
+public abstract class UINode : MonoBehaviour, IUINode, IPreferredFocus
 {
+    [SerializeField] private Selectable? preferredFocus;
+    protected virtual Selectable? GetPreferredFocus() => preferredFocus;
+    object? IPreferredFocus.PreferredFocus => GetPreferredFocus() is { } target && target ? target.gameObject : null;
     private CoreNode? _node;
     private Action<Task>? _observe;
     public CoreNode Node

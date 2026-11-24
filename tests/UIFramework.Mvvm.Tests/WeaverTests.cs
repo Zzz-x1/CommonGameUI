@@ -12,10 +12,10 @@ namespace UIFramework.Mvvm.Tests;
 
 public class WeaverTests
 {
-    private static ModuleDefinition Compile(string body)
+    private static ModuleDefinition Compile(string body, params string[] additionalReferences)
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-            .Append(typeof(ViewModelAttribute).Assembly.Location).Distinct().Select(path => MetadataReference.CreateFromFile(path));
+            .Append(typeof(ViewModelAttribute).Assembly.Location).Concat(additionalReferences).Distinct().Select(path => MetadataReference.CreateFromFile(path));
         var tree = CSharpSyntaxTree.ParseText("using System; using System.Threading.Tasks; using UIFramework.Mvvm; " + body, path: "Vm.cs", encoding: Encoding.UTF8);
         var compilation = CSharpCompilation.Create("VmFixture", new[] { tree }, references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Debug));
         var pe = new MemoryStream(); var pdb = new MemoryStream(); var result = compilation.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
@@ -26,6 +26,7 @@ public class WeaverTests
     private static ViewModelWeaver Weaver(ModuleDefinition module, out ModuleDefinition runtime)
     { runtime = ModuleDefinition.ReadModule(typeof(ViewModelAttribute).Assembly.Location); return new(module, runtime); }
     [Theory]
+    [InlineData("[assembly: BindingTargetProvider(typeof(App))] public class App {}")]
     [InlineData("[ViewModel] public class Vm { [Command] public async void Execute() { await Task.Yield(); } }")]
     [InlineData("[ViewModel] public class Vm { [FieldNotify(nameof(B))] public int A {get;set;} [FieldNotify(nameof(A))] public int B {get;set;} }")]
     [InlineData("[ViewModel] public class Vm { [FieldNotify(\"Missing\")] public int A {get;set;} }")]
@@ -57,6 +58,29 @@ public class WeaverTests
             Assert.Contains(module.Types.Single(type => type.Name == "Vm").Methods, method => method.Name == "Describe");
         }
     }
+    [Fact]
+    public void ManualAndAutomaticNotificationDispatchToDerivedVmInAnotherAssembly()
+    {
+        using var module = Compile("""
+            [ViewModel] public sealed class ShopPlayer : UIFramework.Mvvm.Tests.PlayerVm
+            {
+                [FieldNotify(nameof(Gold))] public int Credits => Gold;
+            }
+            """, typeof(PlayerVm).Assembly.Location);
+        var weaver = Weaver(module, out var runtime);
+        using (runtime) Assert.Equal(1, weaver.Process());
+        using var assembly = new MemoryStream();
+        module.Write(assembly);
+        var type = System.Reflection.Assembly.Load(assembly.ToArray()).GetType("ShopPlayer", true)!;
+        var vm = (PlayerVm)Activator.CreateInstance(type)!;
+        var changes = new List<string>();
+        ((System.ComponentModel.INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
+        vm.NotifyChanged(nameof(PlayerVm.Gold));
+        Assert.Equal(new[] { "Gold", "Credits", "CanBuy" }, changes);
+        changes.Clear();
+        vm.Gold = 50;
+        Assert.Equal(new[] { "Gold", "Credits", "CanBuy" }, changes);
+    }
     [Fact] public void StartupIsInstalledEvenWithoutVmDeclarationsAndDoesNotDuplicate()
     {
         using var module = Compile("public class App { }"); var weaver = Weaver(module, out var runtime);
@@ -66,6 +90,22 @@ public class WeaverTests
             Assert.Equal(0, weaver.Process()); Assert.False(weaver.Changed);
             var startup = module.Types.Single(t => t.Name == "<Module>").Methods.Single(m => m.Name == ".cctor");
             Assert.Single(startup.Body.Instructions, i => i.Operand is MethodReference m && m.DeclaringType.FullName == "UIFramework.Mvvm.MvvmModule" && m.Name == "Install");
+        }
+    }
+
+    [Fact] public void ConverterOnlyLibraryGeneratesOneStartupCallAcrossReweaving()
+    {
+        using var module = Compile("public static class Prices { [Converter] public static string Text(int n) => n.ToString(); }");
+        var weaver = Weaver(module, out var runtime);
+        using (runtime)
+        {
+            weaver.Process();
+            var register = Assert.IsType<MethodDefinition>(weaver.Registration);
+            Assert.Contains(register.Body.Instructions, i => i.OpCode == OpCodes.Newobj);
+            weaver.Process();
+            Assert.False(weaver.Changed);
+            var startup = module.Types.Single(t => t.Name == "<Module>").Methods.Single(m => m.Name == ".cctor");
+            Assert.Single(startup.Body.Instructions, i => i.Operand == register);
         }
     }
 

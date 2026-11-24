@@ -97,15 +97,23 @@ public sealed class UIContext : IAsyncDisposable
         catch (Exception ex) { Report(ex, stage + "; remaining notification chain aborted"); throw; }
         finally { _notificationDepth--; }
     }
-    internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false)
+    internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false, UINode? subtree = null)
     {
-        var nodes = new List<UINode>();
-        void Visit(UINode node) { nodes.Add(node); foreach (var child in node.ChildrenCore) Visit(child); }
-        Visit(Root);
-        var changes = nodes.Select(n => (Node: n, Visible: n.CommittedVisible, Active: n.IsActive,
-            OldVisible: n.PublishedVisible, OldActive: n.PublishedActive)).ToArray();
-        // Commit all effective state before delivering any notification. Failures are never replayed.
-        foreach (var c in changes) { c.Node.PublishedVisible = c.Visible; c.Node.PublishedActive = c.Active; }
+        var changes = new List<(UINode Node, bool Visible, bool Active, bool OldVisible, bool OldActive)>();
+        void Visit(UINode node)
+        {
+            var visible = node.CommittedVisible;
+            var active = node.IsActive;
+            if (visible != node.PublishedVisible || active != node.PublishedActive)
+            {
+                changes.Add((node, visible, active, node.PublishedVisible, node.PublishedActive));
+                node.PublishedVisible = visible;
+                node.PublishedActive = active;
+            }
+            foreach (var child in node.ChildrenCore) Visit(child);
+        }
+        // Snapshot and commit the affected tree before the first callback.
+        Visit(subtree ?? Root);
         Exception? first = null;
         void Deliver(Action callback)
         {
@@ -123,14 +131,17 @@ public sealed class UIContext : IAsyncDisposable
                 if (source != null && ReferenceEquals(n.Owner, source.Node)) return source.For(node);
             return operation.For(node);
         }
-        foreach (var c in Enumerable.Reverse(changes))
+        for (var index = changes.Count - 1; index >= 0; index--)
         {
+            var c = changes[index];
+            if (!(c.OldActive && !c.Active || c.OldVisible && !c.Visible)) continue;
             var context = Describe(c.Node);
             if (c.OldActive && !c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, true, false)));
             if (c.OldVisible && !c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, true, false)));
         }
         foreach (var c in changes)
         {
+            if (!(!c.OldVisible && c.Visible || !c.OldActive && c.Active)) continue;
             var context = Describe(c.Node);
             if (!c.OldVisible && c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, false, true)));
             if (!c.OldActive && c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, false, true)));
@@ -146,7 +157,157 @@ public sealed class UIContext : IAsyncDisposable
         return false;
     }
 
-    internal void SetInputOwner(UINode? node) { InputOwnerNode = node; Root.ApplyState(); }
+    // Retained modal containers keep their history while their panel, page or tab is hidden.
+    private readonly List<ModalContainerNode> _modalContainers = new();
+    internal void TrackModal(ModalContainerNode container, bool open)
+    {
+        if (open) _modalContainers.Add(container);
+        else _modalContainers.Remove(container);
+    }
+    internal bool ReconcileModalInput(ModalContainerNode? closing = null, object? restoreFocus = null)
+    {
+        var previous = InputOwnerNode;
+        // A reappearing subtree must not displace the visible modal that already owns input.
+        var current = (previous?.Parent as ModalContainerNode)?.VisibleTop;
+        for (var i = _modalContainers.Count - 1; current == null && i >= 0; i--)
+            current = _modalContainers[i].VisibleTop;
+        if (ReferenceEquals(previous, current)) return false;
+        InputOwnerNode = current;
+        Root.ApplyState();
+        if (current != null)
+        {
+            var history = current.Parent == closing ? restoreFocus : current.LastFocus;
+            if (history is FocusBookmark saved)
+            {
+                if (saved.TryRestore(this, current)) return true;
+                history = null;
+            }
+            if (!FocusPage(current, history)) Host.ClearFocus();
+        }
+        else
+        {
+            var background = closing != null ? restoreFocus : (previous?.Parent as ModalContainerNode)?.BackgroundFocus;
+            var restored = background is FocusBookmark bookmark
+                ? bookmark.TryRestore(this)
+                : background != null && Host.TryFocus(null, background);
+            if (!restored) ClearDepartingFocus(previous);
+        }
+        return true;
+    }
+
+    private sealed class FocusBookmark
+    {
+        private readonly object _control;
+        private readonly UINode _page;
+        private readonly List<PresentationSession> _openings = new();
+        internal FocusBookmark(object control, UINode page)
+        {
+            _control = control;
+            _page = page;
+            for (UINode? owner = page; owner != null; owner = owner.Parent)
+                if (owner.Presentation is { } opening) _openings.Add(opening);
+        }
+        internal bool TryRestore(UIContext context, UINode? modal = null)
+        {
+            var page = _page;
+            object? target = _control;
+            // A cached window can retain the same tab or inner stack across different openings.
+            // Use the outermost reopened window's entry focus in that case.
+            foreach (var opening in _openings)
+                if (opening.Ended) { page = opening.Node; target = null; }
+            return page.IsInteractive && (modal == null || IsWithin(page, modal)) && context.FocusPage(page, target);
+        }
+    }
+
+    internal object? CaptureModalFocus(object? control)
+    {
+        if (control == null) return null;
+        UINode? Find(UINode parent)
+        {
+            foreach (var child in parent.ChildrenCore)
+            {
+                if (!child.IsInteractive) continue;
+                var nested = Find(child);
+                if (nested != null) return nested;
+                if (parent is ContainerNode && child.Element is { } scope && Host.ContainsFocus(scope, control)) return child;
+            }
+            return null;
+        }
+        var page = Find(Root);
+        return page == null ? control : new FocusBookmark(control, page);
+    }
+
+    internal void RememberFocus(UINode node, object? captured)
+    {
+        if (captured != null && node.Element is { } scope && Host.ContainsFocus(scope, captured))
+            node.LastFocus = captured;
+    }
+
+    private bool FocusPage(UINode page, object? history)
+    {
+        if (page.Element is not { } scope) return false;
+        if (history != null && Host.TryFocus(scope, history)) return true;
+        var preferred = (page.Owner as IPreferredFocus)?.PreferredFocus;
+        if (preferred != null)
+        {
+            if (!Host.ContainsFocus(scope, preferred))
+                throw new InvalidOperationException($"Preferred focus for '{page.Name}' must belong to the page.");
+            if (Host.TryFocus(scope, preferred)) return true;
+        }
+        return Host.TryFocus(scope, null);
+    }
+
+    private void ClearDepartingFocus(UINode? exiting)
+    {
+        if (exiting?.Element is { } scope && Host.CaptureFocus() is { } selected && Host.ContainsFocus(scope, selected))
+            Host.ClearFocus();
+    }
+
+    internal void FocusAfterChange(ContainerNode container, UINode? exiting, UINode? entering, object? captured, bool modalChanged)
+    {
+        if (modalChanged && InputOwnerNode != null) return;
+        if (!container.IsInteractive || (InputOwnerNode != null && !IsWithin(container, InputOwnerNode))) return;
+        var current = Host.CaptureFocus();
+        if (modalChanged && current != null) return;
+        var wasInPage = captured != null && exiting?.Element is { } oldScope && Host.ContainsFocus(oldScope, captured);
+        // An operation lock may temporarily remove focus from a tab header or a sibling panel.
+        if (current == null && captured != null && !wasInPage && Host.TryFocus(InputOwnerNode?.Element, captured)) return;
+        if (container is not (StackContainerNode or TabContainerNode)) return;
+        if (container is TabContainerNode && !wasInPage) return;
+        if (current != null && (exiting?.Element == null || !Host.ContainsFocus(exiting.Element, current))) return;
+        if (entering == null || !FocusPage(entering, entering.LastFocus)) ClearDepartingFocus(exiting);
+    }
+
+    internal UINode? CaptureStackFocusOwner(ContainerNode container, object? captured)
+    {
+        if (container is not StackContainerNode stack || !stack.IsInteractive || stack.Current?.Node is not { } page) return null;
+        var scope = InputOwnerNode is { } modal && IsWithin(modal, page) ? modal.Element : page.Element;
+        return captured == null || scope != null && Host.ContainsFocus(scope, captured) ? page : null;
+    }
+
+    internal void RestoreInterruptedFocus(ContainerNode container, object? captured, UINode? previousPage)
+    {
+        if ((captured == null && previousPage == null) || Host.CaptureFocus() != null || !container.IsInteractive) return;
+        if (previousPage != null && container is StackContainerNode stack && !ReferenceEquals(previousPage, stack.Current?.Node))
+        {
+            // A lifetime exposed this page while the stack was still locked. The failed operation
+            // never reached its own focus commit and its original control went away with the old page.
+            if (stack.Current?.Node is { IsInteractive: true } page)
+            {
+                var owner = InputOwnerNode is { } modal && IsWithin(modal, page) ? modal : page;
+                FocusPage(owner, owner.LastFocus);
+            }
+            return;
+        }
+        if (captured != null) Host.TryFocus(InputOwnerNode?.Element, captured);
+    }
+
+    private static bool IsWithin(UINode node, UINode ancestor)
+    {
+        for (UINode? n = node; n != null; n = n.Parent)
+            if (ReferenceEquals(n, ancestor)) return true;
+        return false;
+    }
     private int _modalInputBlocks;
     internal bool IsModalInputBlocked => _modalInputBlocks != 0;
     internal void BeginModalInputBlock() { _modalInputBlocks++; Root.SetInputLocked(true); }

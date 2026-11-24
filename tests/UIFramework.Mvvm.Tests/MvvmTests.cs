@@ -23,7 +23,13 @@ public static class TestConverters { [Converter] public static string Gold(int v
 public sealed class MvvmTests
 {
     private sealed class Host : IUIHost
-    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? e) { } public void RestoreFocus(object? e) { } }
+    {
+        public void VerifyAccess() { }
+        public object? CaptureFocus() => null;
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
+    }
     private sealed class Loader : IUIResourceLoader { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
     private sealed class Log : IUILog { public readonly List<Exception> Errors = new(); public void Error(string message) => new ConsoleUILog().Error(message);
         public void Exception(Exception error, string context) => Errors.Add(error); }
@@ -55,7 +61,11 @@ public sealed class MvvmTests
         await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var vm = new PlayerVm { Amount = 25 }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Amount", target, BindingMode.TwoWay); Assert.Equal(25, target.Value);
-        target.Edit(150); Assert.Equal(100, target.Value); Assert.Equal(100, vm.Amount);
+        target.Edit(150);
+        Assert.Equal(100, vm.Amount);
+        Assert.Equal(150, target.Value);
+        runtime.FlushBindings();
+        Assert.Equal(100, target.Value);
         await node.DisposeAsync(); vm.Amount = 50; Assert.Equal(100, target.Value); await ui.DisposeAsync();
     }
     [Fact] public async Task NestedReplacementAndNullPresentation()
@@ -63,6 +73,9 @@ public sealed class MvvmTests
         await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var old = new PlayerVm { Gold = 10 }; var vm = new PlayerVm { Selected = old }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Selected.Gold", target, new BindingOptions { HasNullValue = true, NullValue = -1 });
-        vm.Selected = new PlayerVm { Gold = 30 }; old.Gold = 99; Assert.Equal(30, target.Value); vm.Selected = null; Assert.Equal(-1, target.Value); await ui.DisposeAsync();
+        vm.Selected = new PlayerVm { Gold = 30 }; old.Gold = 99;
+        runtime.FlushBindings(); Assert.Equal(30, target.Value);
+        vm.Selected = null; runtime.FlushBindings();
+        Assert.Equal(-1, target.Value); await ui.DisposeAsync();
     }
 }

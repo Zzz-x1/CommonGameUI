@@ -41,6 +41,8 @@ Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 | 任务 | 购买后领取一次奖励 |
 | 设置 | 内嵌分类、画质弹窗、演出偏好与默认恢复 |
 
+用键盘打开确认框时默认选中“取消”。在页面内选中控件并打开详情，返回时会选回原控件；原控件已失效时会尝试页面的 Preferred Focus。
+
 存档：Application.persistentDataPath/unity-client-save.json。保存成功后发布状态，失败直接报错；测试使用隔离档案。
 
 ## 动画
@@ -81,6 +83,14 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 角色培养：进入角色详情并点击培养，先保存等级和属性，再暂停 Hero.Power 绑定播放战力／攻击数值增长，动画完成后显式 ResumeBinding 同步最新值。简化演出使用较短计数动画。
 
 商店条目由异步资源工厂创建，借用共享金币与商店来源，点击时读取商品 ID 作为命令参数。金币不足时卡片变暗，仍可进入详情查看。列表移动／删除保持或释放对应实例。
+
+代码里输入 `control.Bindable().` 即可选择内置控件的可绑定成员。设置窗口通过 `toggle.Bindable().IsOn` 双向编辑演出选项，购买窗口通过 `button.Bindable().Click` 绑定购买命令。
+
+使用 TextMeshPro 的界面在自己的 asmdef 引用 `Unity.TextMeshPro`，并导入 `UIFramework.Mvvm.Unity.TMP`，即可使用 `TMP_Text` 或 `TMP_InputField` 的 `.Bindable().Text`。常规 uGUI 控件直接导入 `UIFramework.Mvvm.Unity`。
+
+需要给滑杆增加可绑定的下限时，参见独立程序集 `StarCourt.UnityDemo.ControlAdapters` 中的 [ClientSliderAdapter.cs](Assets/ControlAdapters/ClientSliderAdapter.cs)。声明一次 `Slider.minValue` 后，引用该程序集的代码可用 `slider.Bindable().MinValue()`，编辑器选中滑杆时也能选择 `minValue`。该属性适用于 VM 设置滑杆范围。
+
+打开商店并选择商品，在购买窗口切换数量下拉框。下拉框通过 `BindTwoWay<int>` 同步写入数量，显式使用 `BindingUpdateTiming.Immediate` 回显。报价使用默认的 `EndOfFrame`，在 Canvas 更新前一次读取最新数量和金币；同帧改动两者只刷新一次。余额不足时购买命令立即禁用，报价显示还差多少金币。
 
 ## 关闭后缓存
 

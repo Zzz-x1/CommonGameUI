@@ -105,7 +105,9 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
             var node = await CreateItemAsync(entry.Context, entry.Cancellation.Token);
             if (!ReferenceEquals(node, entry.Context.CreatedNode)) throw new InvalidOperationException("Item factories must create their node through CollectionItemContext.");
             entry.Cancellation.Token.ThrowIfCancellationRequested();
-            entry.Node = node; Reorder();
+            entry.Node = node;
+            PlaceReady(entry);
+            Changed?.Invoke();
         }
         catch (Exception error)
         {
@@ -118,13 +120,14 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
     { VerifyAvailable(); RemoveCore(index); }
     private void VerifyAvailable()
     { _owner.Context.Host.VerifyAccess(); if (_dispose != null) throw new ObjectDisposedException(GetType().Name); }
-    private void RemoveCore(int index)
+    private void RemoveCore(int index, bool notify = true)
     {
         var entry = _entries[index]; _entries.RemoveAt(index); Exception? first = null;
         try { entry.Cancellation.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         try { if (entry.Node != null && entry.Node.State != NodeState.Disposed) Detach(entry.Node); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         var task = ReleaseAsync(entry); _tasks.Add(task); MvvmExtensions.Scope(_owner.Node).ObserveCollection(task);
-        try { Reorder(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        if (notify)
+            try { Changed?.Invoke(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         if (first != null) { _owner.Context.GetMvvm().Report(first, "MVVM collection removal"); System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw(); }
     }
     private static async Task ReleaseAsync(Entry entry)
@@ -136,19 +139,32 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     public void Move(int oldIndex, int newIndex)
-    { VerifyAvailable(); var entry = _entries[oldIndex]; _entries.RemoveAt(oldIndex); _entries.Insert(newIndex, entry); Reorder(); }
-    private void Reorder()
+    {
+        VerifyAvailable();
+        var entry = _entries[oldIndex];
+        _entries.RemoveAt(oldIndex);
+        _entries.Insert(newIndex, entry);
+        if (entry.Node?.State == NodeState.Ready) PlaceReady(entry);
+        Changed?.Invoke();
+    }
+    private void PlaceReady(Entry moved)
     {
         int index = 0;
-        foreach (var entry in _entries) if (entry.Node?.State == NodeState.Ready) Place(entry.Node, index++);
-        Changed?.Invoke();
+        foreach (var entry in _entries)
+        {
+            if (ReferenceEquals(entry, moved)) break;
+            if (entry.Node?.State == NodeState.Ready) index++;
+        }
+        Place(moved.Node!, index);
     }
     public void Clear() { VerifyAvailable(); ClearCore(); }
     private void ClearCore()
     {
+        if (_entries.Count == 0) return;
         Exception? first = null;
         for (int i = _entries.Count - 1; i >= 0; i--)
-            try { RemoveCore(i); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+            try { RemoveCore(i, notify: false); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        try { Changed?.Invoke(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     public void Dispose() { _owner.ObserveMvvmTask(DisposeAsync().AsTask()); }
@@ -161,8 +177,8 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
     {
         Exception? first = null;
         try { ClearCore(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { await Task.WhenAll(_tasks); } catch { foreach (var task in _tasks.Where(t => !t.IsCompletedSuccessfully)) try { await task; } catch (Exception error) { MvvmRuntime.Failure(ref first, error); } }
-        finally { _tasks.Clear(); }
+        first = await MvvmRuntime.WaitForTasksAsync(_tasks, first);
+        _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 }

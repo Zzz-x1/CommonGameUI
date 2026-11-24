@@ -15,15 +15,22 @@ namespace StarCourt.UnityDemo
         public void Dispose() => _store.Changed -= Refresh;
     }
     [ViewModel]
-    public class ClientPurchaseVm
+    public class ClientPurchaseVm : IDisposable
     {
         private UnityClient _app;
         private Func<System.Threading.Tasks.Task> _close;
         private int _id;
         [FieldNotify] public int Quantity { get; set; } = 1;
-        [FieldNotify] public int Gold { get; set; }
-        [FieldNotify(nameof(Quantity), nameof(Gold))] public bool CanBuy => Gold >= ClientStore.Prices[_id] * Quantity;
-        public void Initialize(UnityClient app, int id, Func<System.Threading.Tasks.Task> close) { _app = app; _id = id; _close = close; }
+        [FieldNotify(nameof(Quantity))] public bool CanBuy => _app.Store.State.Gold >= ClientStore.Prices[_id] * Quantity;
+        public void Initialize(UnityClient app, int id, Func<System.Threading.Tasks.Task> close)
+        {
+            _app = app;
+            _id = id;
+            _close = close;
+            _app.Store.Changed += RefreshBudget;
+        }
+        private void RefreshBudget() => this.NotifyChanged(nameof(CanBuy));
+        public void Dispose() => _app.Store.Changed -= RefreshBudget;
         [Command] public System.Threading.Tasks.Task Close() => _close();
         [Command(CanExecute = nameof(CanBuy))] public async System.Threading.Tasks.Task Buy()
         {

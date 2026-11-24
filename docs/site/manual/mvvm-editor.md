@@ -23,9 +23,15 @@
 | 购买按钮 | Command，`Shop.Buy` |
 | 背包列表 | Collection，条目 Prefab／PackedScene |
 
+例如配置音量时，选择滑杆、Unity 的 `value` 或 Godot 的 `Value`、来源 `Settings.Volume` 和方向 `TwoWay`。这和代码里的 `slider.Bindable().Value` 使用同一份定义。标签的文本只提供 OneTime／OneWay；滑杆的值提供变化通知，因此也能选 TwoWay 或 OneWayToViewModel。旧行保存了不支持的方向时，面板会显示原因，需手动选定有效方向。
+
+来源为 VM 的 OneWay／TwoWay 属性行可以设置**刷新时机**。金币或报价使用默认 `EndOfFrame`，每个 UI 帧合并刷新；需要在输入回调结束前改变的控件状态选择 `Immediate`。打开预览时首次值直接显示。
+
 转换器按输入、输出类型筛选。条目来源名称固定为 `Item`，例如 `Item.Title`。列表布局在资源中配置；Godot 可使用 VBoxContainer／GridContainer，Unity 可使用 LayoutGroup 或项目布局代码。
 
 绑定表支持搜索、删除和重排。Unity 搜索结果中禁用重排；清除搜索后调整完整顺序。Unity 控件 Inspector 有绑定入口，Godot 常见控件属性下有绑定按钮。
+
+例如商店有 30 个商品行，只需在条目模板上配置一次 `Item.Price`。同一 Runtime 内，相同配置的行复用成员和转换器的解析结果。每行仍连接自己的商品 VM 和控件，Prefab Override 或不同的 PackedScene 可以指定其他标签。删除一行会解除该行订阅，其余价格继续更新。
 
 ## 配置转换器
 
@@ -42,13 +48,15 @@
 
 ## 3. 预览初始值
 
-点击 **预览初始值**。预览使用独立 Runtime 和资产克隆，只刷新显示及列表，不执行命令、不反向写入原资产。结束后恢复控件原值。
+点击 **预览初始值**。预览在临时 VM 上校验保存的绑定方向、转换类型和命令参数。双向滑杆显示 VM 初始值，拖动滑杆不会写回；仅向 VM 回写的控件保留原值。按钮不连接业务命令。结束预览后恢复控件与列表。如果某行出错，日志指出节点、来源和目标，框架撤销本次已连接的绑定。
 
 Unity 全局预览从 Provider 目录取得模板并独立克隆；本地来源没有样本时禁用预览。Godot Manual 来源仍使用显式引用的预览资产，运行时必须由业务调用 `SetViewModel`。
 
 ## 保存
 
 Unity 配置保存在组件中，随 Prefab／场景保存，支持 Undo 和 Prefab Override。Godot 场景组件保存绑定 Resource 和原生控件引用数组，编辑器同步修改两者，支持原生 Undo。控件引用不依赖框架维护的层级路径；重命名、换父节点及保存重开保持引用。
+
+保存会写入当前配置。要检查整张绑定表，请用有样本的 VM 运行预览。仅在运行时传入的 Manual VM，在界面连接该实例时校验其成员。
 
 预览不保存场景。编辑配置前先结束预览，避免展示值与编辑值混在一起。
 
@@ -60,6 +68,6 @@ Unity 配置保存在组件中，随 Prefab／场景保存，支持 Undo 和 Pre
 
 集合选择条目资源，添加父来源→条目来源映射。可选工厂引用实现 `ICollectionItemFactory` 的 Unity 组件或 Godot 节点。工厂也接收 `IsPreview`，预览分支仅做展示准备；预览不执行命令，结束后恢复控件。Item 自动提供。
 
-通过 `IBindingTargetProvider` 注册的自定义控件成员直接出现在属性列表中，预览无需另外安装解析器。
+项目用 `[BindProperty]` 追加的成员，也会在编译后出现在属性列表中。例如 Unity 的 `slider.Bindable().MinValue()` 在这里选 `minValue`。面板保存原生控件引用与区分大小写的成员名，预览直接使用同一份属性定义。见[声明控件绑定](mvvm.md#声明控件绑定)。
 
 Godot 工厂节点脚本需要 `[Tool]` 才能用于编辑器预览。将命令改为无业务参数的方法时，通过编辑器提供的操作明确清除旧参数配置。

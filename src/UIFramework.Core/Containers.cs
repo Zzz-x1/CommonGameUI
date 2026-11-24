@@ -3,6 +3,7 @@ namespace UIFramework;
 public abstract class ContainerNode : UINode
 {
     private readonly Dictionary<Type, UINode> _cache = new();
+    private protected object? FocusBeforeOperation { get; private set; }
     private ContainerOperations? _operations;
     private ContainerOperations Operations => _operations ??= new ContainerOperations(this);
     internal bool HasPendingOperations => _operations?.IsBusy == true;
@@ -10,8 +11,17 @@ public abstract class ContainerNode : UINode
     internal override Task WaitForOperationsAsync() => _operations?.WhenIdle ?? Task.CompletedTask;
     protected void CommitState(Action apply)
     { try { apply(); } catch (Exception error) { BlockOperations(error); throw; } }
-    private protected void RestoreNodeState(UINode node, bool visible, bool active)
-    { try { node.RestoreLocalState(visible, active); } catch (Exception error) { BlockOperations(error); throw; } }
+    // Subclasses decide membership and visibility; the operation driver projects
+    // the same stable records on commit, interrupted preparation and native loss.
+    protected abstract bool IsPresented(UINode child);
+    private protected void ApplyPresentation(UINode? child)
+    {
+        if (child?.State != NodeState.Ready) return;
+        var shown = IsPresented(child);
+        child.SetLocalState(shown, shown);
+    }
+    private protected Task RecoverPresentationAsync(Exception primary, UINode? child) =>
+        Context.CleanupAsync(primary, () => { CommitState(() => ApplyPresentation(child)); return Task.CompletedTask; });
     private protected void RestoreBackdrop(IUIBackdrop backdrop, bool visible)
     { try { backdrop.Restore(visible); } catch (Exception error) { BlockOperations(error); throw; } }
     private protected void RestoreBackdropOrder(IUIBackdrop backdrop, object order)
@@ -80,6 +90,7 @@ public abstract class ContainerNode : UINode
     }
     protected void MarkClosed(UINode node)
     {
+        node.LastFocus = null;
         if (node.Presentation is { Ended: false } session) session.End(Operations.CurrentTask);
     }
 
@@ -92,26 +103,17 @@ public abstract class ContainerNode : UINode
             _cache.Remove(typeof(T)); node.Cached = false; node.CacheReuse = true;
             try
             {
-                if (node.SuspendedInputOwner != null && Context.InputOwnerNode != null)
-                    throw new InvalidOperationException("Another modal currently owns input; cannot reopen this cached subtree.");
                 node.SetParameters(args);
                 if (node is IDialogResult dialog) dialog.BeginSession();
             }
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
         }
         else node = await Context.CreateAsync<T>(this, args, token);
-        node.Presentation = new PresentationSession(Id);
+        node.LastFocus = null;
+        node.Presentation = CreateOpening(node);
         return node;
     }
-
-    private bool SuspendOwnedInput(UINode node)
-    {
-        if (Context.InputOwnerNode is not { } inputOwner) return false;
-        for (var parent = inputOwner; parent != null; parent = parent.Parent)
-            if (ReferenceEquals(parent, node))
-            { node.SuspendedInputOwner = inputOwner; Context.SetInputOwner(null); return true; }
-        return false;
-    }
+    private protected virtual PresentationSession CreateOpening(UINode node) => new(this, node);
 
     protected async Task ReleaseClosedAsync(UINode node, bool retain = true)
     {
@@ -122,7 +124,6 @@ public abstract class ContainerNode : UINode
         { await node.DisposeAsync(); return; }
         try
         {
-            if (SuspendOwnedInput(node)) Context.PublishChanges(new LifecycleContext(node, this, LifecycleReason.Close));
             if (_cache.TryGetValue(node.RegisteredType!, out var previous))
             { _cache.Remove(node.RegisteredType!); await previous.DisposeAsync(); }
             node.SetLocalState(false, false); node.Cached = true;
@@ -153,6 +154,7 @@ public abstract class ContainerNode : UINode
 
     protected override void OnChildRemoved(UINode child)
     {
+        child.LastFocus = null;
         if (child.RegisteredType != null && _cache.TryGetValue(child.RegisteredType, out var cached) && ReferenceEquals(cached, child))
             _cache.Remove(child.RegisteredType);
     }
@@ -180,14 +182,30 @@ public abstract class ContainerNode : UINode
         await RunAsync(operation, async ct =>
         {
             Exception? primary = null;
-            try { beforeLock?.Invoke(); LockOperation(true); result = await action(ct); }
+            UINode? focusedPage = null;
+            try
+            {
+                FocusBeforeOperation = Context.Host.CaptureFocus();
+                focusedPage = Context.CaptureStackFocusOwner(this, FocusBeforeOperation);
+                beforeLock?.Invoke();
+                if (Context.InputOwnerNode is { } modal) Context.RememberFocus(modal, FocusBeforeOperation);
+                LockOperation(true);
+                result = await action(ct);
+            }
             catch (Exception ex) { primary = ex; throw; }
             finally
             {
+                var captured = FocusBeforeOperation;
+                FocusBeforeOperation = null;
                 if (State == NodeState.Ready)
                 {
-                    if (primary == null) LockOperation(false);
-                    else await Context.CleanupAsync(primary, () => { LockOperation(false); return Task.CompletedTask; });
+                    void Unlock()
+                    {
+                        LockOperation(false);
+                        Context.RestoreInterruptedFocus(this, captured, primary == null ? null : focusedPage);
+                    }
+                    if (primary == null) Unlock();
+                    else await Context.CleanupAsync(primary, () => { Unlock(); return Task.CompletedTask; });
                 }
                 else
                 {
@@ -202,23 +220,28 @@ public abstract class ContainerNode : UINode
     protected LifecycleContext Describe(UINode node, LifecycleReason reason, UINode? source, UINode? target) =>
         new(node, this, reason, source, target);
     protected void CompleteChange(LifecycleContext operation, UINode? exiting, LifecycleContext? exit,
-        UINode? entering, LifecycleContext? enter, Action? focus = null)
+        UINode? entering, LifecycleContext? enter, Action? focus = null,
+        ModalContainerNode? closingModal = null, object? restoreFocus = null)
     {
         try
         {
-            if (exiting != null && exit?.Reason == LifecycleReason.Close) SuspendOwnedInput(exiting);
-            if (entering?.SuspendedInputOwner is { State: NodeState.Ready } retainedInput)
-            { Context.SetInputOwner(retainedInput); entering.SuspendedInputOwner = null; }
-            exiting?.SetLocalState(false, false);
-            entering?.SetLocalState(true, true);
+            ApplyPresentation(exiting);
+            ApplyPresentation(entering);
             if (entering != null) entering.HasEntered = true;
             LockOperation(false);
+            var modalChanged = Context.ReconcileModalInput(closingModal, restoreFocus);
+            Context.FocusAfterChange(this, exiting, entering, FocusBeforeOperation, modalChanged);
+            FocusBeforeOperation = null;
             focus?.Invoke();
         }
         catch (Exception error) { BlockOperations(error); throw; }
-        Context.PublishChanges(operation, exit);
-        if (exiting != null) exiting.NotifyExited(exit!);
-        if (entering != null) { entering.NotifyEntered(enter!); entering.CacheReuse = false; }
+        try
+        {
+            Context.PublishChanges(operation, exit);
+            if (exiting != null) exiting.NotifyExited(exit!);
+            if (entering != null) entering.NotifyEntered(enter!);
+        }
+        finally { if (entering != null) entering.CacheReuse = false; }
     }
     protected async Task FinishCloseAsync(UINode node, Action notify)
     {
@@ -228,22 +251,41 @@ public abstract class ContainerNode : UINode
         await ReleaseClosedAsync(node);
     }
 
-    protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation,
-        TransitionDirection direction = TransitionDirection.None) => TransitionFlow.PrepareAsync(this, exit, enter, direction, playAnimation, token);
+    protected async Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation,
+        TransitionDirection direction = TransitionDirection.None, Func<CancellationToken, Task>? accompanyingAnimation = null)
+    {
+        var outgoing = exit?.Node.Node;
+        var incoming = enter?.Node.Node;
+        if (outgoing != null && this is StackContainerNode or TabContainerNode)
+            Context.RememberFocus(outgoing, FocusBeforeOperation);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token,
+            outgoing?.Lifetime ?? default, incoming?.Lifetime ?? default);
+        try
+        {
+            await TransitionFlow.PrepareAsync(this, exit, enter, direction, playAnimation, lifetime.Token, accompanyingAnimation);
+            lifetime.Token.ThrowIfCancellationRequested();
+        }
+        catch (Exception error)
+        {
+            await RecoverPresentationAsync(error, outgoing);
+            await RecoverPresentationAsync(error, incoming);
+            throw;
+        }
+    }
 
 }
 
 /// <summary>Independent windows with registration-defined instance identity and retained hiding.</summary>
 public class PanelContainerNode : ContainerNode
 {
-    private sealed class WindowRecord
+    private sealed class WindowRecord(PanelContainerNode container, UINode node) : PresentationSession(container, node)
     {
-        public WindowRecord(Type type) { Type = type; }
-        public Type Type { get; }
         public bool Shown { get; set; } = true;
     }
     private readonly Dictionary<UINode, WindowRecord> _windows = new();
     private readonly Dictionary<Type, UINode> _single = new();
+    private protected override PresentationSession CreateOpening(UINode node) => new WindowRecord(this, node);
+    protected override bool IsPresented(UINode child) => _windows.TryGetValue(child, out var record) && record.Shown;
 
     public Task<T> OpenAsync<T>(object? args = null, bool playAnimation = true,
         CancellationToken cancellationToken = default) where T : class, IUINode =>
@@ -263,14 +305,9 @@ public class PanelContainerNode : ContainerNode
             var enter = Describe(node, LifecycleReason.Open, null, node);
             try { await PrepareChangeAsync(null, enter, ct, playAnimation); }
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
-            _windows.Add(node, new WindowRecord(typeof(T)));
+            _windows.Add(node, (WindowRecord)node.Presentation!);
             if (mode == WindowInstanceMode.Single) _single.Add(typeof(T), node);
-            try { CompleteChange(enter, null, null, node, enter); }
-            catch (Exception ex)
-            {
-                if (node.CacheReuse) await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                throw;
-            }
+            CompleteChange(enter, null, null, node, enter);
             return (T)node.Owner;
         }, cancellationToken);
 
@@ -280,7 +317,7 @@ public class PanelContainerNode : ContainerNode
         {
             Context.Host.VerifyAccess();
             if (State != NodeState.Ready) throw new InvalidOperationException($"Window container is {State}.");
-            var matches = _windows.Where(p => p.Value.Type == typeof(T) && p.Key.State == NodeState.Ready).Select(p => p.Key).ToArray();
+            var matches = _windows.Keys.Where(n => n.RegisteredType == typeof(T) && n.State == NodeState.Ready).ToArray();
             if (matches.Length > 1) throw new InvalidOperationException($"Several windows of registered type {typeof(T).Name} exist; use their instance references.");
             node = matches.Length == 0 ? null : (T)matches[0].Owner;
             return node != null;
@@ -302,8 +339,7 @@ public class PanelContainerNode : ContainerNode
             var record = RequireWindow(node);
             if (!record.Shown) return true;
             var exit = Describe(node, LifecycleReason.Hide, node, null);
-            try { await PrepareChangeAsync(exit, null, ct, playAnimation); }
-            catch (Exception ex) { await Context.CleanupAsync(ex, () => { RestoreNodeState(node, true, true); return Task.CompletedTask; }); throw; }
+            await PrepareChangeAsync(exit, null, ct, playAnimation);
             record.Shown = false;
             CompleteChange(exit, node, exit, null, null);
             return true;
@@ -321,8 +357,7 @@ public class PanelContainerNode : ContainerNode
     private async Task ShowCoreAsync(UINode node, WindowRecord record, bool playAnimation, CancellationToken ct)
     {
         var enter = Describe(node, LifecycleReason.Show, null, node);
-        try { await PrepareChangeAsync(null, enter, ct, playAnimation); }
-        catch (Exception ex) { await Context.CleanupAsync(ex, () => { RestoreNodeState(node, false, false); return Task.CompletedTask; }); throw; }
+        await PrepareChangeAsync(null, enter, ct, playAnimation);
         record.Shown = true;
         CompleteChange(enter, null, null, node, enter);
     }
@@ -339,29 +374,26 @@ public class PanelContainerNode : ContainerNode
                 return;
             }
             var exit = Describe(node, LifecycleReason.Close, node, null);
-            try { await PrepareChangeAsync(exit, null, ct, playAnimation); }
-            catch (Exception ex) { await Context.CleanupAsync(ex, () => { RestoreNodeState(node, true, true); return Task.CompletedTask; }); throw; }
+            await PrepareChangeAsync(exit, null, ct, playAnimation);
             RemoveWindow(node);
             await FinishCloseAsync(node, () => CompleteChange(exit, node, exit, null, null));
         }, cancellationToken);
 
     private void RemoveWindow(UINode node)
     {
-        if (_windows.TryGetValue(node, out var record))
-        {
-            _windows.Remove(node);
-            if (_single.TryGetValue(record.Type, out var single) && ReferenceEquals(single, node)) _single.Remove(record.Type);
-        }
+        if (_windows.Remove(node) && _single.TryGetValue(node.RegisteredType!, out var single) && ReferenceEquals(single, node))
+            _single.Remove(node.RegisteredType!);
     }
     protected override void OnChildRemoved(UINode child) { RemoveWindow(child); base.OnChildRemoved(child); }
 }
 
 public class StackContainerNode : ContainerNode
 {
-    private readonly List<UINode> _history = new();
-    public IReadOnlyList<IUINode> History => _history.Select(n => n.Owner).ToArray();
+    private readonly List<PresentationSession> _history = new();
+    public IReadOnlyList<IUINode> History => _history.Select(entry => entry.Node.Owner).ToArray();
     public IUINode? Current => CurrentNode?.Owner;
-    private UINode? CurrentNode => _history.Count == 0 ? null : _history[_history.Count - 1];
+    private UINode? CurrentNode => _history.LastOrDefault()?.Node;
+    protected override bool IsPresented(UINode child) => ReferenceEquals(CurrentNode, child);
 
     public Task<T> PushAsync<T>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode =>
         OperateAsync("Push", async ct =>
@@ -369,42 +401,31 @@ public class StackContainerNode : ContainerNode
             ct.ThrowIfCancellationRequested();
             if (Context.GetWindowMode<T>() == WindowInstanceMode.Single)
             {
-                var index = _history.FindIndex(n => n.RegisteredType == typeof(T));
+                var index = _history.FindIndex(entry => entry.Node.RegisteredType == typeof(T));
                 if (index >= 0)
                 {
                     if (args != null) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
-                    var existing = _history[index];
+                    var existing = _history[index].Node;
                     if (index != _history.Count - 1) await ReturnCoreAsync(index, playAnimation, ct);
                     return (T)existing.Owner;
                 }
             }
-            var previous = CurrentNode;
             var node = await AcquireAsync<T>(args, ct);
+            // A lifetime may end the old page while the new resource is loading.
+            var previous = CurrentNode;
             var enter = Describe(node, LifecycleReason.Push, previous, node);
             var exit = previous == null ? null : Describe(previous, LifecycleReason.Covered, previous, node);
             try
             {
                 await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Forward);
-                ct.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
-                if (previous != null) await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, true, true); return Task.CompletedTask; });
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
                 throw;
             }
-            _history.Add(node);
-            try { CompleteChange(enter, previous, exit, node, enter); }
-            catch (Exception ex)
-            {
-                if (node.CacheReuse)
-                {
-                    await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                    if (previous != null) await Context.CleanupAsync(ex, () =>
-                    { previous.SetLocalState(true, true); Context.PublishChanges(exit!); return Task.CompletedTask; });
-                }
-                throw;
-            }
+            _history.Add(node.Presentation!);
+            CompleteChange(enter, previous, exit, node, enter);
             return (T)node.Owner;
         }, cancellationToken);
 
@@ -417,7 +438,7 @@ public class StackContainerNode : ContainerNode
 
     public Task PopToAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) => OperateOpeningAsync("PopTo", owner, async (target, ct) =>
     {
-        var index = _history.IndexOf(target);
+        var index = _history.IndexOf(target.Presentation!);
         if (target.Parent != this || target.State != NodeState.Ready || index < 0)
             throw new InvalidOperationException("Target must be a live instance in this stack's history.");
         if (index == _history.Count - 1) return true;
@@ -427,32 +448,22 @@ public class StackContainerNode : ContainerNode
 
     private async Task ReturnCoreAsync(int targetIndex, bool playAnimation, CancellationToken ct)
     {
-        var snapshot = _history.ToArray();
-        var current = snapshot[snapshot.Length - 1];
-        var previous = targetIndex < 0 ? null : snapshot[targetIndex];
-        var removed = snapshot.Skip(targetIndex + 1).Reverse().ToArray();
+        var current = CurrentNode!;
+        var previous = targetIndex < 0 ? null : _history[targetIndex].Node;
+        var removed = _history.Skip(targetIndex + 1).Reverse().ToArray();
         var exit = Describe(current, LifecycleReason.Close, current, previous);
         var enter = previous == null ? null : Describe(previous, LifecycleReason.Return, current, previous);
-        try
-        {
-            await PrepareChangeAsync(exit, enter, ct, playAnimation, TransitionDirection.Backward);
-            ct.ThrowIfCancellationRequested();
-            if (!_history.SequenceEqual(snapshot)) throw new InvalidOperationException("History changed while preparing the return.");
-        }
-        catch (Exception ex)
-        {
-            if (previous != null) await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, false, false); return Task.CompletedTask; });
-            await Context.CleanupAsync(ex, () => { RestoreNodeState(current, true, true); return Task.CompletedTask; });
-            throw;
-        }
-        _history.RemoveRange(targetIndex + 1, _history.Count - targetIndex - 1);
-        foreach (var node in removed) MarkClosed(node);
+        using var participants = CancellationTokenSource.CreateLinkedTokenSource(removed.Select(entry => entry.Node.Lifetime).Append(ct).ToArray());
+        await PrepareChangeAsync(exit, enter, participants.Token, playAnimation, TransitionDirection.Backward);
+        // Removing an unrelated earlier page during preparation can shift the target index.
+        _history.RemoveRange(_history.Count - removed.Length, removed.Length);
+        foreach (var entry in removed) MarkClosed(entry.Node);
         Exception? first = null;
         try { CompleteChange(exit, current, exit, previous, enter); }
         catch (Exception ex) { Context.Report(ex, "Return completion"); first = ex; }
-        foreach (var node in removed)
+        foreach (var entry in removed)
         {
-            try { await ReleaseClosedAsync(node, first == null); }
+            try { await ReleaseClosedAsync(entry.Node, first == null); }
             catch (Exception ex)
             {
                 Context.Report(ex, "Return cleanup");
@@ -462,7 +473,24 @@ public class StackContainerNode : ContainerNode
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 
-    protected override void OnChildRemoved(UINode child) { _history.Remove(child); base.OnChildRemoved(child); }
+    protected override void OnChildRemoved(UINode child)
+    {
+        base.OnChildRemoved(child);
+        var wasCurrent = CurrentNode == child;
+        if (!_history.Remove(child.Presentation!) || !wasCurrent || CurrentNode is not { State: NodeState.Ready } previous) return;
+        for (UINode? owner = this; owner != null; owner = owner.Parent)
+            if (owner.State == NodeState.Disposing) return;
+
+        // Ordinary pops remove history before disposal. A lifetime ending here
+        // exposes the underlying page immediately, preserving any ongoing operation's lock.
+        CommitState(() =>
+        {
+            ApplyPresentation(previous);
+            var modalChanged = Context.ReconcileModalInput();
+            Context.FocusAfterChange(this, child, previous, null, modalChanged);
+        });
+        Context.PublishChanges(Describe(previous, LifecycleReason.Return, child, previous));
+    }
 }
 
 /// <summary>Switcher for existing embedded nodes. Names are ordinal and container-local.</summary>
@@ -473,6 +501,7 @@ public class TabContainerNode : ContainerNode
     public string? CurrentName { get; private set; }
     public IUINode? Current => CurrentNode?.Owner;
     private UINode? CurrentNode => CurrentName == null ? null : _items[CurrentName];
+    protected override bool IsPresented(UINode child) => ReferenceEquals(CurrentNode, child);
 
     public Task BindAsync(string name, IUINode owner, IUIElement? embeddedElement = null,
         CancellationToken cancellationToken = default) => OperateAsync("BindTab", async ct =>
@@ -492,25 +521,15 @@ public class TabContainerNode : ContainerNode
 
     private async Task<bool> SwitchCoreAsync(string name, bool playAnimation, CancellationToken ct)
     {
-            if (!_items.TryGetValue(name, out var next)) throw new KeyNotFoundException($"Tab '{name}' does not exist in '{Name}'.");
-            if (ReferenceEquals(CurrentNode, next)) return true;
-            var previous = CurrentNode;
-            var enter = Describe(next, LifecycleReason.Switch, previous, next);
-            var exit = previous == null ? null : Describe(previous, LifecycleReason.Switch, previous, next);
-            try
-            {
-                await PrepareChangeAsync(exit, enter, ct, playAnimation);
-                ct.ThrowIfCancellationRequested();
-            }
-            catch (Exception ex)
-            {
-                await Context.CleanupAsync(ex, () => { RestoreNodeState(next, false, false); return Task.CompletedTask; });
-                if (previous != null) await Context.CleanupAsync(ex, () => { RestoreNodeState(previous, true, true); return Task.CompletedTask; });
-                throw;
-            }
-            CurrentName = name;
-            CompleteChange(enter, previous, exit, next, enter);
-            return true;
+        if (!_items.TryGetValue(name, out var next)) throw new KeyNotFoundException($"Tab '{name}' does not exist in '{Name}'.");
+        if (ReferenceEquals(CurrentNode, next)) return true;
+        var previous = CurrentNode;
+        var enter = Describe(next, LifecycleReason.Switch, previous, next);
+        var exit = previous == null ? null : Describe(previous, LifecycleReason.Switch, previous, next);
+        await PrepareChangeAsync(exit, enter, ct, playAnimation);
+        CurrentName = name;
+        CompleteChange(enter, previous, exit, next, enter);
+        return true;
     }
 
     public Task SwitchAsync<T>(bool playAnimation = true, CancellationToken cancellationToken = default) where T : class, IUINode =>
@@ -527,12 +546,7 @@ public class TabContainerNode : ContainerNode
             var current = CurrentNode;
             if (current == null) return true;
             var exit = Describe(current, LifecycleReason.Hide, current, null);
-            try { await PrepareChangeAsync(exit, null, ct, playAnimation); ct.ThrowIfCancellationRequested(); }
-            catch (Exception ex)
-            {
-                await Context.CleanupAsync(ex, () => { RestoreNodeState(current, true, true); return Task.CompletedTask; });
-                throw;
-            }
+            await PrepareChangeAsync(exit, null, ct, playAnimation);
             CurrentName = null;
             CompleteChange(exit, current, exit, null, null);
             return true;
@@ -549,15 +563,24 @@ public class TabContainerNode : ContainerNode
 /// <summary>Topmost modal owns input; this container owns its configured backdrop displays.</summary>
 public class ModalContainerNode : ContainerNode
 {
-    private sealed class ModalRecord(object? focus)
+    // The opening that owned the control can end while a newer dialog is still open or loading.
+    private readonly struct ReturnFocus(object? target, ModalRecord? source)
     {
-        public object? Focus { get; } = focus;
+        internal readonly object? Target = target;
+        internal readonly ModalRecord? Source = source;
+    }
+    private sealed class ModalRecord(ModalContainerNode container, UINode node) : PresentationSession(container, node)
+    {
+        internal ReturnFocus Focus;
+        internal IUIBackdrop? Backdrop;
         // The outcome is shared with result waiters, including failed close attempts.
         public TaskCompletionSource<Exception?>? CloseAttempt;
     }
-    private readonly List<UINode> _modals = new();
-    private readonly Dictionary<UINode, ModalRecord> _records = new();
-    private readonly Dictionary<UINode, IUIBackdrop> _backdrops = new();
+    private readonly List<ModalRecord> _modals = new();
+    private ReturnFocus _loadingFocus;
+    private protected override PresentationSession CreateOpening(UINode node) => new ModalRecord(this, node);
+    protected override bool IsPresented(UINode child) =>
+        child.Presentation is ModalRecord record && _modals.Contains(record);
     private IUIBackdropFactory? _backdropFactory;
     private bool _backdropDisabled;
     private IUIBackdrop? _sharedBackdrop;
@@ -565,9 +588,21 @@ public class ModalContainerNode : ContainerNode
     private bool _dismissPending;
     private bool _ownsInputBlock;
     public ModalBackdropMode BackdropMode { get; private set; } = ModalBackdropMode.Shared;
-    public IUIBackdrop? CurrentBackdrop => CurrentNode != null && _backdrops.TryGetValue(CurrentNode, out var backdrop) ? backdrop : null;
+    public IUIBackdrop? CurrentBackdrop => _modals.LastOrDefault()?.Backdrop;
     public IUINode? Current => CurrentNode?.Owner;
-    private UINode? CurrentNode => _modals.LastOrDefault();
+    private UINode? CurrentNode => _modals.LastOrDefault()?.Node;
+    internal UINode? VisibleTop
+    {
+        get
+        {
+            if (!CommittedVisible) return null;
+            for (var i = _modals.Count - 1; i >= 0; i--)
+                if (_modals[i].Node is { State: NodeState.Ready, CommittedVisible: true } top) return top;
+            return null;
+        }
+    }
+    internal object? FocusBefore(UINode modal) => ((ModalRecord)modal.Presentation!).Focus.Target;
+    internal object? BackgroundFocus => _modals.FirstOrDefault()?.Focus.Target;
 
     public void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
     {
@@ -621,10 +656,16 @@ public class ModalContainerNode : ContainerNode
     }
     private void UpdateBackdropInput()
     {
-        foreach (var backdrop in _backdrops.Values.Distinct())
+        if (_sharedBackdrop != null)
         {
-            backdrop.SetVisible(IsVisible && _modals.Any(n => n.IsVisible && _backdrops.TryGetValue(n, out var owned) && ReferenceEquals(owned, backdrop)));
-            backdrop.SetInteractive(!_backdropLocked && IsInteractive && ReferenceEquals(backdrop, CurrentBackdrop));
+            _sharedBackdrop.SetVisible(IsVisible && _modals.Any(entry => entry.Node.IsVisible));
+            _sharedBackdrop.SetInteractive(!_backdropLocked && IsInteractive && CurrentBackdrop != null);
+            return;
+        }
+        foreach (var entry in _modals)
+        {
+            entry.Backdrop?.SetVisible(IsVisible && entry.Node.IsVisible);
+            entry.Backdrop?.SetInteractive(!_backdropLocked && IsInteractive && ReferenceEquals(entry.Backdrop, CurrentBackdrop));
         }
     }
     protected override void OnApplyState() => UpdateBackdropInput();
@@ -632,13 +673,13 @@ public class ModalContainerNode : ContainerNode
     {
         if (BackdropMode == ModalBackdropMode.Shared)
         {
-            foreach (var modal in _modals.Where(n => !ReferenceEquals(n, CurrentNode))) modal.Element?.BringToFront();
+            foreach (var modal in _modals.Where(entry => !ReferenceEquals(entry.Node, CurrentNode))) modal.Node.Element?.BringToFront();
             _sharedBackdrop?.BringToFront(); CurrentNode?.Element?.BringToFront();
         }
         else foreach (var modal in _modals)
         {
-            if (_backdrops.TryGetValue(modal, out var backdrop)) backdrop.BringToFront();
-            modal.Element?.BringToFront();
+            modal.Backdrop?.BringToFront();
+            modal.Node.Element?.BringToFront();
         }
     }
 
@@ -646,7 +687,7 @@ public class ModalContainerNode : ContainerNode
         OpenCoreAsync<T>(args, playAnimation, cancellationToken);
     private Task<T> OpenCoreAsync<T>(object? args, bool playAnimation, CancellationToken cancellationToken, Action<T, ModalRecord>? opened = null) where T : class, IUINode
     {
-        object? focus = null;
+        ReturnFocus focus = default;
         return OperateAsync("OpenModal", async ct =>
         {
             ct.ThrowIfCancellationRequested();
@@ -654,31 +695,35 @@ public class ModalContainerNode : ContainerNode
                 throw new InvalidOperationException("Independent modal containers cannot own input simultaneously.");
             if (Context.GetWindowMode<T>() == WindowInstanceMode.Single)
             {
-                var index = _modals.FindIndex(n => n.RegisteredType == typeof(T));
+                var index = _modals.FindIndex(entry => entry.Node.RegisteredType == typeof(T));
                 if (index >= 0)
                 {
                     if (args != null) throw new InvalidOperationException("Creation parameters cannot be supplied to an existing single window; update it through its business API.");
                     var existing = _modals[index];
                     if (index != _modals.Count - 1) await CloseRangeAsync(index + 1, LifecycleReason.Return, playAnimation, ct);
-                    opened?.Invoke((T)existing.Owner, _records[existing]);
-                    return (T)existing.Owner;
+                    opened?.Invoke((T)existing.Node.Owner, existing);
+                    return (T)existing.Node.Owner;
                 }
             }
-            var previous = CurrentNode;
             var backdropFactory = _backdropDisabled ? null : _backdropFactory ?? Context.DefaultBackdropFactory;
-            var node = await AcquireAsync<T>(args, ct);
+            _loadingFocus = focus;
+            UINode node;
+            try { node = await AcquireAsync<T>(args, ct); focus = _loadingFocus; }
+            finally { _loadingFocus = default; }
+            var previous = CurrentNode;
             var enter = Describe(node, LifecycleReason.Open, previous, node);
             IUIBackdrop? backdrop = null;
             var createdBackdrop = false;
             object? priorOrder = null;
             try
             {
+                using var participants = CancellationTokenSource.CreateLinkedTokenSource(ct, node.Lifetime, previous?.Lifetime ?? default);
                 backdrop = BackdropMode == ModalBackdropMode.Shared ? _sharedBackdrop : null;
                 if (backdrop != null || backdropFactory != null)
                 {
                     if (backdrop == null)
                     {
-                        backdrop = await backdropFactory!.CreateAsync(Element, () => RequestDismissAsync(), ct)
+                        backdrop = await backdropFactory!.CreateAsync(Element, () => RequestDismissAsync(), participants.Token)
                             ?? throw new InvalidOperationException("Backdrop factory returned null.");
                         createdBackdrop = true;
                         backdrop.SetInteractive(false);
@@ -687,10 +732,11 @@ public class ModalContainerNode : ContainerNode
                     backdrop.BringToFront();
                     node.Element?.BringToFront();
                 }
-                await TransitionFlow.PrepareAsync(this, null, enter, TransitionDirection.None, playAnimation, ct,
+                participants.Token.ThrowIfCancellationRequested();
+                await PrepareChangeAsync(null, enter, participants.Token, playAnimation, TransitionDirection.None,
                     createdBackdrop ? token => backdrop!.ShowAsync(playAnimation, token) : null);
                 node.Element?.BringToFront();
-                ct.ThrowIfCancellationRequested();
+                participants.Token.ThrowIfCancellationRequested();
                 if (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this)
                     throw new InvalidOperationException("Another modal container acquired input while this modal was preparing.");
             }
@@ -704,30 +750,28 @@ public class ModalContainerNode : ContainerNode
                 await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
                 throw;
             }
-            _modals.Add(node); _records.Add(node, new ModalRecord(focus));
-            if (backdrop != null)
+            var record = (ModalRecord)node.Presentation!;
+            record.Focus = focus;
+            record.Backdrop = backdrop;
+            _modals.Add(record);
+            if (_modals.Count == 1) Context.TrackModal(this, true);
+            if (BackdropMode == ModalBackdropMode.Shared && !ReferenceEquals(_sharedBackdrop, backdrop))
             {
-                if (BackdropMode == ModalBackdropMode.Shared)
-                {
-                    _sharedBackdrop = backdrop;
-                    foreach (var modal in _modals) _backdrops[modal] = backdrop;
-                }
-                else _backdrops.Add(node, backdrop);
+                _sharedBackdrop = backdrop;
+                // A context default can be configured while an unshaded modal is open.
+                foreach (var entry in _modals) entry.Backdrop = backdrop;
             }
-            CommitState(() => Context.SetInputOwner(node));
-            try { CompleteChange(enter, null, null, node, enter, () => Context.Host.Focus(node.Element)); }
-            catch (Exception ex)
-            {
-                if (node.CacheReuse) await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
-                throw;
-            }
-            opened?.Invoke((T)node.Owner, _records[node]);
+            CompleteChange(enter, null, null, node, enter);
+            opened?.Invoke((T)node.Owner, record);
             return (T)node.Owner;
         }, cancellationToken, () =>
         {
             if (Context.IsModalInputBlocked || (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this))
                 throw new InvalidOperationException("Another modal container owns input or is preparing a modal operation.");
-            focus = Context.Host.CaptureFocus();
+            var source = Context.InputOwnerNode?.Presentation as ModalRecord;
+            if (FocusBeforeOperation != null && (source?.Node.Element is not { } scope || !Context.Host.ContainsFocus(scope, FocusBeforeOperation)))
+                source = null;
+            focus = new ReturnFocus(Context.CaptureModalFocus(FocusBeforeOperation), source);
         });
     }
 
@@ -750,7 +794,7 @@ public class ModalContainerNode : ContainerNode
     public Task CloseToAsync(IUINode owner, bool playAnimation = true, CancellationToken cancellationToken = default) =>
         OperateOpeningAsync("CloseToModal", owner, async (target, ct) =>
         {
-            var index = _modals.IndexOf(target);
+            var index = _modals.IndexOf((ModalRecord)target.Presentation!);
             if (index < 0 || target.State != NodeState.Ready)
                 throw new InvalidOperationException("Target must be a live modal of this container.");
             if (index == _modals.Count - 1) return true;
@@ -761,11 +805,11 @@ public class ModalContainerNode : ContainerNode
     private async Task CloseRangeAsync(int firstRemoved, LifecycleReason reason, bool playAnimation, CancellationToken token)
     {
         var removed = _modals.Skip(firstRemoved).Reverse().ToArray();
-        var current = removed[0];
-        var target = firstRemoved == 0 ? null : _modals[firstRemoved - 1];
-        var focus = _records[removed[removed.Length - 1]].Focus;
+        var current = removed[0].Node;
+        var target = firstRemoved == 0 ? null : _modals[firstRemoved - 1].Node;
+        var focus = removed[removed.Length - 1].Focus.Target;
         var outcome = new TaskCompletionSource<Exception?>();
-        foreach (var node in removed) _records[node].CloseAttempt = outcome;
+        foreach (var entry in removed) entry.CloseAttempt = outcome;
         Exception? failure = null;
         try
         {
@@ -773,25 +817,27 @@ public class ModalContainerNode : ContainerNode
             try
             {
                 // Reveal the final destination behind the exiting top, not an intermediate modal.
-                foreach (var node in removed.Skip(1)) node.StageVisibility(false);
+                using var participants = CancellationTokenSource.CreateLinkedTokenSource(
+                    removed.Select(entry => entry.Node.Lifetime).Append(target?.Lifetime ?? default).Append(token).ToArray());
+                foreach (var entry in removed.Skip(1)) entry.Node.StageVisibility(false);
                 UpdateBackdropInput();
                 var backdrop = BackdropMode == ModalBackdropMode.PerModal || target == null ? CurrentBackdrop : null;
-                await TransitionFlow.PrepareAsync(this, exit, null, TransitionDirection.None, playAnimation, token,
+                await PrepareChangeAsync(exit, null, participants.Token, playAnimation, TransitionDirection.None,
                     backdrop == null ? null : ct => backdrop.HideAsync(playAnimation, ct));
-                token.ThrowIfCancellationRequested();
+                participants.Token.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
-                foreach (var node in removed)
-                    await Context.CleanupAsync(ex, () => { RestoreNodeState(node, true, true); return Task.CompletedTask; });
+                foreach (var entry in removed.Skip(1)) await RecoverPresentationAsync(ex, entry.Node);
                 if (CurrentBackdrop is { } backdrop)
                     await Context.CleanupAsync(ex, () => { RestoreBackdrop(backdrop, true); return Task.CompletedTask; });
                 await Context.CleanupAsync(ex, () => { UpdateBackdropInput(); return Task.CompletedTask; });
                 throw;
             }
             // Commit the final history and input owner once. Intermediate modals never activate.
-            _modals.RemoveRange(firstRemoved, _modals.Count - firstRemoved);
-            foreach (var node in removed) { _records.Remove(node); MarkClosed(node); }
+            _modals.RemoveRange(_modals.Count - removed.Length, removed.Length);
+            if (_modals.Count == 0) Context.TrackModal(this, false);
+            foreach (var entry in removed) { entry.Focus = default; MarkClosed(entry.Node); }
             Exception? first = null;
             void Attempt(Action action)
             {
@@ -799,21 +845,28 @@ public class ModalContainerNode : ContainerNode
                 catch (Exception ex)
                 { Context.Report(ex, "Modal return completion"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex); }
             }
-            foreach (var node in removed) Attempt(() => CommitState(() => node.SetLocalState(false, false)));
-            Attempt(() => CommitState(() => Context.SetInputOwner(target)));
-            Attempt(() => CommitState(OrderBackdrops));
-            Attempt(() => CompleteChange(exit, current, exit, null, null, () => Context.Host.RestoreFocus(focus)));
-            foreach (var node in removed)
+            foreach (var entry in removed)
             {
-                try
-                {
-                    await ReleaseClosedAsync(node, first == null);
-                    await ReleaseBackdropAsync(node);
-                }
+                Attempt(() => CommitState(() => ApplyPresentation(entry.Node)));
+                if (BackdropMode == ModalBackdropMode.PerModal && entry.Backdrop is { } backdrop)
+                    Attempt(() => CommitState(() => { backdrop.SetVisible(false); backdrop.SetInteractive(false); }));
+            }
+            Attempt(() => CommitState(OrderBackdrops));
+            Attempt(() => CompleteChange(exit, current, exit, null, null,
+                closingModal: ReferenceEquals(Context.InputOwnerNode, current) ? this : null, restoreFocus: focus));
+            foreach (var entry in removed)
+            {
+                try { await ReleaseClosedAsync(entry.Node, first == null); }
                 catch (Exception ex)
                 {
-                    await Context.CleanupAsync(ex, async () => await node.DisposeAsync());
+                    await Context.CleanupAsync(ex, async () => await entry.Node.DisposeAsync());
                     Context.Report(ex, "Modal return cleanup"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex); }
+                try { await ReleaseBackdropAsync(entry); }
+                catch (Exception ex)
+                {
+                    await Context.CleanupAsync(ex, async () => await entry.Node.DisposeAsync());
+                    Context.Report(ex, "Modal backdrop cleanup"); if (first == null) first = ex; else UIFailure.AddSecondary(first, ex);
+                }
             }
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }
@@ -821,8 +874,8 @@ public class ModalContainerNode : ContainerNode
         finally
         {
             if (failure != null)
-                foreach (var node in removed)
-                    if (_records.TryGetValue(node, out var record) && !(node is IDialogResult dialog && dialog.HasResult))
+                foreach (var record in removed)
+                    if (!record.Ended && !(record.Node is IDialogResult dialog && dialog.HasResult))
                         record.CloseAttempt = null; // A restored, unanswered dialog can still complete normally later.
             outcome.SetResult(failure);
         }
@@ -832,6 +885,14 @@ public class ModalContainerNode : ContainerNode
     {
         var failure = await record.CloseAttempt!.Task;
         if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private Task CloseDialogOpeningAsync(ModalRecord record, bool playAnimation, CancellationToken token)
+    {
+        if (record.CloseAttempt != null) return AwaitCloseAsync(record);
+        if (record.EndTask != null) return record.EndTask;
+        RequireOpening(record.Node, record);
+        return CloseAsync(record.Node.Owner, playAnimation, token);
     }
 
     public async Task<TResult> ShowDialogAsync<T, TResult>(object? args = null, bool playAnimation = true, CancellationToken cancellationToken = default)
@@ -849,13 +910,10 @@ public class ModalContainerNode : ContainerNode
         catch (Exception ex)
         {
             Context.Report(ex, $"Dialog {node.Name}");
-            await Context.CleanupAsync(ex, () => record.CloseAttempt != null ? AwaitCloseAsync(record) :
-                node.State == NodeState.Ready ? CloseAsync(node, playAnimation) : node.DisposeAsync().AsTask());
+            await Context.CleanupAsync(ex, () => CloseDialogOpeningAsync(record, playAnimation, default));
             throw;
         }
-        if (record.CloseAttempt != null) await AwaitCloseAsync(record);
-        else if (node.State == NodeState.Ready) await CloseAsync(node, playAnimation, cancellationToken);
-        else await node.DisposeAsync();
+        await CloseDialogOpeningAsync(record, playAnimation, cancellationToken);
         return result;
     }
 
@@ -863,21 +921,34 @@ public class ModalContainerNode : ContainerNode
     {
         base.OnChildRemoved(child);
         var ownsInput = ReferenceEquals(Context.InputOwnerNode, child);
-        _records.TryGetValue(child, out var record);
-        _modals.Remove(child); _records.Remove(child);
+        if (child.Presentation is not ModalRecord record) return;
+        var focus = record.Focus;
+        var index = _modals.IndexOf(record);
+        if (index >= 0)
+        {
+            _modals.RemoveAt(index);
+            if (index < _modals.Count && _modals[index].Focus.Source == record) _modals[index].Focus = focus;
+            if (_loadingFocus.Source == record) _loadingFocus = focus;
+            if (_modals.Count == 0) Context.TrackModal(this, false);
+        }
+        record.Focus = default;
         if (ownsInput)
         {
-            CommitState(() => { Context.SetInputOwner(CurrentNode); Context.Host.RestoreFocus(record?.Focus); });
+            CommitState(() => Context.ReconcileModalInput(this, focus.Target));
             Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, CurrentNode), continueOnFailure: true);
         }
     }
 
-    protected override Task OnChildRemovedAsync(UINode child) => ReleaseBackdropAsync(child);
+    protected override Task OnChildRemovedAsync(UINode child) =>
+        child.Presentation is ModalRecord record ? ReleaseBackdropAsync(record) : Task.CompletedTask;
 
-    private async Task ReleaseBackdropAsync(UINode child)
+    private async Task ReleaseBackdropAsync(ModalRecord record)
     {
+        var backdrop = record.Backdrop;
+        if (backdrop == null) return;
+        record.Backdrop = null;
         IUIBackdrop? release = null;
-        if (_backdrops.Remove(child, out var backdrop) && (BackdropMode == ModalBackdropMode.PerModal || _modals.Count == 0))
+        if (BackdropMode == ModalBackdropMode.PerModal || _modals.Count == 0 && ReferenceEquals(_sharedBackdrop, backdrop))
         {
             release = backdrop;
             if (ReferenceEquals(backdrop, _sharedBackdrop)) _sharedBackdrop = null;

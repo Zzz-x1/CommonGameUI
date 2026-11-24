@@ -5,14 +5,13 @@ namespace UIFramework.Mvvm.EditorUnity
 {
     internal static class MvvmEditorBootstrap
     {
+        private static readonly MvvmFrameDriver Frames = new MvvmFrameDriver();
+
         [InitializeOnLoadMethod] private static void Initialize()
         {
-            EngineMvvm.MvvmBootstrap.EditModeObserver = runtime =>
-            {
-                EditorApplication.CallbackFunction observe = null;
-                observe = () => { runtime.ObserveTasks(); if (runtime.IsDisposed) EditorApplication.update -= observe; };
-                EditorApplication.update += observe;
-            };
+            EngineMvvm.MvvmBootstrap.EditModeObserver = Frames.Attach;
+            EditorApplication.update -= Frames.Tick;
+            EditorApplication.update += Frames.Tick;
             EngineMvvm.MvvmBootstrap.Register();
         }
     }

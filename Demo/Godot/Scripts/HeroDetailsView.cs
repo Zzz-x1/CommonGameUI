@@ -21,7 +21,7 @@ public partial class HeroDetailsView : EngineUI.UINode<int>
     {
         Transition = ClientTransitions.Hero();
         _hero = this.CreateViewModel<ClientHeroVm>("Hero");
-        this.Bind("Hero.Power", Root.GetNode<Label>("Stats").TextTarget(), new BindingOptions { Convert = value => Stats((int)value!) });
+        this.Bind("Hero.Power", Root.GetNode<Label>("Stats").Bindable().Text, new BindingOptions { Convert = value => Stats((int)value!) });
         Root.GetNode<Button>("Train").Pressed += Train;
         Root.GetNode<Button>("Equip").Pressed += Equip;
         Root.GetNode<Button>("Unequip").Pressed += Unequip;

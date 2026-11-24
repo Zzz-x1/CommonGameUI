@@ -4,7 +4,7 @@ MVVM is optional. Keep currency, settings and inventory data in a VM and update 
 
 ## Install
 
-- **Unity**: run `scripts/Prepare-Mvvm.ps1`, then install `src/UIFramework.Mvvm.Unity` as a local UPM package. Reference `UIFramework.Mvvm.Unity` from your asmdef; text targets also require `Unity.TextMeshPro`. Unity's ILPostProcessor automatically weaves project assemblies.
+- **Unity**: run `scripts/Prepare-Mvvm.ps1`, then install `src/UIFramework.Mvvm.Unity` as a local UPM package. Reference `UIFramework.Mvvm.Unity` from your asmdef and import that namespace for uGUI. For TextMeshPro controls, also reference `Unity.TextMeshPro` and import `UIFramework.Mvvm.Unity.TMP`. Unity's ILPostProcessor automatically weaves project assemblies.
 - **Godot**: run `scripts/Prepare-GodotMvvm.ps1 -Project <project directory>` to install the source plugin. Reference `UIFramework.Mvvm.csproj` and the existing Godot adapter, then import `build/UIFramework.Mvvm.targets`. Enable **UIFramework MVVM** in project settings.
 - **Plain .NET**: reference `UIFramework.Mvvm.csproj` and import the same targets. The build tool requires the .NET 10 SDK; the game runtime module targets `netstandard2.1`.
 
@@ -37,18 +37,36 @@ Provide sources and bindings during node initialization:
 
 ```csharp
 this.SetViewModel("Player", player);
-this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
+this.Bind("Player.Gold", goldLabel.Bindable().Text, new BindingOptions
 {
     Convert = Converters.Find("FormatNumber")
 });
-this.BindCommand("Player.Buy", buyButton.ClickTarget());
+this.BindCommand("Player.Buy", buyButton.Bindable().Click);
 ```
 
-Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
+Import `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity` and type `.Bindable().` after a control to see its available members. A label's `Text` displays a value and a button's `Click` invokes a command. Plain C# projects provide their own target interfaces.
+
+### Refresh a value owned by a service
+
+A health bar can read its value from the combat service through a VM property. Handle the service's health event on the UI thread and call `NotifyChanged` to refresh the bar and any dependent properties.
+
+```csharp
+[FieldNotify]
+public int Health => combat.Health;
+
+[FieldNotify(nameof(Health))]
+public bool IsDefeated => Health <= 0;
+
+private void OnHealthChanged() => this.NotifyChanged(nameof(Health));
+```
+
+Pass the name of a single `[FieldNotify]` property on this VM. Every manual call publishes a change. Assigning through a marked setter already publishes when its value changes.
 
 ## Automatic source resolution
 
 `GetViewModel`, code bindings and GUI bindings use the same rule: use the current node's local source first, then resolve the provider name. Global VMs need no prior injection. Collections or business code must inject `Item`. A local instance with the wrong type raises an error instead of selecting a global instance.
+
+An inventory can bind its list to `Inventory.Items` and its details to `Selection`. Calling `SetViewModel("Selection", next)` refreshes the details and keeps both visible rows and pending row loads. Replacing a nested VM updates subscriptions to the new object. Rows are reused if it exposes the same collection. A new collection instance or a collection `Reset` rebuilds the list.
 
 ```csharp
 var shop = this.GetViewModel<ShopVm>("Shop");
@@ -108,7 +126,7 @@ The framework rejects independent SO creation, SO factory results, and direct sh
 
 | Mode | Typical use | Released by |
 |---|---|---|
-| Create Instance | Equipment details and purchase flows | Node closure |
+| Create Instance | Equipment details and purchase flows | Node disposal |
 | Manual | Player state already created by gameplay services | Project |
 | Shared Asset | Currency or settings shared across windows | Last sharing Context closes |
 
@@ -126,17 +144,77 @@ To share asset clones across contexts, call `second.ShareMvvm(first)` before cre
 ## Two-way and nested paths
 
 ```csharp
-this.Bind("Settings.Volume", volumeSlider.ValueTarget(), BindingMode.TwoWay);
-this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
+this.Bind("Settings.Volume", volumeSlider.Bindable().Value, BindingMode.TwoWay);
+this.Bind("Player.Selected.Name", nameLabel.Bindable().Text, new BindingOptions
 {
     HasNullValue = true,
     NullValue = "No selection"
 });
 ```
 
-Two-way bindings initially use the VM value. After control input, the normalized setter value is synchronized back. Configure forward and reverse conversions separately with `Convert` and `ConvertBack`.
+A two-way binding initially displays the VM value. Player input writes to the VM immediately. Set forward and reverse conversions separately with `Convert` and `ConvertBack`.
+
+### Choose when the control updates
+
+The first display and `ResumeBinding` are synchronous. Subsequent property changes default to `EndOfFrame`. At the UI frame boundary each dirty binding reads its latest source values once and updates the control once. Manual notifications and the display of a value corrected by a setter use the same timing.
+
+Use `Immediate` when the control must be up to date before the current call returns, such as disabling order confirmation when the budget changes. A purchase command still checks the current VM when invoked.
+
+```csharp
+this.Bind<bool>("Order.CanConfirm", SetConfirmEnabled,
+    timing: BindingUpdateTiming.Immediate);
+```
 
 Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive properties also require `FieldNotify`. Null paths throw by default. Explicit null presentation neither hides missing members or wrong types nor creates missing objects.
+
+## Calculate a quote from multiple VMs
+
+When quantity, price and wallet balance change in the same frame, this binding calculates the quote once. List the source paths in lambda parameter order. The label shows the total when affordable and the shortfall as a negative number otherwise.
+
+```csharp
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.Bindable().Text,
+    (int gold, int price, int quantity) =>
+    {
+        long total = (long)price * quantity;
+        return gold >= total ? $"{total}" : $"-{total - gold}";
+    });
+
+this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
+```
+
+Pass a target and a function returning its value to update a control property. Pass a synchronous callback for custom presentation, such as the badge's `ShowCount` method. Both run when connected. If a VM along a path is replaced, the binding reads all sources from the current instances.
+
+## Connect a custom input control
+
+A **quantity picker** edits one property. Pass the control's display method to `apply`. In `subscribe`, connect its input event and return a callback that disconnects it. The methods and events on these controls belong to the project.
+
+```csharp
+this.BindTwoWay<int>("Cart.Quantity",
+    apply: quantityPicker.SetValueWithoutNotify,
+    subscribe: edited =>
+    {
+        quantityPicker.ValueEdited += edited;
+        return () => quantityPicker.ValueEdited -= edited;
+    }, timing: BindingUpdateTiming.Immediate);
+```
+
+When the window opens, the picker immediately displays `Cart.Quantity`. If a player enters 120 and the setter caps the value at 99, the picker displays 99. The binding subscribes to input once and ignores synchronous input events from initialization or display updates.
+
+A **price range slider** displays two properties. Let the control preview changes during a drag and emit a project-defined `PriceRange` on release. Use one `commit` call to set both limits. Looking up the current VM inside the callback sends future edits to the new instance if the filter is replaced.
+
+```csharp
+this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
+    apply: rangeSlider.SetRangeWithoutNotify,
+    subscribe: committed =>
+    {
+        rangeSlider.RangeCommitted += committed;
+        return () => rangeSlider.RangeCommitted -= committed;
+    },
+    commit: range => this.GetViewModel<FilterVm>("Filter")
+                         .SetPriceRange(range.Min, range.Max));
+```
+
+With the default timing, edits within one UI frame yield a single redraw with the final range. Other bindings use their own timing. A failing commit propagates the original exception immediately. Changes already applied to the VM are displayed at the selected time. For editor configuration, see [Declare control bindings](#declare-control-bindings).
 
 ## Pause bindings for animation
 
@@ -153,13 +231,23 @@ The VM can keep updating while paused. Bindings neither overwrite animation nor 
 
 All controls bound to the same source property pause together. Other properties, child nodes, commands and lists continue. If the name matches different source paths, specify the full path, such as `"Hero.Power"`. Repeated pause, resume without pause and missing bindings raise errors.
 
-These are synchronous paired APIs without animation wrappers or automatic recovery. The application decides when to resume after cancellation or failure. Closing the node releases its bindings; do not resume afterward.
+Use any participating path to pause the whole multi-source binding. It ignores input while paused and redraws once with the latest values on resume. The project decides when to resume after animation completion, cancellation or failure. Hidden and cached nodes keep their bindings. Disposing a binding or its node disconnects the input event.
 
 ## Lists and commands
 
 Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind them with `BindCollection` and `CollectionTarget`. Add `MvvmBindings` to the item scene or Prefab; the framework supplies the `Item` source automatically, without an asset declaration. Items can be basic nodes without a business View class.
 
 Moving retains item instances; removal detaches bindings and releases the item. Ordinary arrays support one-time display. Project resources define layout. The module provides no virtualization, sorting or extra pool.
+
+When the inventory is sorted or receives a full server snapshot, call `ApplySnapshot` on the bound collection on the UI thread. Use an instance ID to distinguish two items of the same type.
+
+```csharp
+Equipment.ApplySnapshot(sortedItems,
+    row => row.InstanceId, item => item.InstanceId,
+    item => new EquipmentRowVm(item), (row, item) => row.UpdateFrom(item));
+```
+
+`create` builds and populates a VM for each new key. `update` refreshes retained rows, preserving their controls and pending loads. Missing keys trigger removal. If an item can switch templates, use `(InstanceId, LayoutKind)` as its key.
 
 Commands support `void` and `Task`, at most one business parameter, and an optional `CancellationToken` for asynchronous work. `async void` is rejected. `CanExecute` and execution state control buttons; the Runtime continuously observes the same task. Save business changes before presenting rewards. Cancelled confirmations do not commit.
 
@@ -171,13 +259,66 @@ Await cleanup before exiting:
 await ui.DisposeAsync();
 ```
 
-Original exceptions are logged and propagated. UI bindings and notifications run on the engine thread. Direct field writes do not notify.
+When node disposal or `WhenMvvmIdleAsync()` waits for several tasks, it waits for all of them even if one fails. The caller receives the original exception. Read `UIFailure.GetSecondaryExceptions(error)` for other failures and cancellations. Each exception appears once. Faults take precedence over cancellation within a batch.
+
+Commands and bindings log the original errors. UI bindings and notifications run on the engine thread. Direct field writes do not notify.
 
 Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [Lifecycle](lifecycle.md)
 
-## Custom control properties
+## Declare control bindings
 
-Implement `IBindingTargetProvider.GetTargets()` and mark the assembly with `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`. Return strongly typed `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)` definitions. `subscribe` is optional for display bindings; TwoWay and View→VM require it. Runtime, the property picker and preview use the same definitions. Member discovery does not subscribe to control events.
+### Adapt an additional engine control
+
+For a quest log with a Unity `Scrollbar`, the project can expose its scroll position. Put the declaration in a C# file compiled by the project. Import its namespace at the call site.
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ControlAdapter(typeof(Scrollbar))]
+    [BindProperty(nameof(Scrollbar.value),
+        Write = nameof(Scrollbar.SetValueWithoutNotify),
+        Changed = nameof(Scrollbar.onValueChanged))]
+    internal static class QuestScrollbarAdapter { }
+}
+```
+
+With `using Game.UI.Bindings;`, call `this.Bind("Quest.ScrollPosition", scrollbar.Bindable().Value, BindingMode.TwoWay)`. The getter reads `value`, VM updates use the silent setter, and a native change event makes the binding read the current value back. A display-only property can omit `Changed`. The GUI exposes the registered key `value`.
+
+### Extend an existing adapter
+
+Unity already supplies an adapter for `Slider`. A settings page can add a binding for the minimum allowed volume by extending that adapter.
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ExtendControlAdapter(typeof(Slider))]
+    [BindProperty(nameof(Slider.minValue))]
+    internal static class SettingsSliderAdapter { }
+}
+```
+
+Import `UIFramework.Mvvm.Unity` and `Game.UI.Bindings` in the view:
+
+```csharp
+this.Bind("Settings.MinVolume", slider.Bindable().MinValue());
+this.Bind("Settings.Volume", slider.Bindable().Value, BindingMode.TwoWay);
+```
+
+The primary adapter exposes **properties** such as `Value`. An additional declaration exposes **extension methods** such as `MinValue()`. In View Bindings select the same slider and choose `minValue` or `value`. Each native control type has one primary declaration. The declared C# type determines completion: a variable typed as `Slider` exposes `Value`, while a `Selectable` variable exposes members of `Selectable` and its adapted bases.
+
+Godot uses the same declarations. Its built-in `Range.Value` target exposes a `float` and writes through `SetValueNoSignal`. The Godot demo extends `Godot.Range` with `[BindProperty(nameof(Godot.Range.MinValue))]`, which exposes `slider.Bindable().MinValue()` and the GUI key `MinValue`.
+
+### Build and registration
+
+Roslyn generates the typed C# surface and a strongly typed property provider. Cecil weaves VM access and emits the provider registration entry points. Both are build tools. Unity includes the generator as a `RoslynAnalyzer` in the MVVM UPM package. Godot and .NET projects import `build/UIFramework.Mvvm.targets` in the application and in each library declaring adapters or providers. Reference these libraries as copy-local dependencies so their registrations are available at startup and in preview.
+
+For members known only at runtime, use the engine's `BindingTargets.Property(control, member)`. A handwritten `IBindingTargetProvider` can also supply definitions to the same registry. Code bindings, the property picker and preview share the resolved definition. Each control instance owns its subscription.
 
 ## Command parameters and item factories
 
@@ -186,7 +327,7 @@ A command binding can use a typed constant or a source path. The source is read 
 Item mappings borrow parent VM instances at creation time; they do not clone or follow replacement of the parent source.
 
 ```csharp
-node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+node.BindCommand("Shop.Buy", buyButton.Bindable().Click,
     new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
 
 var target = new CollectionTarget(node, mount, itemResource,

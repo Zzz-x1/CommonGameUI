@@ -66,20 +66,33 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(view.Rect.Find("Hero").GetComponent<CanvasGroup>().alpha, Is.EqualTo(1));
             await view.Tabs.SwitchAsync("Lobby"); Assert.That(view.Node.IsInteractive, Is.True);
         }
-        [UnityTest] public IEnumerator TimelineExternalStopAndObserverFailureRemainErrors() => Await(TimelineFailures());
-        private async Task TimelineFailures()
+        [UnityTest] public IEnumerator TimelineExternalStopCommitsSelectedTab() => Await(StopTimeline());
+        private async Task StopTimeline()
         {
             var view = await TimelineTab();
-            var playing = view.Tabs.SwitchAsync("Lobby"); view.Director.Stop();
-            try { await playing; Assert.Fail("Expected interrupted Timeline failure."); }
-            catch (InvalidOperationException error) { Assert.That(error.Message, Does.Contain("interrupted")); Assert.That(_log.Errors, Does.Contain(error)); }
+            var playing = view.Tabs.SwitchAsync("Lobby");
+            view.Director.Stop();
+            await playing;
+            Assert.That(view.Tabs.CurrentName, Is.EqualTo("Lobby"));
+            Assert.That(view.Node.IsInteractive, Is.True);
+            Assert.That(view.Director.playableGraph.IsValid(), Is.False);
+            Assert.That(_log.Errors, Is.Empty);
+        }
+
+        [UnityTest] public IEnumerator TimelineObserverFailurePreservesExceptionAndAllowsRetry() => Await(ObserverFailure());
+        private async Task ObserverFailure()
+        {
+            var view = await TimelineTab();
             var original = new System.IO.IOException("Timeline observer identity");
             void Failure(TransitionState state) { if (state.Stage == TransitionStage.Playing && state.Progress > .1) throw original; }
             view.Node.TransitionChanged += Failure;
             try { await view.Tabs.SwitchAsync("Lobby"); Assert.Fail("Expected observer failure."); }
             catch (System.IO.IOException error) { Assert.That(error, Is.SameAs(original)); }
             view.Node.TransitionChanged -= Failure;
-            Assert.That(view.Director.playableGraph.IsValid(), Is.False); await view.Tabs.SwitchAsync("Lobby"); Assert.That(view.Node.IsInteractive, Is.True);
+            Assert.That(view.Tabs.CurrentName, Is.Null);
+            Assert.That(view.Director.playableGraph.IsValid(), Is.False);
+            await view.Tabs.SwitchAsync("Lobby");
+            Assert.That(view.Node.IsInteractive, Is.True);
         }
         [UnityTest] public IEnumerator TimelineRejectsInvalidDirectorConfiguration() => Await(TimelineInvalid());
         private async Task TimelineInvalid()
