@@ -136,6 +136,36 @@ namespace StarCourt.UnityDemo.Tests
             await modals.CloseAsync(first); Assert.That(_events.GetComponent<EventSystem>().currentSelectedGameObject, Is.SameAs(original.gameObject));
             Assert.That(_mount.childCount, Is.EqualTo(0));
         }
+        [UnityTest] public IEnumerator HidingAndShowingPanelRestoresNestedModalInput() => Await(HideModalParentAsync());
+        private async Task HideModalParentAsync()
+        {
+            var panels = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", _mount);
+            var lobby = await panels.OpenAsync<Other>();
+            var shop = await panels.OpenAsync<Plain>();
+            var lobbyButton = lobby.GetRoot().GetComponentInChildren<Button>();
+            var events = _events.GetComponent<EventSystem>();
+            events.SetSelectedGameObject(lobbyButton.gameObject);
+            var dialogs = await shop.CreateContainerAsync<ModalContainerNode>("Dialogs");
+            dialogs.ConfigureBackdrop(EngineUI.Backdrops.Dim(_ => Assert.Fail("Unexpected dismissal")));
+            var confirm = await dialogs.OpenAsync<Other>(playAnimation: false);
+            var backdrop = dialogs.GetRoot().Find("ModalBackdrop").GetComponent<CanvasGroup>();
+
+            Assert.That(lobbyButton.IsInteractable(), Is.False);
+            Assert.That(events.currentSelectedGameObject.transform.IsChildOf(confirm.GetRoot()), Is.True);
+
+            await panels.HideAsync(shop);
+            Assert.That(confirm.GetRoot().gameObject.activeInHierarchy, Is.False);
+            Assert.That(backdrop.gameObject.activeInHierarchy, Is.False);
+            Assert.That(lobbyButton.IsInteractable(), Is.True);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(lobbyButton.gameObject));
+
+            await panels.ShowAsync(shop);
+            Assert.That(dialogs.Current, Is.SameAs(confirm));
+            Assert.That(confirm.GetRoot().GetComponentInChildren<Button>().IsInteractable(), Is.True);
+            Assert.That(backdrop.gameObject.activeInHierarchy && backdrop.blocksRaycasts, Is.True);
+            Assert.That(lobbyButton.IsInteractable(), Is.False);
+            Assert.That(events.currentSelectedGameObject.transform.IsChildOf(confirm.GetRoot()), Is.True);
+        }
         [UnityTest] public IEnumerator NativeTransitionCancellationAndRawFailure() => Await(TransitionBoundariesAsync());
         private async Task TransitionBoundariesAsync()
         {
