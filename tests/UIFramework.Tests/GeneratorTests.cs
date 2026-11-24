@@ -20,6 +20,12 @@ public class GeneratorTests
             public class DashboardView : UINode { }
             [UIResource("res://confirm.tscn")]
             public class ConfirmView : DialogNode<bool> { }
+            [UIResource("res://purchase.tscn")]
+            public class PurchaseView : DialogNode<bool>, IParameterizedNode<int>
+            {
+                public int Parameters { get; private set; }
+                protected override void OnSetParameters(object args) => Parameters = (int)args;
+            }
             public static class Calls
             {
                 public static async System.Threading.Tasks.Task Run(PanelContainerNode windows)
@@ -44,6 +50,10 @@ public class GeneratorTests
                     var result = dialogs.ShowConfirmViewAsync(false, token);
                     ((ConfirmView)dialogs.Current).Complete(true);
                     if (!await result) throw new System.Exception("Dialog result lost");
+                    var purchase = dialogs.ShowPurchaseViewAsync(42, false, token);
+                    var dialog = (PurchaseView)dialogs.Current;
+                    dialog.Complete(dialog.Parameters == 42);
+                    if (!await purchase) throw new System.Exception("Dialog argument lost");
                 }
                 public static System.Threading.Tasks.Task Cancel(PanelContainerNode windows,
                     System.Threading.CancellationToken token) => windows.OpenExampleViewAsync("cancel", false, token);
