@@ -109,6 +109,23 @@ public sealed class BindingPlanTests
         return row;
     }
 
+    [Theory]
+    [InlineData(BindingMode.TwoWay)]
+    [InlineData(BindingMode.OneWayToViewModel)]
+    public async Task UnsupportedCodeBindingFailsBeforeEitherSideChanges(BindingMode mode)
+    {
+        var host = new Host();
+        await using var ui = new UIContext(host, host, host);
+        var model = new Product { Price = 21 };
+        var node = await Row(ui, 1, model);
+        var control = new TestControl { Value = 73 };
+        var target = BindingTargetRegistry.Find(typeof(TestControl), "Display").CreateTarget(control);
+
+        Assert.Throws<InvalidOperationException>(() => node.Bind("Item.Price", target, mode));
+        Assert.Equal(21, model.Price);
+        Assert.Equal(73, control.Value);
+    }
+
     [Fact]
     public async Task ThirtyProductRowsShareDescriptionsAndReleaseTheirOwnConnections()
     {

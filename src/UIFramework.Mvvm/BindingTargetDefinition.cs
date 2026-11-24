@@ -7,6 +7,11 @@ public sealed class BindingTargetProviderAttribute(Type type) : Attribute
 public interface IBindingTargetProvider
 { IEnumerable<BindingTargetDefinition> GetTargets(); }
 
+internal interface IRegisteredBindingTarget
+{
+    void ValidateMode(BindingMode mode);
+}
+
 public sealed class BindingTargetDefinition
 {
     public Type TargetType { get; }
@@ -19,25 +24,75 @@ public sealed class BindingTargetDefinition
     public static BindingTargetDefinition Create<TTarget, TValue>(string member, Func<TTarget, TValue> read,
         Action<TTarget, TValue> write, Func<TTarget, Action, Action>? subscribe = null) where TTarget : class =>
         new(typeof(TTarget), member, typeof(TValue), subscribe != null,
-            value => new Target<TValue>(() => read((TTarget)value), v => write((TTarget)value, v),
+            value => new Target<TValue>(member, () => read((TTarget)value), v => write((TTarget)value, v),
                 subscribe == null ? null : callback => subscribe((TTarget)value, callback)));
+
+    public bool Supports(BindingMode mode) => Supports(mode, Observable);
+
+    private static bool Supports(BindingMode mode, bool observable) => mode switch
+    {
+        BindingMode.OneTime or BindingMode.OneWay => true,
+        BindingMode.OneWayToViewModel or BindingMode.TwoWay => observable,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode))
+    };
+
     public IBindingTarget CreateTarget(object target, BindingMode mode = BindingMode.OneWay)
     {
         if (!TargetType.IsInstanceOfType(target)) throw new InvalidCastException("Binding target type mismatch: " + TargetType.FullName);
-        if (!Observable && mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
-            throw new InvalidOperationException("Binding target does not provide change notifications: " + Member);
+        if (!Supports(mode)) throw MissingNotifications(Member);
         return _create(target);
     }
-    private sealed class Target<T> : IBindingTarget
+
+    private static InvalidOperationException MissingNotifications(string member) =>
+        new("Binding target does not provide change notifications: " + member);
+
+    private sealed class Target<T>(string member, Func<T> read, Action<T> write,
+        Func<Action, Action>? subscribe) : IBindingTarget, IRegisteredBindingTarget
     {
-        private readonly Func<T> _read; private readonly Action<T> _write; private Action? _disconnect;
-        public Target(Func<T> read, Action<T> write, Func<Action, Action>? subscribe)
-        { _read = read; _write = write; _disconnect = subscribe?.Invoke(() => Changed?.Invoke()); }
+        private Action? _changed;
+        private Action? _disconnect;
+        private bool _disposed;
+
         public Type ValueType => typeof(T);
-        public object? Read() => _read();
-        public void Write(object? value) => _write((T)value!);
-        public event Action? Changed;
-        public void Dispose() { var disconnect = _disconnect; _disconnect = null; disconnect?.Invoke(); }
+        public object? Read() => read();
+        public void Write(object? value) => write((T)value!);
+
+        public void ValidateMode(BindingMode mode)
+        {
+            if (!Supports(mode, subscribe != null)) throw MissingNotifications(member);
+        }
+
+        public event Action? Changed
+        {
+            add
+            {
+                if (value == null) return;
+                if (_disposed) throw new ObjectDisposedException(nameof(IBindingTarget));
+                if (subscribe == null) throw MissingNotifications(member);
+                // A control may report its initial value while the listener is being installed.
+                if (_changed == null) _disconnect = subscribe(() => _changed?.Invoke());
+                _changed += value;
+            }
+            remove
+            {
+                _changed -= value;
+                if (_changed == null) Disconnect();
+            }
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            _changed = null;
+            Disconnect();
+        }
+
+        private void Disconnect()
+        {
+            var disconnect = _disconnect;
+            _disconnect = null;
+            disconnect?.Invoke();
+        }
     }
 }
 

@@ -385,6 +385,7 @@ internal sealed partial class BindingScope : IAsyncDisposable
         {
             ValidateTiming();
             var mode = _options.Mode;
+            if (_target is IRegisteredBindingTarget registered) registered.ValidateMode(mode);
             bool twoWay = mode == BindingMode.TwoWay;
             if (_options.HasConstantValue && (twoWay || mode == BindingMode.OneWayToViewModel))
                 throw new InvalidOperationException("Constant input cannot be written back to a ViewModel.");
