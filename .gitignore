@@ -27,5 +27,6 @@ Demo/Unity/Assets/InitTestScene*.unity*
 
 src/UIFramework.Mvvm.Unity/**/Plugins/*.dll
 src/UIFramework.Mvvm.Unity/**/Plugins/*.pdb
+src/UIFramework.Mvvm.Unity/Analyzers/*.dll
 
 Demo/Godot/addons/ui_framework_mvvm/

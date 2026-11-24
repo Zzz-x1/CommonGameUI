@@ -78,7 +78,7 @@ namespace StarCourt.UnityDemo
             }
             Navigation.SetActive(false);
             var wallet = new WalletNode(); await wallet.AttachToAsync(UI.Root, "Wallet", Wallet.rectTransform);
-            wallet.Bind("Player.Wallet", Wallet.TextTarget());
+            wallet.Bind("Player.Wallet", Wallet.Bindable().Text);
             await Pages.PushAsync<LoginView>();
         }
         public Task RunAsync(IUINode owner, Func<Task> action) => RunAsync(async () =>

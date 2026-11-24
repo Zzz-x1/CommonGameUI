@@ -4,6 +4,7 @@ using EngineUI = global::UIFramework.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
@@ -46,6 +47,39 @@ namespace StarCourt.UnityDemo.Tests
     }
     public sealed class MvvmNativeTests
     {
+        [Test]
+        public void SliderBindableIncludesInheritedAndProjectMembers()
+        {
+            var owner = new GameObject("Price slider", typeof(RectTransform), typeof(Slider));
+            try
+            {
+                var slider = owner.GetComponent<Slider>();
+                var targets = slider.Bindable();
+                var registered = BindingTargetRegistry.Members(typeof(Slider));
+                CollectionAssert.IsSubsetOf(new[] { "activeSelf", "enabled", "interactable", "value", "minValue" },
+                    registered.Select(definition => definition.Member));
+                using var minimum = targets.MinValue();
+                using var value = targets.Value;
+                using var interactable = targets.Interactable;
+                minimum.Write(-2f);
+                Assert.That(slider.minValue, Is.EqualTo(-2f));
+                interactable.Write(false);
+                Assert.That(slider.interactable, Is.False);
+
+                int changes = 0;
+                value.Changed += () => changes++;
+                value.Write(.5f);
+                Assert.That(slider.value, Is.EqualTo(.5f));
+                Assert.That(changes, Is.Zero);
+                slider.value = .75f;
+                Assert.That(changes, Is.EqualTo(1));
+                value.Dispose();
+                slider.value = 1f;
+                Assert.That(changes, Is.EqualTo(1));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(owner); }
+        }
+
         [UnityTest] public IEnumerator GlobalOwnershipAndLifecycle() => Wait(GlobalRulesRun());
         private static async Task GlobalRulesRun()
         {
@@ -158,7 +192,7 @@ namespace StarCourt.UnityDemo.Tests
             var select = row.gameObject.AddComponent<Button>();
             int selected = 0;
             second.Open = () => { selected = second.Id; return Task.CompletedTask; };
-            row.BindCommand("Item.Select", select.ClickTarget());
+            row.BindCommand("Item.Select", select.Bindable().Click);
             player.Items.ApplySnapshot(new[] { 1, 2 }, item => item.Id, id => id,
                 id => new ClientInventoryItemVm { Id = id }, (item, id) => item.Text = "Item " + id);
             await ui.WhenMvvmIdleAsync();
@@ -207,7 +241,7 @@ namespace StarCourt.UnityDemo.Tests
             finally { Time.timeScale = previousScale; }
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
             slider.GetComponent<Slider>().maxValue = 200;
-            node.Bind(template.name + ".Gold", slider.GetComponent<Slider>().ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
+            node.Bind(template.name + ".Gold", slider.GetComponent<Slider>().Bindable().Value, new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
             node.PauseBinding(nameof(NativePlayerVm.Gold)); vm.Gold = 120; slider.GetComponent<Slider>().value = 15;
             Assert.That(vm.Gold, Is.EqualTo(120)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
             node.ResumeBinding(template.name + ".Gold"); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("120")); Assert.That(slider.GetComponent<Slider>().value, Is.EqualTo(120));

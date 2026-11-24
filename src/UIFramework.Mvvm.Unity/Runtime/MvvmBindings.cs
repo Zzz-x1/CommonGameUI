@@ -52,7 +52,7 @@ namespace UIFramework.Mvvm.Unity
         object IViewBindingSlots.GetTarget(int slot) => Bindings[slot].Target ? Bindings[slot].Target
             : throw new InvalidOperationException("Missing binding target: " + Bindings[slot].Source);
         Type IViewBindingSlots.CommandTargetType => typeof(Button);
-        ICommandTarget IViewBindingSlots.CreateCommandTarget(object target) => ((Button)target).ClickTarget();
+        ICommandTarget IViewBindingSlots.CreateCommandTarget(object target) => ((Button)target).Bindable().Click;
         ICollectionTarget IViewBindingSlots.CreateCollectionTarget(IUINode node, int slot, bool preview)
         {
             var binding = Bindings[slot];

@@ -25,7 +25,7 @@ public sealed class HeroView : EngineUI.UINode<int>
         {
             _bindings = new ViewBindings(this); _bindings.Listen(Refresh);
             _hero = this.CreateViewModel<ClientHeroVm>("Hero");
-            this.Bind("Hero.Power", this.GetControl<Text>("Panel/Text").TextTarget(), new BindingOptions { Convert = value => Stats((int)value) });
+            this.Bind("Hero.Power", this.GetControl<Text>("Panel/Text").Bindable().Text, new BindingOptions { Convert = value => Stats((int)value) });
             var portraits = this.GetRoot().Find("Portraits");
             for (int i = 0; i < 6; i++) portraits.GetChild(i).gameObject.SetActive(i == Parameters);
             _bindings.Button("Panel/Train", TrainAsync);

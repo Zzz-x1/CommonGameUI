@@ -31,7 +31,7 @@ namespace StarCourt.UnityDemo
                     var root = ((UIFramework.Unity.UIElement)node.Element).Rect;
                     var config = root.GetComponent<MvvmBindings>();
                     foreach (var binding in config.Bindings) if (binding.Kind == ViewBindingKind.Command) { binding.Source = "Shop.Select"; binding.ParameterMode = CommandParameterMode.SourcePath; binding.ParameterPath = "Item.Id"; }
-                    node.Bind("Player.Gold", BindingTargets.Property(root.GetComponent<Image>(), "color"), new BindingOptions { Convert = value => (int)value >= ClientStore.Prices[((ClientInventoryItemVm)context.Item).Id] ? Color.white : new Color(.7f, .7f, .7f) });
+                    node.Bind("Player.Gold", root.GetComponent<Image>().Bindable().Color, new BindingOptions { Convert = value => (int)value >= ClientStore.Prices[((ClientInventoryItemVm)context.Item).Id] ? Color.white : new Color(.7f, .7f, .7f) });
                 }, cancellationToken);
         }
     }

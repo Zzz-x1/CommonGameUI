@@ -33,7 +33,7 @@ public sealed class SettingsView : ClientView
                 Bindings.Button("Panel/Tabs/" + name, () => Tabs.CurrentName == item ? Task.CompletedTask : Tabs.SwitchAsync(item));
             }
             var vm = this.CreateViewModel<ClientSettingsVm>("Settings"); vm.Initialize(App.Store);
-            this.Bind("Settings.FullMotion", this.GetControl<Toggle>("Panel/Pages/演出/Motion").ToggleTarget(), BindingMode.TwoWay);
+            this.Bind("Settings.FullMotion", this.GetControl<Toggle>("Panel/Pages/演出/Motion").Bindable().IsOn, BindingMode.TwoWay);
             await Tabs.SwitchAsync("画面", false, token);
             DismissRequested = _ => App.Modals.CloseAsync(this);
         }

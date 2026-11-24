@@ -3,6 +3,7 @@
   "references": [
     "UIFramework.Unity",
     "StarCourt.UnityDemo",
+    "StarCourt.UnityDemo.ControlAdapters",
     "Unity.ugui",
     "UIFramework.Mvvm.Unity"
   ],

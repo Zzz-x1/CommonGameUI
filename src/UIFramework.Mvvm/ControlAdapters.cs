@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace UIFramework.Mvvm;
 
 /// <summary>Declares the primary Bindable() surface of a native control.</summary>
@@ -49,8 +51,10 @@ public sealed class ControlAdapterMemberAttribute(Type control, string member) :
 /// <summary>Access to the native control for generated properties and extensions.</summary>
 public abstract class BindableMembers(object control)
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public object Control { get; } = control ?? throw new ArgumentNullException(nameof(control));
 
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public IBindingTarget Property(string member) =>
         BindingTargetRegistry.Find(Control.GetType(), member).CreateTarget(Control);
 }

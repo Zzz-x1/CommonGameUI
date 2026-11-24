@@ -10,7 +10,6 @@ namespace UIFramework.Mvvm.Unity
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         public static void Register()
         {
-            BindingTargetRegistry.Register(new BuiltinBindingTargets());
             MvvmModule.RegisterAdapter(typeof(EngineUI.UIHost), new ViewModelAssets(),
                 node => node.Element is EngineUI.UIElement display ? display.Rect.GetComponent<MvvmBindings>() : null, runtime => { if (Application.isPlaying) MvvmObserver.Attach(runtime); else EditModeObserver(runtime); },
                 () => new IGlobalViewModelProvider[] { GlobalViewModelProvider.Load() });

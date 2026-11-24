@@ -1,0 +1,8 @@
+{
+  "name": "StarCourt.UnityDemo.ControlAdapters",
+  "references": [
+    "UnityEngine.UI",
+    "UIFramework.Mvvm.Unity"
+  ],
+  "autoReferenced": false
+}

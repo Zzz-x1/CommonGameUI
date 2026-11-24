@@ -28,15 +28,15 @@ namespace StarCourt.UnityDemo
                     return () => changed.RemoveListener(SelectQuantity);
                 }, timing: BindingUpdateTiming.Immediate);
             int unitPrice = ClientStore.Prices[Parameters];
-            this.Bind("Purchase.Quantity", "Player.Gold", this.GetControl<Text>("Panel/Text").TextTarget(),
+            this.Bind("Purchase.Quantity", "Player.Gold", this.GetControl<Text>("Panel/Text").Bindable().Text,
                 (int quantity, int gold) =>
                 {
                     int total = unitPrice * quantity;
                     string detail = gold >= total ? "购买将增加背包库存，推进整装待发任务。" : $"还差 {total - gold} 金币。";
                     return $"数量 {quantity} · 合计 {total} 金币\n\n{detail}";
                 });
-            this.BindCommand("Purchase.Close", this.GetControl<Button>("Panel/Close").ClickTarget());
-            this.BindCommand("Purchase.Buy", this.GetControl<Button>("Panel/Buy").ClickTarget());
+            this.BindCommand("Purchase.Close", this.GetControl<Button>("Panel/Close").Bindable().Click);
+            this.BindCommand("Purchase.Buy", this.GetControl<Button>("Panel/Buy").Bindable().Click);
             DismissRequested = _ => App.Modals.CloseAsync(this);
             return Task.CompletedTask;
         }
