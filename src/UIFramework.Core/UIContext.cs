@@ -97,15 +97,23 @@ public sealed class UIContext : IAsyncDisposable
         catch (Exception ex) { Report(ex, stage + "; remaining notification chain aborted"); throw; }
         finally { _notificationDepth--; }
     }
-    internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false)
+    internal void PublishChanges(LifecycleContext operation, LifecycleContext? source = null, bool continueOnFailure = false, UINode? subtree = null)
     {
-        var nodes = new List<UINode>();
-        void Visit(UINode node) { nodes.Add(node); foreach (var child in node.ChildrenCore) Visit(child); }
-        Visit(Root);
-        var changes = nodes.Select(n => (Node: n, Visible: n.CommittedVisible, Active: n.IsActive,
-            OldVisible: n.PublishedVisible, OldActive: n.PublishedActive)).ToArray();
-        // Commit all effective state before delivering any notification. Failures are never replayed.
-        foreach (var c in changes) { c.Node.PublishedVisible = c.Visible; c.Node.PublishedActive = c.Active; }
+        var changes = new List<(UINode Node, bool Visible, bool Active, bool OldVisible, bool OldActive)>();
+        void Visit(UINode node)
+        {
+            var visible = node.CommittedVisible;
+            var active = node.IsActive;
+            if (visible != node.PublishedVisible || active != node.PublishedActive)
+            {
+                changes.Add((node, visible, active, node.PublishedVisible, node.PublishedActive));
+                node.PublishedVisible = visible;
+                node.PublishedActive = active;
+            }
+            foreach (var child in node.ChildrenCore) Visit(child);
+        }
+        // Snapshot and commit the affected tree before the first callback.
+        Visit(subtree ?? Root);
         Exception? first = null;
         void Deliver(Action callback)
         {
@@ -123,14 +131,17 @@ public sealed class UIContext : IAsyncDisposable
                 if (source != null && ReferenceEquals(n.Owner, source.Node)) return source.For(node);
             return operation.For(node);
         }
-        foreach (var c in Enumerable.Reverse(changes))
+        for (var index = changes.Count - 1; index >= 0; index--)
         {
+            var c = changes[index];
+            if (!(c.OldActive && !c.Active || c.OldVisible && !c.Visible)) continue;
             var context = Describe(c.Node);
             if (c.OldActive && !c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, true, false)));
             if (c.OldVisible && !c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, true, false)));
         }
         foreach (var c in changes)
         {
+            if (!(!c.OldVisible && c.Visible || !c.OldActive && c.Active)) continue;
             var context = Describe(c.Node);
             if (!c.OldVisible && c.Visible) Deliver(() => c.Node.NotifyVisible(new StateChangeContext(context, false, true)));
             if (!c.OldActive && c.Active) Deliver(() => c.Node.NotifyActive(new StateChangeContext(context, false, true)));

@@ -207,7 +207,7 @@ public class UINode : IUINode
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
                 SetLocalState(initiallyVisible ?? InitiallyVisible, initiallyVisible ?? InitiallyVisible);
-                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization));
+                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization), subtree: this);
             }, cancellationToken, allowInitializing: true, allowCached: allowCached);
         }
         catch (Exception ex)
@@ -366,7 +366,7 @@ public class UINode : IUINode
             if (_busy != 0 && _idle != null) await _idle.Task;
             await Attempt(WaitForOperationsAsync);
             if (_transitionParticipants != 0) await _transitionsIdle!.Task;
-            await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true); return Task.CompletedTask; });
+            await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true, subtree: this); return Task.CompletedTask; });
             foreach (var child in Enumerable.Reverse(_children.ToArray()))
                 await Attempt(async () => await child.DisposeAsync());
             foreach (var extension in _initializedExtensions.AsEnumerable().Reverse())

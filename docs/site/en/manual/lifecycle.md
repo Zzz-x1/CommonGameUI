@@ -90,4 +90,6 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 
 [Signatures](../api/core.md) · [Errors and commit](async-and-errors.md)
 
+When a window adds rows, an ordinary attachment checks only the new subtree. Visibility and activation changes are committed before callbacks run. Exit notifications reach children first, and entry notifications reach parents first.
+
 KeepAlive close exits and deactivates without repeating initialization or canceling Lifetime. Reopening updates arguments and sets `IsCacheReuse` to true; final release runs Dispose. See [closed-instance caching](resources.md#closed-instance-caching).
