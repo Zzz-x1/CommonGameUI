@@ -317,6 +317,8 @@ internal sealed class BindingScope : IAsyncDisposable
                 {
                     var (owner, member) = _path.Resolve();
                     if (owner != null) ValidateMember(owner, member);
+                    else if (options.Mode == BindingMode.OneWayToViewModel)
+                        throw new InvalidOperationException("Cannot write through a null VM path.");
                     if (options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
                         _path.Changed += Pull;
                 }
@@ -408,7 +410,7 @@ internal sealed class BindingScope : IAsyncDisposable
             try
             {
                 if (options == null) throw new ArgumentNullException(nameof(options));
-                _path = new Path(scope, path, target != null, true);
+                _path = new Path(scope, path, true, true);
                 if (options.Mode == CommandParameterMode.SourcePath) _parameterPath = new Path(scope, options.ParameterPath, false);
                 else _parameter = options.ConstantValue;
                 var (vm, member) = _path.Resolve();

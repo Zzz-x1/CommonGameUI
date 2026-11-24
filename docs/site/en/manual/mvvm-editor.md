@@ -52,6 +52,8 @@ Unity global preview resolves templates from the provider catalog and clones the
 
 Unity stores configuration in the component and saves it with the Prefab / scene, including Undo and Prefab Overrides. Godot stores binding Resources and a native control reference array on the scene component; the editor edits both together with native Undo. Targets do not depend on framework-maintained hierarchy paths. Renaming, reparenting and reopening preserve references.
 
+Saving persists the configured rows. Use preview to validate the complete set against sample VMs. When a Manual VM is supplied only at runtime, the framework checks its members against the actual instance as the view connects.
+
 Preview does not save the scene. Stop preview before editing configuration so display values remain separate from authored values.
 
 Related: [Setup and ownership](mvvm.md) · [API](../api/mvvm.md)
