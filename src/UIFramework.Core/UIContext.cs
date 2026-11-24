@@ -182,7 +182,7 @@ public sealed class UIContext : IAsyncDisposable
                 if (saved.TryRestore(this, current)) return true;
                 history = null;
             }
-            if (!FocusPage(current, history)) ClearDepartingFocus(previous);
+            if (!FocusPage(current, history)) Host.ClearFocus();
         }
         else
         {

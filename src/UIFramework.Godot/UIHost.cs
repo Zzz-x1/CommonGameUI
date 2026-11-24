@@ -46,7 +46,13 @@ public sealed class UIHost : IUIHost, IUILog
         control.GrabFocus();
         return control.HasFocus();
     }
-    public void ClearFocus() { VerifyAccess(); _viewport.GuiGetFocusOwner()?.ReleaseFocus(); }
+    public void ClearFocus()
+    {
+        VerifyAccess();
+        var selected = _viewport.GuiGetFocusOwner();
+        if (selected != null && (RootMount == null || GodotObject.IsInstanceValid(RootMount)
+            && (selected == RootMount || RootMount.IsAncestorOf(selected)))) selected.ReleaseFocus();
+    }
     public void Error(string message) => GD.PushError($"[UI] {message}");
     public void Exception(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
 }

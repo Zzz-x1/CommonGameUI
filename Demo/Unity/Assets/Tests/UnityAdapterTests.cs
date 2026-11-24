@@ -138,6 +138,26 @@ namespace StarCourt.UnityDemo.Tests
         }
         [UnityTest] public IEnumerator HidingAndShowingPanelRestoresNestedModalInput() => Await(HideModalParentAsync());
         [UnityTest] public IEnumerator StackRestoresOriginalOrPreferredFocus() => Await(StackFocusAsync());
+        [UnityTest] public IEnumerator ModalWithoutSelectableClearsAndRestoresBackgroundFocus() => Await(EmptyModalFocusAsync());
+        private async Task EmptyModalFocusAsync()
+        {
+            var pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages");
+            var modals = await _ui.Root.CreateContainerAsync<ModalContainerNode>("Dialogs");
+            var events = _events.GetComponent<EventSystem>();
+            var page = await pages.PushAsync<Other>(playAnimation: false);
+            var opener = page.GetRoot().Find("Panel/Yes").gameObject;
+            events.SetSelectedGameObject(opener);
+            _ui.Register(() => new WaitingWindow(), "UI/Confirm", configure: window =>
+            {
+                foreach (var button in window.GetRoot().GetComponentsInChildren<Button>(true)) button.interactable = false;
+            });
+            var waiting = await modals.OpenAsync<WaitingWindow>(playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.Null);
+            await modals.CloseAsync(waiting, playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(opener));
+        }
+        private sealed class WaitingWindow : UINode { }
+
         private async Task StackFocusAsync()
         {
             _ui.Register<ConfirmView>("UI/Confirm");

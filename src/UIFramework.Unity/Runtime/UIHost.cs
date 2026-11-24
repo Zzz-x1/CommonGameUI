@@ -74,7 +74,8 @@ namespace UIFramework.Unity
             VerifyAccess();
             if (_lifetimeEnding && !_events) return;
             VerifyEvents();
-            _events.SetSelectedGameObject(null);
+            var selected = _events.currentSelectedGameObject;
+            if (selected && (!RootMount || selected.transform.IsChildOf(RootMount))) _events.SetSelectedGameObject(null);
         }
         public void Error(string message) => Debug.LogError("[UI] " + message);
         public void Exception(Exception exception, string context)
