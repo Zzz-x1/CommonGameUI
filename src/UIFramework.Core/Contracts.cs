@@ -160,10 +160,30 @@ public static class UIFailure
     public const string SecondaryExceptionsKey = "UIFramework.SecondaryExceptions";
     internal static void AddSecondary(Exception primary, Exception secondary)
     {
-        if (!(primary.Data[SecondaryExceptionsKey] is List<Exception> list))
-            primary.Data[SecondaryExceptionsKey] = list = new List<Exception>();
-        list.Add(secondary);
+        if (ReferenceEquals(primary, secondary)) return;
+        lock (primary)
+        {
+            if (!(primary.Data[SecondaryExceptionsKey] is List<Exception> list))
+                primary.Data[SecondaryExceptionsKey] = list = new List<Exception>();
+            if (!list.Any(error => ReferenceEquals(error, secondary))) list.Add(secondary);
+        }
     }
-    public static IReadOnlyList<Exception> GetSecondaryExceptions(Exception exception) =>
-        exception.Data[SecondaryExceptionsKey] is List<Exception> list ? list.AsReadOnly() : Array.Empty<Exception>();
+    public static IReadOnlyList<Exception> GetSecondaryExceptions(Exception exception)
+    {
+        var failures = new List<Exception>();
+        AddChildren(exception);
+        for (var i = 0; i < failures.Count; i++) AddChildren(failures[i]);
+        return failures;
+
+        void AddChildren(Exception parent)
+        {
+            lock (parent)
+            {
+                if (parent.Data[SecondaryExceptionsKey] is not List<Exception> children) return;
+                foreach (var child in children)
+                    if (!ReferenceEquals(child, exception) && !failures.Any(error => ReferenceEquals(error, child)))
+                        failures.Add(child);
+            }
+        }
+    }
 }

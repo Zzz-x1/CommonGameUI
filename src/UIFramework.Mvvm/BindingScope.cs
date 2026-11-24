@@ -155,8 +155,7 @@ internal sealed class BindingScope : IAsyncDisposable
         var others = _commands.Where(command => !command.IsCaller).ToArray();
         foreach (var command in others)
             try { command.Cancel(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { await Task.WhenAll(others.Select(command => command.Completion).Concat(_tasks)); }
-        catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        first = await MvvmRuntime.WaitForTasksAsync(others.Select(command => command.Completion).Concat(_tasks), first);
         _sources.Clear(); _bindings.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
@@ -164,8 +163,7 @@ internal sealed class BindingScope : IAsyncDisposable
     {
         Exception? first = null;
         try { await _dispose!; } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { await Task.WhenAll(_commands.Select(command => command.Completion)); }
-        catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+        first = await MvvmRuntime.WaitForTasksAsync(_commands.Select(command => command.Completion), first);
         foreach (var value in _owned.AsEnumerable().Reverse())
             try { await _runtime.Release(value.Value, value.Assets); } catch (Exception error) { _runtime.Report(error, "MVVM VM release"); MvvmRuntime.Failure(ref first, error); }
         _runtime.Remove(this); _owned.Clear(); _commands.Clear(); _tasks.Clear(); _initialCollections.Clear();

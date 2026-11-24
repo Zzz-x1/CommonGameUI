@@ -177,8 +177,8 @@ public abstract class CollectionTargetBase : ICollectionTarget, IAsyncDisposable
     {
         Exception? first = null;
         try { ClearCore(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
-        try { await Task.WhenAll(_tasks); } catch { foreach (var task in _tasks.Where(t => !t.IsCompletedSuccessfully)) try { await task; } catch (Exception error) { MvvmRuntime.Failure(ref first, error); } }
-        finally { _tasks.Clear(); }
+        first = await MvvmRuntime.WaitForTasksAsync(_tasks, first);
+        _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 }

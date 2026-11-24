@@ -123,7 +123,7 @@ internal static class TransitionFlow
                     {
                         await context.CleanupAsync(ex, () => { cancel.Cancel(); return Task.CompletedTask; });
                     }
-                    else if (!ReferenceEquals(first, ex)) { lock (first!) UIFailure.AddSecondary(first!, ex); }
+                    else UIFailure.AddSecondary(first!, ex);
                 }
             }
             // Play observes synchronous throws as well as every asynchronous failure.

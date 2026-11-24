@@ -173,7 +173,9 @@ this.ResumeBinding(nameof(HeroVm.Power));
 await ui.DisposeAsync();
 ```
 
-原始错误会记录并传播。UI 绑定和通知在引擎线程执行；直接改字段不会产生通知。
+节点销毁或 `WhenMvvmIdleAsync()` 等待多个任务时，即使一个失败，也会等其余任务结束。调用方收到原始异常，通过 `UIFailure.GetSecondaryExceptions(error)` 可取得其他失败和取消原因。同一异常只列一次；同批次的失败优先于取消。
+
+命令和绑定会记录原始错误。UI 绑定和通知在引擎线程执行。直接修改字段不会产生通知。
 
 相关：[GUI 配置](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [生命周期](lifecycle.md)
 

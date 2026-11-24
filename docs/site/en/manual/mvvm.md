@@ -173,7 +173,9 @@ Await cleanup before exiting:
 await ui.DisposeAsync();
 ```
 
-Original exceptions are logged and propagated. UI bindings and notifications run on the engine thread. Direct field writes do not notify.
+When node disposal or `WhenMvvmIdleAsync()` waits for several tasks, it waits for all of them even if one fails. The caller receives the original exception. Read `UIFailure.GetSecondaryExceptions(error)` for other failures and cancellations. Each exception appears once. Faults take precedence over cancellation within a batch.
+
+Commands and bindings log the original errors. UI bindings and notifications run on the engine thread. Direct field writes do not notify.
 
 Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [Lifecycle](lifecycle.md)
 

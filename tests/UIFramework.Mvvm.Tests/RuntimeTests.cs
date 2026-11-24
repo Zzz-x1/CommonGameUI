@@ -261,6 +261,105 @@ public class RuntimeTests
         var first = new Click(); var second = new Click(); a.BindCommand("Player.Wait", first); b.BindCommand("Player.Wait", second); first.Press(); await vm.Started.Task;
         Assert.False(first.Enabled); Assert.False(second.Enabled); vm.Finish.SetResult(); await Task.Yield(); runtime.ObserveTasks(); Assert.True(first.Enabled); Assert.True(second.Enabled);
     }
+    [Theory]
+    [InlineData("idle")]
+    [InlineData("node")]
+    [InlineData("context")]
+    public async Task ParallelFailuresKeepAllOriginalErrorsAcrossObservationAndCleanup(string wait)
+    {
+        var runtime = new MvvmRuntime();
+        var ui = Context(runtime);
+        var node = await Node(ui, "Shop");
+        var cancellation = new CancellationToken(canceled: true);
+        var first = new IOException("prices");
+        var second = new IOException("images");
+        var third = new IOException("rows");
+        var late = new TaskCompletionSource();
+        var prices = Task.FromException(first);
+        var imagesAndRows = Task.WhenAll(Task.FromException(second), Task.FromException(third));
+        node.ObserveMvvmTask(Task.FromCanceled(cancellation));
+        node.ObserveMvvmTask(prices);
+        node.ObserveMvvmTask(prices);
+        node.ObserveMvvmTask(imagesAndRows);
+        node.ObserveMvvmTask(late.Task);
+
+        var waiting = wait switch
+        {
+            "node" => node.DisposeAsync().AsTask(),
+            "context" => ui.DisposeAsync().AsTask(),
+            _ => ui.WhenMvvmIdleAsync()
+        };
+        Assert.False(waiting.IsCompleted);
+        late.SetResult();
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => waiting));
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
+        Assert.Collection(UIFailure.GetSecondaryExceptions(first),
+            error => Assert.Same(second, error),
+            error => Assert.Same(third, error),
+            error => Assert.Equal(cancellation, Assert.IsAssignableFrom<OperationCanceledException>(error).CancellationToken));
+    }
+
+    [Fact]
+    public async Task ContextShutdownIncludesFailuresFromEachNodeAndTheRuntimeOnlyOnce()
+    {
+        var ui = Context(new MvvmRuntime());
+        var shop = await Node(ui, "Shop");
+        var bag = await Node(ui, "Bag");
+        var failures = new[] { new IOException("prices"), new IOException("offers"), new IOException("items"), new IOException("icons") };
+        shop.ObserveMvvmTask(Task.FromException(failures[0]));
+        shop.ObserveMvvmTask(Task.FromException(failures[1]));
+        bag.ObserveMvvmTask(Task.FromException(failures[2]));
+        bag.ObserveMvvmTask(Task.FromException(failures[3]));
+        var primary = await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask());
+        var others = UIFailure.GetSecondaryExceptions(primary);
+        Assert.Contains(primary, failures);
+        Assert.Equal(3, others.Count);
+        Assert.All(failures.Where(error => !ReferenceEquals(error, primary)), error => Assert.Contains(error, others));
+    }
+
+    [Fact]
+    public async Task RepeatedObservationOfCancelledTaskPreservesCancellation()
+    {
+        var runtime = new MvvmRuntime();
+        var token = new CancellationToken(canceled: true);
+        var canceled = Task.FromCanceled(token);
+        runtime.Observe(canceled);
+        runtime.Observe(canceled);
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(runtime.WhenIdleAsync);
+        Assert.Equal(token, error.CancellationToken);
+        Assert.Same(error, await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.DisposeAsync().AsTask()));
+        Assert.Empty(UIFailure.GetSecondaryExceptions(error));
+    }
+
+    [Fact]
+    public async Task CommandReturningWhenAllRetainsAllBusinessFailures()
+    {
+        var runtime = new MvvmRuntime();
+        var ui = Context(runtime);
+        var node = await Node(ui, "Shop");
+        var first = new IOException("order");
+        var second = new IOException("receipt");
+        node.SetViewModel("Cart", new ClosingVm { Action = _ => Task.WhenAll(Task.FromException(first), Task.FromException(second)) });
+        var button = new Click();
+        node.BindCommand("Cart.Close", button);
+        button.Press();
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(runtime.WhenIdleAsync));
+        Assert.Same(second, Assert.Single(UIFailure.GetSecondaryExceptions(first)));
+        Assert.Same(first, await Assert.ThrowsAsync<IOException>(() => ui.DisposeAsync().AsTask()));
+    }
+
+    [Fact]
+    public async Task FrameObserverPreservesEveryFaultFromAnObservedWhenAll()
+    {
+        await using var runtime = new MvvmRuntime();
+        var first = new IOException("primary");
+        var second = new IOException("secondary");
+        runtime.Observe(Task.WhenAll(Task.FromException(first), Task.FromException(second)));
+        Assert.Same(first, Assert.Throws<IOException>(runtime.ObserveTasks));
+        Assert.Same(second, Assert.Single(UIFailure.GetSecondaryExceptions(first)));
+        runtime.ObserveTasks();
+    }
+
     [Fact] public async Task AsyncFailureKeepsIdentityInObserverAndCleanup()
     {
         var log = new Log(); var runtime = new MvvmRuntime(log); var ui = Context(runtime); var node = await Node(ui, "A"); var vm = new OwnedVm(); node.SetViewModel("Player", vm); var button = new Click(); node.BindCommand("Player.Fail", button); button.Press();

@@ -70,8 +70,7 @@ public static class MvvmModule
         }
         public async ValueTask DisposeAsync()
         {
-            Exception? first = null;
-            try { await Task.WhenAll(_retired); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
+            var first = await MvvmRuntime.WaitForTasksAsync(_retired);
             try { await _lease.Release(); } catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }

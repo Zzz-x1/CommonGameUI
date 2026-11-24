@@ -25,23 +25,24 @@ public sealed class MvvmRuntime : IAsyncDisposable
     public void Observe(Task task) => _tasks.Add(task);
     public async Task WhenIdleAsync()
     {
-        await DrainTasksAsync();
-        if (_dispose != null) await _dispose;
+        var first = await DrainTasksAsync();
+        if (_dispose != null)
+            try { await _dispose; } catch (Exception error) { Failure(ref first, error); }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
-    private async Task DrainTasksAsync()
+    private async Task<Exception?> DrainTasksAsync(Exception? first = null)
     {
         var waited = new HashSet<Task>();
-        Exception? first = null;
         while (true)
         {
             var tasks = _tasks.Where(task => waited.Add(task)).ToArray();
             if (tasks.Length == 0) break;
-            try { await Task.WhenAll(tasks); } catch (Exception error) { Failure(ref first, error); }
+            first = await WaitForTasksAsync(tasks, first);
         }
         RemoveCompletedCommands();
         _tasks.RemoveAll(task => task.IsCompletedSuccessfully);
         _releases.RemoveWhere(task => task.IsCompletedSuccessfully);
-        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+        return first;
     }
     internal void ObserveRelease(Task task) { _releases.Add(task); Observe(task); }
     public MvvmRuntime(IUILog? log = null) => Log = log ?? new ConsoleUILog();
@@ -156,8 +157,19 @@ public sealed class MvvmRuntime : IAsyncDisposable
         async Task Run()
         {
             Exception? first = null;
-            try { CommandStateChanged?.Invoke(); await vm.Execute(command, parameter, execution.Token); }
-            catch (Exception error) { first = error; Report(error, "MVVM command " + command); }
+            Task? action = null;
+            try
+            {
+                CommandStateChanged?.Invoke();
+                action = vm.Execute(command, parameter, execution.Token);
+                await action;
+            }
+            catch (Exception error)
+            {
+                first = error;
+                if (action != null) CollectFaults(action, ref first);
+                Report(error, "MVVM command " + command);
+            }
             _running.Remove((vm, command));
             try { CommandStateChanged?.Invoke(); } catch (Exception error) { Failure(ref first, error); }
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
@@ -181,7 +193,10 @@ public sealed class MvvmRuntime : IAsyncDisposable
         foreach (var task in _tasks.ToArray())
         {
             if (!task.IsCompleted) continue;
-            _tasks.Remove(task); _releases.Remove(task); task.GetAwaiter().GetResult();
+            _tasks.Remove(task); _releases.Remove(task);
+            Exception? failure = null;
+            CollectFaults(task, ref failure);
+            task.GetAwaiter().GetResult();
         }
         if (_observeDisposal && _dispose?.IsCompleted == true)
         {
@@ -210,30 +225,48 @@ public sealed class MvvmRuntime : IAsyncDisposable
         foreach (var scope in _scopes.ToArray())
             try { await scope.DisposeAsync(); } catch (Exception error) { Failure(ref first, error); }
         var callers = new HashSet<Task>(_commands.Where(command => command.IsCaller).Select(command => command.Completion));
-        try { await Task.WhenAll(_tasks.Where(task => !callers.Contains(task) && !_releases.Contains(task)).ToArray()); }
-        catch (Exception error) { Failure(ref first, error); }
+        first = await WaitForTasksAsync(_tasks.Where(task => !callers.Contains(task) && !_releases.Contains(task)), first);
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     private async Task DisposeCoreAsync()
     {
         Exception? first = null;
         try { await _close!; } catch (Exception error) { Failure(ref first, error); }
-        try { await DrainTasksAsync(); } catch (Exception error) { Failure(ref first, error); }
+        first = await DrainTasksAsync(first);
         foreach (var owned in _owned.AsEnumerable().Reverse())
             try { await Release(owned.Value, owned.Assets); } catch (Exception error) { Report(error, "MVVM shared VM release"); Failure(ref first, error); }
         _owned.Clear(); _shared.Clear(); _globals.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
+    // A canceled Task can synthesize a new TaskCanceledException on every await.
+    private static readonly ConditionalWeakTable<Task, OperationCanceledException> Cancellations = new();
+    internal static async Task<Exception?> WaitForTasksAsync(IEnumerable<Task> tasks, Exception? first = null)
+    {
+        var batch = tasks.Distinct().ToArray();
+        var completion = Task.WhenAll(batch);
+        try { await completion; }
+        catch
+        {
+            foreach (var task in batch) CollectFaults(task, ref first);
+            foreach (var task in batch)
+            {
+                if (!task.IsCanceled) continue;
+                try { await task; }
+                catch (OperationCanceledException canceled)
+                { Failure(ref first, Cancellations.GetValue(task, _ => canceled)); }
+            }
+        }
+        return first;
+    }
+    private static void CollectFaults(Task task, ref Exception? first)
+    {
+        if (task.Exception is { } faults)
+            foreach (var error in faults.InnerExceptions) Failure(ref first, error);
+    }
     internal static void Failure(ref Exception? first, Exception error)
     {
-        if (ReferenceEquals(first, error)) return;
         if (first == null) first = error;
-        else
-        {
-            if (first.Data[UIFailure.SecondaryExceptionsKey] is not List<Exception> secondary)
-                first.Data[UIFailure.SecondaryExceptionsKey] = secondary = new List<Exception>();
-            secondary.Add(error);
-        }
+        else UIFailure.AddSecondary(first, error);
     }
     internal void Report(Exception error, string context)
     { try { Log.Exception(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
