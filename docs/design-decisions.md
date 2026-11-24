@@ -2613,7 +2613,7 @@ await modals.CloseAsync(settings);      // 此时才释放遮罩
 
 商店同步一份新报价时，单价、数量和余额可能在一帧内先后变化。报价只需展示这批修改的最终结果。数量选择器则适合在输入时立即显示 setter 校正后的数量。这两条绑定可以同时使用同一份购物车数据。
 
-建议增加 `BindingUpdateTiming`，取值为 `Immediate = 0` 和 `EndOfFrame`。现有目标绑定、泛型回调、投影和 `BindTwoWay` 在末尾接受可选参数 `timing`。使用 `BindingOptions` 的重载通过 `UpdateTiming` 配置。默认立即更新。Unity 和 Godot 编辑器的 OneWay／TwoWay 属性绑定行提供同一选项，存入 `BindingRule`。OneTime 首次读取、纯输入、命令、集合增删移动沿用已有语义。
+默认时机拟采用 `BindingUpdateTiming.EndOfFrame = 0`，需要同一调用栈内更新控件时显式选 `Immediate = 1`。现有目标绑定、泛型回调、投影和 `BindTwoWay` 在末尾接受可选参数 `timing`。使用 `BindingOptions` 的重载通过 `UpdateTiming` 配置。Unity 和 Godot 编辑器的 OneWay／TwoWay 属性绑定行提供同一选项，存入 `BindingRule`。省略参数的代码和未配置时机的现有资产都采用帧末刷新。OneTime 首次读取、纯输入、命令、集合增删移动沿用已有语义。
 
 ```csharp
 this.Bind("Cart.Quantity", "Offer.UnitPrice", "Player.Gold", quoteLabel.TextTarget(),
@@ -2621,8 +2621,12 @@ this.Bind("Cart.Quantity", "Offer.UnitPrice", "Player.Gold", quoteLabel.TextTarg
     {
         long total = (long)quantity * price;
         return gold >= total ? $"合计 {total}" : $"还差 {total - gold}";
-    }, timing: BindingUpdateTiming.EndOfFrame);
+    });
 ```
+
+默认值改变的是通知之后 VM → 控件的可见时机。设置 VM 后立即读取标签，可能仍得到旧文本；需要当场依据文本测量弹窗布局时，为该标签选择 `Immediate`。同一帧多次增加金币时，余额标签只显示最终余额；每笔奖励都要播放的飞字应由发奖事件触发。
+
+商店购买按最新 VM 计算资格。Godot Demo 的商品详情将报价文本和确认按钮禁用状态写在同一个回调中；若要求改数量后立刻阻止同帧确认，可让按钮状态单独使用 `Immediate`。命令绑定仍在执行时检查 `CanExecute`。自定义宿主及测试需要在 UI 逻辑帧驱动刷新，断言控件最终值时应推进到提交点。
 
 - **刷新单位。** 每个 Runtime 按绑定实例记录待刷新项。同一条绑定收到任意次数的通知，在本次提交点只从当前 VM 读取每条不同来源路径的最终值一次，随后执行一次转换／投影和一次显示；重复路径共用读取结果。分开声明的绑定各自刷新。此约定只计算绑定对展示值的读取，setter 比较和业务读取仍照常执行。
 - **嵌套路径。** 具名来源或中间对象替换时使旧路径失效，解绑旧后代。延迟绑定在刷新时从最新根重建失效的订阅分支并取值。已经排队的绑定可以覆盖新分支在此期间发生的变化。双向输入始终同步解析当前实例并写回或执行业务 `commit`，显示 setter 校正值遵循该绑定的时机；即使 setter 没有发出变化通知，输入也会请求一次回显。
