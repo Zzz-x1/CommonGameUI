@@ -44,7 +44,7 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
             Text("Center/Pages/Text/Body", $"{item.Name} × {Parameters.Quantity}\n\n共计 {item.Price * Parameters.Quantity} 金币\n\n购买后返回商品页面，奖励自动存入背包。");
             var confirm = Get<Button>("Center/Confirm");
             confirm.Text = "购买";
-            this.BindCommand("Purchase.Buy", confirm.ClickTarget());
+            this.BindCommand("Purchase.Buy", confirm.Bindable().Click);
         }
         else Wire("Center/Confirm", ConfirmAsync);
         _pages = await this.CreateContainerAsync<TabContainerNode>("Content", Get<Control>("Center/Pages"), token);
@@ -115,7 +115,7 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
         }, timing: BindingUpdateTiming.Immediate);
         var price = Get<Label>("Center/Pages/Shop/Price");
         var confirm = Get<Button>("Center/Confirm");
-        this.Bind("Order.Quantity", "Player.Gold", price.TextTarget(), (int quantity, int gold) =>
+        this.Bind("Order.Quantity", "Player.Gold", price.Bindable().Text, (int quantity, int gold) =>
         {
             int total = item.Price * quantity;
             string budget = gold < total ? $"可用 {gold} 金币" : $"单价 {item.Price} 金币";
@@ -149,9 +149,9 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
         await _settings.SwitchAsync("声音", false, token);
         var vm = this.CreateViewModel<ClientSettingsVm>("Settings");
         vm.Initialize(App.Store, App.ApplySettings);
-        this.Bind("Settings.Volume", Get<HSlider>(path + "SettingPages/声音/Volume").ValueTarget(), BindingMode.TwoWay);
-        this.Bind("Settings.Fullscreen", Get<CheckButton>(path + "SettingPages/画面/Fullscreen").ToggleTarget(), BindingMode.TwoWay);
-        this.Bind("Settings.FullMotion", Get<CheckButton>(path + "SettingPages/演出/FullMotion").ToggleTarget(), BindingMode.TwoWay);
+        this.Bind("Settings.Volume", Get<HSlider>(path + "SettingPages/声音/Volume").Bindable().Value, BindingMode.TwoWay);
+        this.Bind("Settings.Fullscreen", Get<CheckButton>(path + "SettingPages/画面/Fullscreen").Bindable().ButtonPressed, BindingMode.TwoWay);
+        this.Bind("Settings.FullMotion", Get<CheckButton>(path + "SettingPages/演出/FullMotion").Bindable().ButtonPressed, BindingMode.TwoWay);
         var quality = Get<OptionButton>(path + "SettingPages/画面/Quality");
         foreach (var n in new[]
         {

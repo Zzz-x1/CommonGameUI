@@ -16,7 +16,7 @@ public partial class MvvmBindings : global::Godot.Node, IViewBindingConfiguratio
     bool IViewBindingSlots.IsEnabled(int slot) => Bindings[slot].Enabled;
     BindingRule IViewBindingSlots.GetRule(int slot) => Bindings[slot].Rule;
     Type IViewBindingSlots.CommandTargetType => typeof(BaseButton);
-    ICommandTarget IViewBindingSlots.CreateCommandTarget(object target) => ((BaseButton)target).ClickTarget();
+    ICommandTarget IViewBindingSlots.CreateCommandTarget(object target) => ((BaseButton)target).Bindable().Click;
     ICollectionTarget IViewBindingSlots.CreateCollectionTarget(IUINode node, int slot, bool preview)
     {
         var binding = Bindings[slot];

@@ -19,7 +19,7 @@ public partial class ShellView : ClientView
     protected override async Task OnInitializeAsync(CancellationToken token)
     {
         this.SetViewModel("Player", App.PlayerVm);
-        this.Bind("Player.Wallet", Get<Label>("Top/Wallet").TextTarget());
+        this.Bind("Player.Wallet", Get<Label>("Top/Wallet").Bindable().Text);
         Pages = await this.CreateContainerAsync<StackContainerNode>("Pages", Get<Control>("PageMount"), token);
         Pages.ChildTransition = EngineUI.Transitions.SlideHorizontal(.24);
         foreach (var name in new[]

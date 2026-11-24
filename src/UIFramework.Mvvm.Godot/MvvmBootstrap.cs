@@ -10,7 +10,6 @@ internal static class MvvmBootstrap
     [ModuleInitializer]
     internal static void Initialize()
     {
-        BindingTargetRegistry.Register(new BuiltinBindingTargets());
         MvvmModule.RegisterAdapter(typeof(EngineUI.UIHost), new ViewModelAssets(),
             node => node.Element is EngineUI.UIElement display ? display.Control.GetChildren().OfType<MvvmBindings>().SingleOrDefault() : null,
             runtime => MvvmObserver.Attach((SceneTree)Engine.GetMainLoop(), runtime));

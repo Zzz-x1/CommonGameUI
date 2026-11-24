@@ -4,4 +4,5 @@
     <ProjectReference Include="../UIFramework.Mvvm/UIFramework.Mvvm.csproj" />
     <ProjectReference Include="../UIFramework.Godot/UIFramework.Godot.csproj" />
   </ItemGroup>
+  <Import Project="../../build/UIFramework.Mvvm.targets" />
 </Project>

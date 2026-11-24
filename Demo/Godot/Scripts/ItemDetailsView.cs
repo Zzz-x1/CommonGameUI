@@ -1,6 +1,5 @@
 using Transitions = global::UIFramework.Transitions;
 using UINode = global::UIFramework.UINode;
-using EngineMvvm = global::UIFramework.Mvvm.Godot;
 using EngineUI = global::UIFramework.Godot;
 using Godot;
 using UIFramework;
@@ -22,10 +21,10 @@ public partial class ItemDetailsView : EngineUI.UINode<string>
         Root.GetNode<Button>("Favorite").Pressed += Favorite;
         Root.GetNode<Button>("Compare").Pressed += Compare;
         var vm = this.CreateViewModel<ClientItemVm>("Item"); vm.Initialize(App.Store, Parameters);
-        this.Bind("Item.Name", Root.GetNode<Label>("Name").TextTarget());
-        this.Bind("Item.Description", Root.GetNode<Label>("Description").TextTarget());
-        this.Bind("Item.Count", Root.GetNode<Label>("Count").TextTarget());
-        this.Bind("Item.Icon", EngineMvvm.BindingTargets.Property(Root.GetNode<TextureRect>("Icon"), "Texture"));
+        this.Bind("Item.Name", Root.GetNode<Label>("Name").Bindable().Text);
+        this.Bind("Item.Description", Root.GetNode<Label>("Description").Bindable().Text);
+        this.Bind("Item.Count", Root.GetNode<Label>("Count").Bindable().Text);
+        this.Bind("Item.Icon", Root.GetNode<TextureRect>("Icon").Bindable().Texture);
         Refresh();
         return Task.CompletedTask;
     }

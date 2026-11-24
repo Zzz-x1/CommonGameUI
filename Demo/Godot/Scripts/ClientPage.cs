@@ -162,7 +162,7 @@ public abstract partial class ClientPage : ClientView
     private sealed class ShopItemFactory : ICollectionItemFactory
     {
         public Task<IUINode> CreateAsync(global::UIFramework.Mvvm.CollectionItemContext context, CancellationToken cancellationToken) =>
-            context.LoadAsync("res://Scenes/Client/ShopRow.tscn", node => node.Bind("Player.Gold", EngineMvvm.BindingTargets.Property(((EngineUI.UIElement)node.Element!).Control, "SelfModulate"), new BindingOptions { Convert = value => (int)value! >= Catalog.Items[((ClientInventoryItemVm)context.Item).Id].Price ? Colors.White : new Color(.7f, .7f, .7f) }), cancellationToken);
+            context.LoadAsync("res://Scenes/Client/ShopRow.tscn", node => node.Bind("Player.Gold", ((EngineUI.UIElement)node.Element!).Control.Bindable().SelfModulate, new BindingOptions { Convert = value => (int)value! >= Catalog.Items[((ClientInventoryItemVm)context.Item).Id].Price ? Colors.White : new Color(.7f, .7f, .7f) }), cancellationToken);
     }
     private void UpdateInventory(string tab, System.Collections.ObjectModel.ObservableCollection<ClientInventoryItemVm> items)
     {

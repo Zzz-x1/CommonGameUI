@@ -8,6 +8,11 @@ using UIFramework.Godot;
 using UIFramework.Mvvm;
 using UIFramework.Mvvm.Godot;
 namespace HierarchyDemo.Tests;
+
+[ExtendControlAdapter(typeof(global::Godot.Range))]
+[BindProperty(nameof(global::Godot.Range.MinValue))]
+internal static class RangeLimitsAdapter { }
+
 public partial class MvvmVerification : global::Godot.Node
 {
     private Task _test = null!;
@@ -33,13 +38,16 @@ public partial class MvvmVerification : global::Godot.Node
         var template = new NativePlayerVm(); template.Other = template;
         var view = new Control { Name = "View" }; AddChild(view); var label = new Label { Name = "Gold", Text = "original" }; view.AddChild(label);
         var button = new Button { Name = "Buy" }; view.AddChild(button); var slider = new HSlider { Name = "Amount", MinValue = 0, MaxValue = 200 }; view.AddChild(slider);
+        VerifyRangeTargets(slider);
         var config = new MvvmBindings { Name = "MvvmBindings" }; view.AddChild(config); config.Owner = view; label.Owner = view; button.Owner = view; slider.Owner = view;
         config.ViewModels.Add(new ViewModelSourceResource { Name = "Player", Creation = ViewModelCreation.SharedAsset, Template = template });
         config.AddBinding(view.GetNode<Control>("Gold"), new ViewBindingResource { Member = "Text", Source = "Player.Gold", Converter = "FormatNumber" });
         config.AddBinding(view.GetNode<Control>("Buy"), new ViewBindingResource { Kind = ViewBindingKind.Command, Source = "Player.Buy" });
         config.AddBinding(view.GetNode<Control>("Amount"), new ViewBindingResource { Member = "Value", Source = "Player.Gold", Mode = BindingMode.TwoWay, Converter = "IntToFloat", ConvertBack = "FloatToInt", UpdateTiming = BindingUpdateTiming.Immediate });
+        config.AddBinding(slider, new ViewBindingResource { Member = nameof(global::Godot.Range.MinValue), Source = "Player.MinimumAmount" });
         var runtime = new MvvmRuntime(); var ui = EngineUI.UI.Create(this); ui.ConfigureMvvm(runtime); var node = new UINode(); await node.AttachToAsync(ui.Root, "View", view);
         var vm = node.GetViewModel<NativePlayerVm>("Player"); Check(vm != template, "Original asset was used"); Check(ReferenceEquals(vm, vm.Other), "Asset cycle not preserved"); Check(label.Text == "100", "Initial display missing");
+        Check(slider.MinValue == vm.MinimumAmount, "GUI resolves the project's MinValue member on HSlider");
         button.EmitSignal(BaseButton.SignalName.Pressed); Check(vm.Gold == 90 && template.Gold == 100, "Purchase modified template");
         Check(slider.Value == 90 && label.Text == "100", "Immediate slider and deferred label observe the same purchase");
         slider.Value = 70; Check(vm.Gold == 70 && label.Text == "100", "Two-way editor writes synchronously");
@@ -60,11 +68,27 @@ public partial class MvvmVerification : global::Godot.Node
         template.Other = null; var path = "user://mvvm-config-verification.tscn";
         using (var packed = new PackedScene()) { Check(packed.Pack(view) == Error.Ok, "Pack view"); Check(ResourceSaver.Save(packed, path) == Error.Ok, "Save configuration"); }
         using var saved = ResourceLoader.Load<PackedScene>(path, cacheMode: ResourceLoader.CacheMode.Ignore); var restored = saved.Instantiate<Control>(); var restoredConfig = restored.GetNode<MvvmBindings>("MvvmBindings");
-        Check(restoredConfig.ViewModels.Count == 1 && restoredConfig.Bindings.Count == 3, "Configuration was not serialized");
+        Check(restoredConfig.ViewModels.Count == 1 && restoredConfig.Bindings.Count == 4 &&
+            restoredConfig.Bindings[3].Member == nameof(global::Godot.Range.MinValue), "Configuration and project member key survive serialization");
         Check(restoredConfig.Bindings[0].UpdateTiming == BindingUpdateTiming.EndOfFrame &&
             restoredConfig.Bindings[2].UpdateTiming == BindingUpdateTiming.Immediate, "Binding timing survives scene save and reopen");
         restored.Free(); DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
         view.QueueFree(); template.Dispose(); await VerifyCollectionAsync();
+    }
+    private void VerifyRangeTargets(HSlider slider)
+    {
+        using var value = slider.Bindable().Value;
+        int changes = 0;
+        value.Changed += () => changes++;
+        value.Write(24f);
+        Check(value.ValueType == typeof(float) && slider.Value == 24 && changes == 0, "Value writes float without a native change event");
+        slider.Value = 30;
+        Check((float)value.Read()! == 30f && changes == 1, "Native Range changes refresh the float target");
+
+        using var minimum = slider.Bindable().MinValue();
+        minimum.Write(5d);
+        Check(slider.MinValue == 5d, "The project extension exposes Range.MinValue on HSlider");
+        minimum.Write(0d);
     }
     private async Task NextUIFrameAsync()
     {
@@ -119,7 +143,7 @@ public partial class MvvmVerification : global::Godot.Node
         row.AddChild(select);
         int selected = 0;
         second.Open = () => { selected = second.Id; return Task.CompletedTask; };
-        row.BindCommand("Item.Select", select.ClickTarget());
+        row.BindCommand("Item.Select", select.Bindable().Click);
         player.Equipment.ApplySnapshot(new[] { 1, 2 }, item => item.Id, id => id,
             id => new ClientInventoryItemVm { Id = id }, (item, id) => item.Title = "Item " + id);
         await ui.WhenMvvmIdleAsync();
