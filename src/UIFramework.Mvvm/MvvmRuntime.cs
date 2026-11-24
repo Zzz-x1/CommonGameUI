@@ -272,7 +272,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
     }
     internal void Report(Exception error, string context)
     { try { Log.Exception(error, context); } catch (Exception loggingError) { Exception? first = error; Failure(ref first, loggingError); } }
-    private sealed class ReferenceComparer : IEqualityComparer<object>
+    internal sealed class ReferenceComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceComparer Instance = new();
         public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
@@ -300,7 +300,7 @@ public sealed class MvvmNodeExtension : IUINodeExtension
     public Task AfterInitializeAsync(UINode node, CancellationToken token) => MvvmExtensions.Scope(node).InitializeAsync(token);
     public ValueTask DisposeAsync(UINode node) => MvvmExtensions.Scope(node).DisposeAsync();
 }
-public static class MvvmExtensions
+public static partial class MvvmExtensions
 {
     internal static readonly ConditionalWeakTable<UINode, BindingScope> Scopes = new();
     internal static readonly ConditionalWeakTable<UINode, Action<IUINode>> Initializers = new();

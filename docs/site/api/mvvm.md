@@ -55,6 +55,20 @@ void ObserveMvvmTask(this IUINode node, Task task);
 
 路径格式为 `Source.Member`，支持经过已织入 VM 的嵌套路径。四种模式为 `OneTime`、`OneWay`、`OneWayToViewModel`、`TwoWay`。`BindingOptions` 另有 `Convert`、`ConvertBack`、`HasNullValue`、`NullValue`。
 
+## 泛型回调与多来源投影
+
+```csharp
+IDisposable Bind<T>(this IUINode node, string path, Action<T> apply);
+IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply);
+IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply);
+IDisposable Bind<T1, T2, TResult>(this IUINode node, string path1, string path2,
+    IBindingTarget target, Func<T1, T2, TResult> project);
+IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string path2, string path3,
+    IBindingTarget target, Func<T1, T2, T3, TResult> project);
+```
+
+来源须可通知；输入按路径顺序传入，计算结果须可赋给目标。用任一来源的完整路径暂停整条绑定，用同一路径恢复时只刷新一次。释放绑定或销毁节点会解除全部订阅；隐藏或进入关闭缓存时保留。
+
 ## 标记与转换
 
 | 标记 | 作用 |

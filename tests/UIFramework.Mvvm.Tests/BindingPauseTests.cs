@@ -4,7 +4,7 @@ using Xunit;
 
 namespace UIFramework.Mvvm.Tests;
 
-public sealed class BindingPauseTests
+public sealed partial class BindingPauseTests
 {
     private sealed class Host : IUIHost, IUILog
     {

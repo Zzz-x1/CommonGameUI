@@ -156,6 +156,23 @@ Two-way bindings initially use the VM value. After control input, the normalized
 
 Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive properties also require `FieldNotify`. Null paths throw by default. Explicit null presentation neither hides missing members or wrong types nor creates missing objects.
 
+## Calculate a quote from multiple VMs
+
+List the source paths in the same order as the lambda parameters. A change to the quantity, price or wallet balance updates the quote. This example displays the total when affordable and the shortfall as a negative number otherwise.
+
+```csharp
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
+    (int gold, int price, int quantity) =>
+    {
+        long total = (long)price * quantity;
+        return gold >= total ? $"{total}" : $"-{total - gold}";
+    });
+
+this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
+```
+
+Pass a target and a function returning its value to update a control property. Pass a synchronous callback for custom presentation, such as the badge's `ShowCount` method. Both run when connected. If a VM along a path is replaced, the binding reads all sources from the current instances.
+
 ## Pause bindings for animation
 
 After character training saves a new power value, pause its binding while the control displays the count-up animation, then resume:

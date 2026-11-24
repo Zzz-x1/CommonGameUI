@@ -4,7 +4,7 @@ using System.ComponentModel;
 
 namespace UIFramework.Mvvm;
 
-internal sealed class BindingScope : IAsyncDisposable
+internal sealed partial class BindingScope : IAsyncDisposable
 {
     private readonly MvvmRuntime _runtime;
     private readonly IViewModelAssets? _assets;
@@ -148,11 +148,15 @@ internal sealed class BindingScope : IAsyncDisposable
             Node.Context.Host.VerifyAccess();
             if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
             if (string.IsNullOrWhiteSpace(propertyName)) throw new ArgumentException("A VM property name or source path is required.", nameof(propertyName));
-            var bindings = _bindings.OfType<PropertyBinding>().Where(binding => !binding.Disposed && binding.HasSource &&
-                (propertyName.Contains('.') ? binding.SourcePath == propertyName : binding.Member == propertyName)).ToArray();
-            if (bindings.Length == 0) throw new KeyNotFoundException("No property binding: " + propertyName);
-            if (bindings.Select(binding => binding.SourcePath).Distinct(StringComparer.Ordinal).Count() != 1)
+            var matches = (from binding in _bindings.OfType<IPropertyBinding>()
+                           where !binding.Disposed
+                           from path in binding.SourcePaths
+                           where path == propertyName || path.EndsWith("." + propertyName, StringComparison.Ordinal) && !propertyName.Contains('.')
+                           select (binding, path)).ToArray();
+            if (matches.Length == 0) throw new KeyNotFoundException("No property binding: " + propertyName);
+            if (matches.Any(match => match.path != matches[0].path))
                 throw new InvalidOperationException("Ambiguous property binding; use a complete Source.Member path: " + propertyName);
+            var bindings = matches.Select(match => match.binding).Distinct().ToArray();
             if (bindings.Any(binding => binding.Paused == pause))
                 throw new InvalidOperationException(pause ? "Property binding is already paused: " + propertyName : "Property binding is not paused: " + propertyName);
             foreach (var binding in bindings) binding.Paused = pause;
@@ -224,15 +228,16 @@ internal sealed class BindingScope : IAsyncDisposable
     {
         private readonly BindingScope _scope;
         private readonly string[] _parts;
-        private readonly List<(INotifyPropertyChanged Model, PropertyChangedEventHandler Handler)> _subscriptions = new();
+        private readonly List<(IMvvmObject Model, PropertyChangedEventHandler? Handler)> _subscriptions = new();
+        private readonly CallbackBinding? _group;
         private readonly bool _observe;
         private readonly bool _command;
         private bool _disposed;
         internal event Action? Changed;
-        internal Path(BindingScope scope, string path, bool observe, bool command = false)
+        internal Path(BindingScope scope, string path, bool observe, bool command = false, CallbackBinding? group = null)
         {
-            _scope = scope; _parts = scope._runtime.Plans.Path(path); _observe = observe; _command = command;
-            scope.SourceChanged += OnSourceChanged;
+            _scope = scope; _parts = scope._runtime.Plans.Path(path); _observe = observe; _command = command; _group = group;
+            if (group == null) scope.SourceChanged += OnSourceChanged;
             try { if (_observe) Watch(1, scope.Get(_parts[0])); } catch { Dispose(); throw; }
         }
         internal (IMvvmObject? Owner, string Member) Resolve()
@@ -248,9 +253,27 @@ internal sealed class BindingScope : IAsyncDisposable
         internal object? Read() { var (owner, member) = Resolve(); return owner?.Read(member); }
         private void OnSourceChanged(string name)
         {
-            if (_disposed || name != _parts[0]) return;
+            if (SourceReplaced(name)) Changed?.Invoke();
+        }
+        internal bool SourceReplaced(string name)
+        {
+            if (_disposed || name != _parts[0]) return false;
             if (_observe) Watch(1, _scope.Get(name));
-            Changed?.Invoke();
+            return true;
+        }
+        private bool MemberChanged(int index, IMvvmObject model, string? property)
+        {
+            if (_disposed || index >= _subscriptions.Count || !ReferenceEquals(_subscriptions[index].Model, model)) return false;
+            var member = _parts[index + 1];
+            if (!string.IsNullOrEmpty(property) && property != member) return false;
+            if (index + 2 < _parts.Length) Watch(index + 2, model.Read(member));
+            return true;
+        }
+        internal bool MemberChanged(IMvvmObject model, string? property)
+        {
+            bool changed = false;
+            for (int i = 0; i < _subscriptions.Count; i++) changed |= MemberChanged(i, model, property);
+            return changed;
         }
         private void Watch(int start, object? value)
         {
@@ -261,22 +284,20 @@ internal sealed class BindingScope : IAsyncDisposable
                 var model = (IMvvmObject)value;
                 var member = _parts[i];
                 var subscription = i - 1;
-                var next = i + 1;
-                var leaf = next == _parts.Length;
+                var leaf = i + 1 == _parts.Length;
                 if (leaf && _command) break;
                 if (!_scope._runtime.Plans.Member(model, member, MvvmMemberKind.Property).Observable)
                 {
                     if (!leaf) throw new InvalidOperationException("Reactive path requires FieldNotify: " + member);
                     break;
                 }
-                PropertyChangedEventHandler handler = (_, e) =>
+                PropertyChangedEventHandler? handler = null;
+                if (_group == null)
                 {
-                    if (_subscriptions.Count <= subscription || !ReferenceEquals(_subscriptions[subscription].Model, model)) return;
-                    if (!string.IsNullOrEmpty(e.PropertyName) && e.PropertyName != member) return;
-                    if (!leaf) Watch(next, model.Read(member));
-                    Changed?.Invoke();
-                };
-                model.PropertyChanged += handler;
+                    handler = (_, e) => { if (MemberChanged(subscription, model, e.PropertyName)) Changed?.Invoke(); };
+                    model.PropertyChanged += handler;
+                }
+                else _group.WatchModel(model);
                 _subscriptions.Add((model, handler));
                 if (!leaf) value = model.Read(member);
             }
@@ -286,28 +307,36 @@ internal sealed class BindingScope : IAsyncDisposable
             for (var i = _subscriptions.Count - 1; i >= firstPart - 1; i--)
             {
                 var (model, handler) = _subscriptions[i];
-                model.PropertyChanged -= handler;
+                if (_group == null) model.PropertyChanged -= handler;
+                else _group.UnwatchModel(model);
                 _subscriptions.RemoveAt(i);
             }
         }
         public void Dispose()
         { _disposed = true; _scope.SourceChanged -= OnSourceChanged; UnsubscribeFrom(1); }
     }
-    private sealed class PropertyBinding : IDisposable
+    internal interface IPropertyBinding : IDisposable
+    {
+        IReadOnlyList<string> SourcePaths { get; }
+        bool Disposed { get; }
+        bool Paused { get; set; }
+        void Refresh();
+    }
+    private sealed class PropertyBinding : IPropertyBinding
     {
         private readonly BindingScope _scope; private readonly Path? _path; private readonly IBindingTarget _target; private readonly BindingOptions _options;
         private bool _updating; private bool _disposed;
         private readonly CompiledBinding? _plan;
         private Type? _validatedOwner;
         internal string SourcePath { get; }
-        internal string Member => SourcePath.Substring(SourcePath.LastIndexOf('.') + 1);
-        internal bool HasSource => !_options.HasConstantValue;
-        internal bool Disposed => _disposed;
-        internal bool Paused { get; set; }
-        internal void Refresh() => Pull();
+        public IReadOnlyList<string> SourcePaths { get; }
+        public bool Disposed => _disposed;
+        public bool Paused { get; set; }
+        public void Refresh() => Pull();
         internal PropertyBinding(BindingScope scope, string path, IBindingTarget target, BindingOptions options, bool preview = false, CompiledBinding? plan = null)
         {
             _scope = scope; _target = target; _options = options; _plan = plan; SourcePath = path;
+            SourcePaths = options.HasConstantValue ? Array.Empty<string>() : new[] { path };
             try
             {
                 if (options.HasConstantValue && options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)

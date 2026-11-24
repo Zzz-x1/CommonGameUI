@@ -55,6 +55,20 @@ Enable MVVM before creating business nodes. `SetViewModel` borrows an object; `C
 
 Paths use `Source.Member` and may traverse woven intermediate VMs. Modes are `OneTime`, `OneWay`, `OneWayToViewModel` and `TwoWay`. `BindingOptions` also provides `Convert`, `ConvertBack`, `HasNullValue` and `NullValue`.
 
+## Typed callbacks and multi-source projections
+
+```csharp
+IDisposable Bind<T>(this IUINode node, string path, Action<T> apply);
+IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply);
+IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply);
+IDisposable Bind<T1, T2, TResult>(this IUINode node, string path1, string path2,
+    IBindingTarget target, Func<T1, T2, TResult> project);
+IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string path2, string path3,
+    IBindingTarget target, Func<T1, T2, T3, TResult> project);
+```
+
+Sources must support change notification. Arguments follow path order, and the result must be assignable to the target. Pause with any participating path, then resume with that same path for a single refresh. Disposing the binding or its node releases all subscriptions. Hiding or caching the window keeps them connected.
+
 ## Attributes and conversions
 
 | Attribute | Purpose |

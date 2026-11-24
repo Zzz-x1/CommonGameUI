@@ -156,6 +156,23 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 
 中间对象替换后重新订阅。响应路径的中间属性也需要 `FieldNotify`。空路径默认报错；显式空值不会隐藏成员缺失或类型错误，也不会创建缺失对象。
 
+## 使用多个 VM 计算报价
+
+购物车数量、单价或玩家余额变化时，报价都会重新计算。按 lambda 的参数顺序列出来源路径。下例在余额足够时显示总价，余额不足时显示还差多少金币。
+
+```csharp
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
+    (int gold, int price, int quantity) =>
+    {
+        long total = (long)price * quantity;
+        return gold >= total ? $"{total}" : $"-{total - gold}";
+    });
+
+this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
+```
+
+传目标和返回值函数可以更新一个控件属性。传同步回调则由项目自由更新表现，`ShowCount` 是本例中角标的显示方法。首次绑定会立即显示；路径中的 VM 被替换后，绑定从当前实例读取全部来源。
+
 ## 暂停绑定，让动画接管
 
 角色培养保存了新的战力，但界面需要逐步增长显示时，先暂停该属性绑定，动画结束后恢复：
