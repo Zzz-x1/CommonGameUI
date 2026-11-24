@@ -36,6 +36,7 @@ MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
     Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
 void SetViewModel(this IUINode node, string name, object vm);
+void NotifyChanged<TVm>(this TVm vm, string propertyName) where TVm : class;
 T GetViewModel<T>(this IUINode node, string name) where T : class;
 T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
@@ -77,7 +78,7 @@ void PreviewSources.Register<T>(Func<T> factory) where T : class;
 
 `Converters.Configure` 是 GUI／预览共用的配置入口：ViewModel 输入使用绑定来源路径，Constant 输入按函数类型解析常量。常量只允许 OneWay／OneTime。`BindingOptions.HasConstantValue`／`ConstantValue` 也可显式配置常量，不要求 VM 来源。
 
-Weaver 实现 `IMvvmObject`：`Read`、`Write`、`CanExecute`、`Execute`、`Describe` 和 `PropertyChanged`。`Describe` 返回 `MvvmMember[]`，包含名称、类型、成员种类、通知及可写标记；业务代码通常不直接使用这些入口。
+Weaver 为 `IMvvmObject` 生成 `Read`、`Write`、`CanExecute`、`Execute`、`Describe`、`NotifyChanged` 和 `PropertyChanged`。手写该接口的 VM 也需实现 `void NotifyChanged(string propertyName)`。升级后请用配套 Weaver 重新编译包含 VM 的程序集。
 
 ## 引擎适配
 

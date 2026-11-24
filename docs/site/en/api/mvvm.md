@@ -36,6 +36,7 @@ MvvmRuntime GetMvvm(this UIContext ui);
 void ConfigureMvvm(this UIContext ui, MvvmRuntime? runtime = null,
     Func<UINode, IViewBindingConfiguration?>? configuration = null, IViewModelAssets? assets = null);
 void SetViewModel(this IUINode node, string name, object vm);
+void NotifyChanged<TVm>(this TVm vm, string propertyName) where TVm : class;
 T GetViewModel<T>(this IUINode node, string name) where T : class;
 T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
@@ -77,7 +78,7 @@ Built-in names: `FormatNumber`, `PercentText`, `InvertBoolean`, `IntToFloat`, `F
 
 `Converters.Configure` is shared by GUI and preview. ViewModel input uses the binding source path; Constant input parses the literal as the function's input type. Constants support OneWay / OneTime only. `BindingOptions.HasConstantValue` / `ConstantValue` can also explicitly configure a constant without a VM source.
 
-The Weaver implements `IMvvmObject`: `Read`, `Write`, `CanExecute`, `Execute`, `Describe` and `PropertyChanged`. `Describe` returns `MvvmMember[]` containing names, types, member kinds, notification and writable flags. Business code usually does not call these generated entry points.
+The Weaver implements `Read`, `Write`, `CanExecute`, `Execute`, `Describe`, `NotifyChanged` and `PropertyChanged` on `IMvvmObject`. Handwritten implementations must also implement `void NotifyChanged(string propertyName)`. Recompile assemblies containing VMs with the matching Weaver after upgrading.
 
 ## Engine integration
 

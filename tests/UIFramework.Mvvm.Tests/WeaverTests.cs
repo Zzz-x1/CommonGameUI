@@ -12,10 +12,10 @@ namespace UIFramework.Mvvm.Tests;
 
 public class WeaverTests
 {
-    private static ModuleDefinition Compile(string body)
+    private static ModuleDefinition Compile(string body, params string[] additionalReferences)
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-            .Append(typeof(ViewModelAttribute).Assembly.Location).Distinct().Select(path => MetadataReference.CreateFromFile(path));
+            .Append(typeof(ViewModelAttribute).Assembly.Location).Concat(additionalReferences).Distinct().Select(path => MetadataReference.CreateFromFile(path));
         var tree = CSharpSyntaxTree.ParseText("using System; using System.Threading.Tasks; using UIFramework.Mvvm; " + body, path: "Vm.cs", encoding: Encoding.UTF8);
         var compilation = CSharpCompilation.Create("VmFixture", new[] { tree }, references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Debug));
         var pe = new MemoryStream(); var pdb = new MemoryStream(); var result = compilation.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
@@ -57,6 +57,29 @@ public class WeaverTests
             Assert.NotEmpty(module.Types.Single(type => type.Name == "Base").Methods.Single(method => method.Name == "__mvvmOriginal_set_Gold").DebugInformation.SequencePoints);
             Assert.Contains(module.Types.Single(type => type.Name == "Vm").Methods, method => method.Name == "Describe");
         }
+    }
+    [Fact]
+    public void ManualAndAutomaticNotificationDispatchToDerivedVmInAnotherAssembly()
+    {
+        using var module = Compile("""
+            [ViewModel] public sealed class ShopPlayer : UIFramework.Mvvm.Tests.PlayerVm
+            {
+                [FieldNotify(nameof(Gold))] public int Credits => Gold;
+            }
+            """, typeof(PlayerVm).Assembly.Location);
+        var weaver = Weaver(module, out var runtime);
+        using (runtime) Assert.Equal(1, weaver.Process());
+        using var assembly = new MemoryStream();
+        module.Write(assembly);
+        var type = System.Reflection.Assembly.Load(assembly.ToArray()).GetType("ShopPlayer", true)!;
+        var vm = (PlayerVm)Activator.CreateInstance(type)!;
+        var changes = new List<string>();
+        ((System.ComponentModel.INotifyPropertyChanged)(object)vm).PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
+        vm.NotifyChanged(nameof(PlayerVm.Gold));
+        Assert.Equal(new[] { "Gold", "Credits", "CanBuy" }, changes);
+        changes.Clear();
+        vm.Gold = 50;
+        Assert.Equal(new[] { "Gold", "Credits", "CanBuy" }, changes);
     }
     [Fact] public void StartupIsInstalledEvenWithoutVmDeclarationsAndDoesNotDuplicate()
     {

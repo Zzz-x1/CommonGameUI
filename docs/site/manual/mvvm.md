@@ -46,6 +46,22 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
 
+### 通知 UI 重读服务数据
+
+血量由战斗服务持有时，VM 可以直接读取服务。收到服务的血量事件后，在 UI 线程调用 `NotifyChanged`，已绑定的血条和依赖属性都会刷新。
+
+```csharp
+[FieldNotify]
+public int Health => combat.Health;
+
+[FieldNotify(nameof(Health))]
+public bool IsDefeated => Health <= 0;
+
+private void OnHealthChanged() => this.NotifyChanged(nameof(Health));
+```
+
+手动通知接受本 VM 的一个 `[FieldNotify]` 属性名，每次调用都会发布。通过已标记的 setter 修改值时，框架会自动比较新旧值并通知。
+
 ## 来源自动解析
 
 `GetViewModel`、代码绑定和 GUI 绑定使用同一规则：先查当前节点的本地来源，没有时按名称查询 Provider。无需提前注入全局 VM。`Item` 必须由集合或业务注入。已有本地实例类型错误时直接报错，不改用全局实例。

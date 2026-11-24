@@ -111,7 +111,7 @@ public sealed partial class ViewModelWeaver
         foreach (var property in type.Properties.Where(p => Attribute(p, "FieldNotifyAttribute")))
         {
             if (property.GetMethod?.IsPublic != true || property.GetMethod.IsStatic || property.HasParameters || property.PropertyType.IsByReference || property.PropertyType.IsPointer) throw new InvalidOperationException("Invalid FieldNotify property: " + property.FullName);
-            if (property.SetMethod != null) Setter(type, property, events, Dependencies(properties, property.Name));
+            if (property.SetMethod != null) Setter(type, property);
         }
         ValidateDependencies(properties);
         Notify(type, properties, events, inherited);
@@ -183,7 +183,7 @@ public sealed partial class ViewModelWeaver
         if (eventDefinition == null) { eventDefinition = new EventDefinition("PropertyChanged", EventAttributes.None, field.FieldType); type.Events.Add(eventDefinition); }
         if (add) eventDefinition.AddMethod = method; else eventDefinition.RemoveMethod = method;
     }
-    private void Setter(TypeDefinition type, PropertyDefinition property, FieldReference events, string[] notifications)
+    private void Setter(TypeDefinition type, PropertyDefinition property)
     {
         var setter = property.SetMethod;
         if (!setter.HasBody || setter.IsStatic || setter.Parameters.Count != 1) throw new InvalidOperationException("Unsupported setter: " + setter.FullName);
@@ -201,12 +201,13 @@ public sealed partial class ViewModelWeaver
         var different = new GenericInstanceMethod(Runtime("MvvmNotifications", "Different")); different.GenericArguments.Add(_module.ImportReference(property.PropertyType));
         il.Emit(OpCodes.Call, different); il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, property.Name);
-        il.Emit(OpCodes.Callvirt, new MethodReference("__mvvmNotify", _module.TypeSystem.Void, type) { HasThis = true, Parameters = { new ParameterDefinition(_module.TypeSystem.String) } });
+        il.Emit(OpCodes.Callvirt, Runtime("IMvvmObject", "NotifyChanged"));
         il.Append(done);
     }
     private void Notify(TypeDefinition type, List<PropertyDefinition> properties, FieldReference events, bool inherited)
     {
         var method = new MethodDefinition("__mvvmNotify", MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig | (inherited ? 0 : MethodAttributes.NewSlot), _module.TypeSystem.Void);
+        if (!inherited) method.Overrides.Add(Runtime("IMvvmObject", "NotifyChanged"));
         method.Parameters.Add(new ParameterDefinition(_module.TypeSystem.String)); type.Methods.Add(method);
         var il = method.Body.GetILProcessor();
         foreach (var property in properties.Where(p => Attribute(p, "FieldNotifyAttribute")))
@@ -216,7 +217,17 @@ public sealed partial class ViewModelWeaver
             { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, events); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Call, Runtime("MvvmNotifications", "Raise")); }
             il.Emit(OpCodes.Ret); il.Append(next);
         }
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldstr, $"{type.FullName.Replace('/', '+')} has no [FieldNotify] property named '");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "'.");
+        var concat = new MethodReference("Concat", _module.TypeSystem.String, _module.TypeSystem.String);
+        for (var i = 0; i < 3; i++) concat.Parameters.Add(new ParameterDefinition(_module.TypeSystem.String));
+        il.Emit(OpCodes.Call, concat);
+        var error = new TypeReference("System", "MissingMemberException", _module, _module.TypeSystem.CoreLibrary);
+        var ctor = new MethodReference(".ctor", _module.TypeSystem.Void, error) { HasThis = true };
+        ctor.Parameters.Add(new ParameterDefinition(_module.TypeSystem.String));
+        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Throw);
     }
     private void Dispatch(TypeDefinition type, string name, List<PropertyDefinition> properties, List<MethodDefinition> commands, bool inherited)
     {

@@ -20,6 +20,7 @@ public sealed class WovenViewModelAttribute : Attribute { }
 /// <summary>Implemented by Cecil; application classes need no framework base class.</summary>
 public interface IMvvmObject : INotifyPropertyChanged
 {
+    void NotifyChanged(string propertyName);
     object? Read(string member);
     void Write(string member, object? value);
     bool CanExecute(string command);

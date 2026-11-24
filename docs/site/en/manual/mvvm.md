@@ -46,6 +46,22 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
 
+### Refresh a value owned by a service
+
+A health bar can read its value from the combat service through a VM property. Handle the service's health event on the UI thread and call `NotifyChanged` to refresh the bar and any dependent properties.
+
+```csharp
+[FieldNotify]
+public int Health => combat.Health;
+
+[FieldNotify(nameof(Health))]
+public bool IsDefeated => Health <= 0;
+
+private void OnHealthChanged() => this.NotifyChanged(nameof(Health));
+```
+
+Pass the name of a single `[FieldNotify]` property on this VM. Every manual call publishes a change. Assigning through a marked setter already publishes when its value changes.
+
 ## Automatic source resolution
 
 `GetViewModel`, code bindings and GUI bindings use the same rule: use the current node's local source first, then resolve the provider name. Global VMs need no prior injection. Collections or business code must inject `Item`. A local instance with the wrong type raises an error instead of selecting a global instance.

@@ -27,7 +27,12 @@ public sealed class BindingPlanTests
         {
             if (member != "Price") throw new MissingMemberException(member);
             Price = (int)value!;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(member));
+            NotifyChanged(member);
+        }
+        public void NotifyChanged(string propertyName)
+        {
+            if (propertyName != "Price") throw new MissingMemberException(GetType().FullName, propertyName);
+            MvvmNotifications.Raise(PropertyChanged, this, propertyName);
         }
         public bool CanExecute(string command) => throw new InvalidOperationException("Preview called CanExecute");
         public Task Execute(string command, object? parameter, CancellationToken token) => throw new InvalidOperationException("Preview ran a command");
