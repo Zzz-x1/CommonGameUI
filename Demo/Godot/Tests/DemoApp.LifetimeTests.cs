@@ -43,6 +43,10 @@ public partial class DemoApp
         dialogs.ConfigureBackdrop(EngineUI.Backdrops.Dim(observed.Add), ModalBackdropMode.PerModal);
         var first = await dialogs.OpenAsync<LifetimeWindow>(playAnimation: false);
         var second = await dialogs.OpenAsync<LifetimeWindow>(playAnimation: false);
+        context.Register<ConfirmView>("res://Scenes/Client/Confirm.tscn");
+        var confirmation = await dialogs.OpenAsync<ConfirmView>("出售装备？", playAnimation: false);
+        pass(GetViewport().GuiGetFocusOwner() == confirmation.GetControl<Button>("Center/Cancel"),
+            "a confirmation opens with keyboard focus on Cancel");
         var lifetime = context.BindLifetime(scene);
         scene.QueueFree(); await lifetime.Completion;
         pass(context.Root.State == NodeState.Disposed && first.State == NodeState.Disposed && second.State == NodeState.Disposed,
@@ -163,6 +167,7 @@ public partial class DemoApp
         var inventory = await pages.PushAsync<InventoryView>(playAnimation: false);
         await inventory.Tabs.SwitchAsync("材料", playAnimation: false);
         var row = inventory.GetControl<Button>("Pages/材料/C0");
+        row.GrabFocus();
         var details = await pages.PushAsync<ItemDetailsView>("mat0", playAnimation: false);
         pass(!row.IsVisibleInTree() && details.IsInteractive, "item details cover the retained inventory row");
 
@@ -177,7 +182,12 @@ public partial class DemoApp
         pass(inventory.IsInteractive && inventory.Tabs.CurrentName == "材料" && row.IsVisibleInTree()
             && ReferenceEquals(inventory.GetControl<Button>("Pages/材料/C0"), row),
             "restored inventory retains the materials tab and its native row");
-        row.GrabFocus();
-        pass(row.HasFocus(), "the restored material row accepts keyboard focus");
+        pass(GetViewport().GuiGetFocusOwner() == row, "return restores keyboard focus to the original material row");
+
+        await pages.PushAsync<ItemDetailsView>("mat0", playAnimation: false);
+        row.Disabled = true;
+        await pages.PopAsync(playAnimation: false);
+        pass(GetViewport().GuiGetFocusOwner() == inventory.GetControl<Button>("Tabs/材料"),
+            "unavailable row restores the scene's preferred category button");
     }
 }

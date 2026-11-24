@@ -56,10 +56,10 @@ public partial class DemoApp
         focusMount.AddChild(currentFocus);
         currentFocus.GrabFocus();
         var host = new EngineUI.UIHost(GetViewport());
-        host.RestoreFocus(previousFocus);
+        host.TryFocus(null, previousFocus);
         pass(GetViewport().GuiGetFocusOwner() == currentFocus, "restore focus does not select a business-disabled button");
         previousFocus.Disabled = false;
-        host.RestoreFocus(previousFocus);
+        host.TryFocus(null, previousFocus);
         pass(GetViewport().GuiGetFocusOwner() == previousFocus, "restore focus selects a usable original button");
         RemoveChild(focusMount);
         focusMount.QueueFree();

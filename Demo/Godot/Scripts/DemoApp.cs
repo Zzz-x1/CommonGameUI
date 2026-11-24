@@ -161,7 +161,7 @@ public partial class DemoApp : Control
             if (owner.State == NodeState.Ready)
             {
                 display.SetInteractive(owner.IsInteractive);
-                owner.Context.Host.RestoreFocus(focus);
+                if (focus != null && owner.IsInteractive) owner.Context.Host.TryFocus(display, focus);
             }
         }
     });

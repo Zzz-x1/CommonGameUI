@@ -21,8 +21,9 @@
 [ext_resource type="Texture2D" path="res://Assets/Client/hero5.png" id="19"]
 [ext_resource type="Texture2D" path="res://Assets/Items/crystal-growth.svg" id="20"]
 
-[node name="Modal" type="Control"]
+[node name="Modal" type="Control" node_paths=PackedStringArray("PreferredFocus")]
 script = ExtResource("native_ui")
+PreferredFocus = NodePath("Center/Cancel")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

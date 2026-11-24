@@ -16,23 +16,37 @@ public sealed class UIHost : IUIHost, IUILog
             throw new InvalidOperationException("UI access must run on the Godot scene thread; dispatch through the host before calling.");
     }
     public object? CaptureFocus() { VerifyAccess(); return _viewport.GuiGetFocusOwner(); }
-    public void Focus(IUIElement? element)
+    public bool ContainsFocus(IUIElement scope, object target)
     {
         VerifyAccess();
-        if (element == null) return;
-        if (!(element is UIElement godot)) throw new ArgumentException("Expected a Godot display.", nameof(element));
-        var control = UIElement.Enumerate(godot.Control).FirstOrDefault(c =>
-            c.IsVisibleInTree() && c.FocusMode != Control.FocusModeEnum.None && (!(c is BaseButton b) || !b.Disabled));
-        control?.GrabFocus();
+        var root = ((UIElement)scope).Control;
+        return target is Control control && GodotObject.IsInstanceValid(root) && GodotObject.IsInstanceValid(control)
+            && root.IsInsideTree() && root.GetViewport() == _viewport && (root == control || root.IsAncestorOf(control));
     }
-    public void RestoreFocus(object? focus)
+    public bool TryFocus(IUIElement? scope, object? target)
     {
         VerifyAccess();
-        // A disappeared focus target is a normal condition after closing its owning screen.
-        if (focus is Control control && GodotObject.IsInstanceValid(control) && !control.IsQueuedForDeletion()
-            && control.IsVisibleInTree() && control.FocusMode != Control.FocusModeEnum.None
-            && (control is not BaseButton button || !button.Disabled)) control.GrabFocus();
+        var root = scope == null ? RootMount : ((UIElement)scope).Control;
+        bool Usable(Control c) => GodotObject.IsInstanceValid(c) && !c.IsQueuedForDeletion() && c.IsInsideTree()
+            && c.GetViewport() == _viewport && c.IsVisibleInTree() && c.FocusMode != Control.FocusModeEnum.None
+            && (c is not BaseButton button || !button.Disabled);
+        Control? control;
+        if (target != null)
+        {
+            if (target is not Control candidate || !Usable(candidate) || root != null &&
+                (!GodotObject.IsInstanceValid(root) || root != candidate && !root.IsAncestorOf(candidate))) return false;
+            control = candidate;
+        }
+        else
+        {
+            if (scope == null || !GodotObject.IsInstanceValid(root)) return false;
+            control = UIElement.Enumerate(root!).FirstOrDefault(Usable);
+            if (control == null) return false;
+        }
+        control.GrabFocus();
+        return control.HasFocus();
     }
+    public void ClearFocus() { VerifyAccess(); _viewport.GuiGetFocusOwner()?.ReleaseFocus(); }
     public void Error(string message) => GD.PushError($"[UI] {message}");
     public void Exception(Exception exception, string context) => GD.PushError($"[UI] {context}\n{exception}");
 }

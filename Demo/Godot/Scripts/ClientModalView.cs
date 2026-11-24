@@ -130,13 +130,10 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
     }
 
     protected override void OnActivated(StateChangeContext context) => Refresh();
-    protected override void OnEntered(LifecycleContext context)
+    protected override Control GetPreferredFocus()
     {
         var button = Get<Button>("Center/Confirm");
-        if (button.Disabled)
-            Get<Button>("Center/Close").GrabFocus();
-        else
-            button.GrabFocus();
+        return button.Disabled ? Get<Button>("Center/Close") : button;
     }
 
     public void Refresh()
