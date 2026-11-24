@@ -157,18 +157,31 @@ public partial class DemoApp
         Pass(ReferenceEquals(item, reusedItem) && reusedItem.GetViewModel<ClientItemVm>("Item").Name == Catalog.Item("eq1").Name, "cached item applies new parameters and refreshes VM");
         await Shell.Pages.PopAsync();
         await OpenAsync("Shop");
-        await ModalAsync(new ModalArgs("Shop", 0));
+        await ModalAsync(new ModalArgs("Shop", 0, 3));
         var detail = (ClientModalView)Modals.Current!;
+        var quantityPicker = detail.GetControl<SpinBox>("Center/Pages/Shop/Quantity");
+        int wallet = Store.State.Gold;
+        int total = Catalog.Items[0].Price * 2;
+        Pass(quantityPicker.Value == 3, "order supplies initial quantity");
+        quantityPicker.Value = 2;
+        Pass(detail.GetViewModel<ClientOrderVm>("Order").Quantity == 2 &&
+            detail.GetControl<Label>("Center/Pages/Shop/Price").Text.Contains($"总计 {total} 金币"), "quantity edit updates order and quote");
+        Store.Change(state => state.Gold = total - 1);
+        var orderButton = detail.GetControl<Button>("Center/Confirm");
+        Pass(orderButton.Disabled && orderButton.Text == "还差 1 金币", "wallet updates open order");
+        Store.Change(state => state.Gold = wallet);
         await detail.ConfirmAsync();
         var confirmation = (ClientModalView)Modals.Current!;
+        Pass(confirmation.GetControl<Label>("Center/Pages/Text/Body").Text.Contains($"共计 {total} 金币"), "confirmation uses committed quantity");
         int owned = Store.State.Inventory["eq0"];
         await PressAsync(confirmation.GetControl<Button>("Center/Confirm"));
-        Pass(Store.State.Inventory["eq0"] == owned + 1 && Modals.Current is RewardView, "purchase reward");
+        Pass(Store.State.Inventory["eq0"] == owned + 2 && Store.State.Gold == wallet - total && Modals.Current is RewardView, "purchase reward");
         Pass(confirmation.State == NodeState.Disposed && detail.State == NodeState.Ready && !detail.IsInteractive, "close to target");
         await BackAsync();
-        Pass(ReferenceEquals(Modals.Current, detail) && detail.IsInteractive, "detail restored");
+        Pass(ReferenceEquals(Modals.Current, detail) && detail.IsInteractive && quantityPicker.Value == 2, "detail restored with its quantity");
         await BackAsync();
         await ModalAsync(new ModalArgs("Shop", 1));
+        Pass(((ClientModalView)Modals.Current!).GetControl<SpinBox>("Center/Pages/Shop/Quantity").Value == 1, "next order has its own quantity");
         await ((ClientModalView)Modals.Current!).ConfirmAsync();
         owned = Store.State.Inventory["eq1"];
         await BackAsync();
@@ -292,11 +305,12 @@ public partial class DemoApp
     private async Task VerifyClientSaveAsync()
     {
         // Separate process, same isolated file; never recreates a preset archive.
-        Check(Store.State.Gold == 14520 && Store.State.Gems == 650 && Store.State.Inventory["eq0"] == 3, "restart currencies and inventory");
+        const int expectedGold = 14340;
+        Check(Store.State.Gold == expectedGold && Store.State.Gems == 650 && Store.State.Inventory["eq0"] == 4, "restart currencies and inventory");
         Check(Store.State.Levels[0] == 13 && Store.State.Equipment[2] == "eq0" && Store.State.Showcase == 1, "restart heroes and profile");
         Check(Store.State.Counts["mail"] == 8 && Store.State.Claimed.Contains("t2") && Store.State.Claimed.Contains("a2") && Store.State.Claimed.Contains("e1"), "restart rewards cannot repeat");
         await EnterAsync();
-        Check(Shell.GetControl<Label>("Top/Wallet").Text.Contains("14,520"), "restart visible wallet");
+        Check(Shell.GetControl<Label>("Top/Wallet").Text.Contains(expectedGold.ToString("N0")), "restart visible wallet");
         GD.Print("CLIENT RESTART TESTS PASSED: 4");
         await _ui.DisposeAsync();
         GetTree().Quit();

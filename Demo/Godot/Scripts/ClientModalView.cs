@@ -37,8 +37,14 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
         Wire("Center/Cancel", CancelAsync);
         if (Parameters.Kind == "Purchase")
         {
-            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase"); purchase.Initialize(App.Store, Parameters, ConfirmAsync);
-            this.BindCommand("Purchase.Buy", Get<Button>("Center/Confirm").ClickTarget());
+            var purchase = this.CreateViewModel<ClientPurchaseVm>("Purchase");
+            purchase.Initialize(App.Store, Parameters, ConfirmAsync);
+            var item = Catalog.Items[Parameters.Id];
+            Text("Center/Title", "确认购买");
+            Text("Center/Pages/Text/Body", $"{item.Name} × {Parameters.Quantity}\n\n共计 {item.Price * Parameters.Quantity} 金币\n\n购买后返回商品页面，奖励自动存入背包。");
+            var confirm = Get<Button>("Center/Confirm");
+            confirm.Text = "购买";
+            this.BindCommand("Purchase.Buy", confirm.ClickTarget());
         }
         else Wire("Center/Confirm", ConfirmAsync);
         _pages = await this.CreateContainerAsync<TabContainerNode>("Content", Get<Control>("Center/Pages"), token);
@@ -61,12 +67,7 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
             }
 
         if (page == "Shop")
-        {
-            var spin = Get<SpinBox>("Center/Pages/Shop/Quantity");
-            spin.Value = Parameters.Quantity;
-            void Changed(double value) => Refresh();
-            spin.ValueChanged += Changed;
-        }
+            InitializeOrder();
 
         if (page == "Profile")
         {
@@ -91,6 +92,36 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
         if (page == "Settings")
             await InitializeSettingsAsync(token);
         Refresh();
+    }
+
+    private void InitializeOrder()
+    {
+        var item = Catalog.Items[Parameters.Id];
+        Text("Center/Title", "商品详情");
+        Text("Center/Pages/Shop/Name", item.Name);
+        Get<TextureRect>("Center/Pages/Shop/Icon").Texture = GD.Load<Texture2D>($"res://Assets/Items/{item.Icon}.svg");
+        this.CreateViewModel<ClientOrderVm>("Order").Quantity = Parameters.Quantity;
+        this.SetViewModel("Player", App.PlayerVm);
+        var quantityPicker = Get<SpinBox>("Center/Pages/Shop/Quantity");
+        this.BindTwoWay<int>("Order.Quantity", value => quantityPicker.SetValueNoSignal(value), edited =>
+        {
+            void SelectQuantity(double quantity) => edited((int)quantity);
+            quantityPicker.ValueChanged += SelectQuantity;
+            return () =>
+            {
+                if (GodotObject.IsInstanceValid(quantityPicker))
+                    quantityPicker.ValueChanged -= SelectQuantity;
+            };
+        });
+        var price = Get<Label>("Center/Pages/Shop/Price");
+        var confirm = Get<Button>("Center/Confirm");
+        this.Bind("Order.Quantity", "Player.Gold", (int quantity, int gold) =>
+        {
+            int total = item.Price * quantity;
+            price.Text = $"单价 {item.Price} 金币\n总计 {total} 金币";
+            confirm.Disabled = gold < total;
+            confirm.Text = gold < total ? $"还差 {total - gold} 金币" : "确认订单";
+        });
     }
 
     private async Task InitializeSettingsAsync(CancellationToken token)
@@ -139,29 +170,15 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
     public void Refresh()
     {
         var p = Parameters;
+        Text("Center/Description", p.Text);
+        Get<Button>("Center/Cancel").Text = "返回";
+        if (p.Kind is "Shop" or "Purchase")
+            return;
         var yes = Get<Button>("Center/Confirm");
         yes.Disabled = false;
         yes.Text = "确定";
-        Text("Center/Description", p.Text);
-        Get<Button>("Center/Cancel").Text = "返回";
         switch (p.Kind)
         {
-            case "Shop":
-                var item = Catalog.Items[p.Id];
-                int quantity = (int)Get<SpinBox>("Center/Pages/Shop/Quantity").Value;
-                Text("Center/Title", "商品详情");
-                Get<TextureRect>("Center/Pages/Shop/Icon").Texture = GD.Load<Texture2D>($"res://Assets/Items/{item.Icon}.svg");
-                Text("Center/Pages/Shop/Name", item.Name);
-                Text("Center/Pages/Shop/Price", $"单价 {item.Price} 金币\n总计 {quantity * item.Price} 金币");
-                yes.Text = Data.Gold < quantity * item.Price ? "金币不足" : "确认订单";
-                yes.Disabled = Data.Gold < quantity * item.Price;
-                break;
-            case "Purchase":
-                Text("Center/Title", "确认购买");
-                Text("Center/Pages/Text/Body", $"{Catalog.Items[p.Id].Name} × {p.Quantity}\n\n共计 {Catalog.Items[p.Id].Price * p.Quantity} 金币\n\n购买后返回商品页面，奖励自动存入背包。");
-                yes.Text = "购买";
-                yes.Disabled = Data.Gold < Catalog.Items[p.Id].Price * p.Quantity;
-                break;
             case "Team":
             case "Equip":
             case "Compare":
@@ -290,7 +307,8 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
         switch (p.Kind)
         {
             case "Shop":
-                await App.ModalAsync(new ModalArgs("Purchase", p.Id, (int)Get<SpinBox>("Center/Pages/Shop/Quantity").Value, p.Text, this));
+                int quantity = this.GetViewModel<ClientOrderVm>("Order").Quantity;
+                await App.ModalAsync(new ModalArgs("Purchase", p.Id, quantity, p.Text, this));
                 return;
             case "Purchase":
                 await App.Modals.CloseToAsync(p.ReturnTo!);

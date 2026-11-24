@@ -51,7 +51,7 @@ IDisposable BindCollection(this IUINode node, string path, ICollectionTarget tar
 void ObserveMvvmTask(this IUINode node, Task task);
 ```
 
-Enable MVVM before creating business nodes. `SetViewModel` borrows an object; `CreateViewModel` gives ownership to the node. Returned bindings can be detached early and are also cleaned up with the node. Hiding retains them; closing cleans them up.
+`SetViewModel` borrows an existing object. The node owns instances created by `CreateViewModel`. Call `Dispose()` on a returned binding to detach it early. Bindings survive hiding or closing into the `KeepAlive` cache and are released when the node is disposed.
 
 Paths use `Source.Member` and may traverse woven intermediate VMs. Modes are `OneTime`, `OneWay`, `OneWayToViewModel` and `TwoWay`. `BindingOptions` also provides `Convert`, `ConvertBack`, `HasNullValue` and `NullValue`.
 
@@ -68,6 +68,21 @@ IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string pa
 ```
 
 Sources must support change notification. Arguments follow path order, and the result must be assignable to the target. Pause with any participating path, then resume with that same path for a single refresh. Disposing the binding or its node releases all subscriptions. Hiding or caching the window keeps them connected.
+
+## Two-way input from custom controls
+
+```csharp
+IDisposable BindTwoWay<T>(this IUINode node, string path, Action<T> apply,
+    Func<Action<T>, Action> subscribe);
+IDisposable BindTwoWay<T1, TEdit>(this IUINode node, string path, Action<T1> apply,
+    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+IDisposable BindTwoWay<T1, T2, TEdit>(this IUINode node, string path1, string path2,
+    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+IDisposable BindTwoWay<T1, T2, T3, TEdit>(this IUINode node, string path1, string path2, string path3,
+    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+```
+
+`apply` receives the current source values. `subscribe` connects the input handler it receives and returns an unsubscribe action. The overload with one type parameter writes edits to the current writable property. With `commit`, the project handles one `TEdit` input and the display sources can be read-only. After each successful commit the binding reads the final VM values and redraws once.
 
 ## Attributes and conversions
 

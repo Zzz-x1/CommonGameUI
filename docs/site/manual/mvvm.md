@@ -126,7 +126,7 @@ public sealed class PlayerVm : GlobalViewModel
 
 | 方式 | 常见场景 | 释放时机 |
 |---|---|---|
-| Create Instance | 每张装备详情、每个购买流程 | 节点关闭 |
+| Create Instance | 每张装备详情、每个购买流程 | 节点销毁 |
 | Manual | 业务服务已经创建的玩家状态 | 项目负责 |
 | Shared Asset | 多个窗口共享金币或设置 | 最后一个共享 Context 关闭 |
 
@@ -173,6 +173,38 @@ this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
 
 传目标和返回值函数可以更新一个控件属性。传同步回调则由项目自由更新表现，`ShowCount` 是本例中角标的显示方法。首次绑定会立即显示；路径中的 VM 被替换后，绑定从当前实例读取全部来源。
 
+## 接入自定义控件的输入
+
+**数量选择器**只编辑一个属性。将控件的显示方法传给 `apply`，在 `subscribe` 中连接输入事件并返回解绑动作。这里的控件方法和事件由项目提供。
+
+```csharp
+this.BindTwoWay<int>("Cart.Quantity",
+    apply: quantityPicker.SetValueWithoutNotify,
+    subscribe: edited =>
+    {
+        quantityPicker.ValueEdited += edited;
+        return () => quantityPicker.ValueEdited -= edited;
+    });
+```
+
+打开窗口时，选择器立即显示 `Cart.Quantity`。玩家输入 120，如果 setter 将数量限制为 99，选择器最终显示 99。框架只订阅一次输入，初始化和回显时控件同步发出的事件不会写回 VM。
+
+**价格范围滑杆**同时显示两个属性。拖动时控件本地预览，松手时发出一个项目定义的 `PriceRange`。由 `commit` 一次提交最低价和最高价。回调中按名称获取当前 VM，替换筛选条件后，后续编辑会提交给新实例。
+
+```csharp
+this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
+    apply: rangeSlider.SetRangeWithoutNotify,
+    subscribe: committed =>
+    {
+        rangeSlider.RangeCommitted += committed;
+        return () => rangeSlider.RangeCommitted -= committed;
+    },
+    commit: range => this.GetViewModel<FilterVm>("Filter")
+                         .SetPriceRange(range.Min, range.Max));
+```
+
+一次成功提交后，滑杆只重绘一次，其他绑定照常接收每个属性的通知。若提交中途抛错，已完成的修改保留。绑定会尝试读取并显示已生效的值，调用方仍收到原异常。需要通过编辑器配置同一控件时，可[注册控件属性](#自定义控件属性)。
+
 ## 暂停绑定，让动画接管
 
 角色培养保存了新的战力，但界面需要逐步增长显示时，先暂停该属性绑定，动画结束后恢复：
@@ -188,7 +220,7 @@ this.ResumeBinding(nameof(HeroVm.Power));
 
 同一来源属性绑定到多个控件时一起暂停；不影响其他属性、子节点、命令或列表。同名属性来自不同路径时使用完整路径，例如 `"Hero.Power"`。重复暂停、未暂停就恢复、缺失绑定直接报错。
 
-这是同步配对 API，不提供动画包装或自动恢复。动画取消／失败时由项目决定恢复时机；节点已关闭则绑定已清理，不能继续恢复。
+多来源绑定可用任一参与的路径暂停整条绑定。暂停期间忽略输入，恢复时读取各来源的最新值并重绘一次。动画结束、取消或失败时，由项目决定何时恢复。隐藏和关闭后进入缓存的节点保留绑定。释放绑定或销毁节点时会解除输入订阅。
 
 ## 列表和命令
 

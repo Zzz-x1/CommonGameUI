@@ -279,7 +279,7 @@ internal sealed partial class BindingScope : IAsyncDisposable
         {
             if (_subscriptions.Count >= start && ReferenceEquals(value, _subscriptions[start - 1].Model)) return;
             UnsubscribeFrom(start);
-            for (int i = start; i < _parts.Length && value != null; i++)
+            for (int i = start; i < _parts.Length && value != null && !_disposed; i++)
             {
                 var model = (IMvvmObject)value;
                 var member = _parts[i];

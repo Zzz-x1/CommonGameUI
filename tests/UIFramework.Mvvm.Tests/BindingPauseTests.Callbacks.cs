@@ -1,9 +1,62 @@
+using System.ComponentModel;
 using Xunit;
 
 namespace UIFramework.Mvvm.Tests;
 
 public sealed partial class BindingPauseTests
 {
+    private sealed class OfferSource : IMvvmObject
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public int Subscribers => PropertyChanged?.GetInvocationList().Length ?? 0;
+        public OfferSource? Selected;
+        public Action? OnReadSelected;
+        public object? Read(string member)
+        {
+            if (member == "Price") return 7;
+            if (member != "Selected") throw new MissingMemberException(member);
+            OnReadSelected?.Invoke();
+            return Selected;
+        }
+        public MvvmMember[] Describe() => new[]
+        {
+            new MvvmMember("Selected", typeof(OfferSource), MvvmMemberKind.Property, true, false),
+            new MvvmMember("Price", typeof(int), MvvmMemberKind.Property, true, false)
+        };
+        public void NotifyChanged(string propertyName) => MvvmNotifications.Raise(PropertyChanged, this, propertyName);
+        public void Write(string member, object? value) => throw new NotSupportedException();
+        public bool CanExecute(string command) => throw new NotSupportedException();
+        public Task Execute(string command, object? parameter, CancellationToken token) => throw new NotSupportedException();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClosingInPathGetterReleasesEveryObserverDuringSetupOrSourceReplacement(bool replace)
+    {
+        await using var ui = Context();
+        var node = await Node(ui);
+        var old = new OfferSource { Selected = new OfferSource() };
+        var next = new OfferSource { Selected = new OfferSource() };
+        ValueTask closing = default;
+        next.OnReadSelected = () => closing = node.DisposeAsync();
+        node.SetViewModel("Shop", replace ? old : next);
+        int renders = 0;
+        using var binding = node.Bind<int>("Shop.Selected.Price", _ => renders++);
+        if (replace)
+        {
+            Assert.Equal(1, old.Subscribers);
+            Assert.Equal(1, old.Selected.Subscribers);
+            node.SetViewModel("Shop", next);
+        }
+        await closing;
+        Assert.Equal(replace ? 1 : 0, renders);
+        Assert.Equal(0, old.Subscribers);
+        Assert.Equal(0, old.Selected.Subscribers);
+        Assert.Equal(0, next.Subscribers);
+        Assert.Equal(0, next.Selected.Subscribers);
+    }
+
     [Fact]
     public async Task CallbackQuoteReadsAllSourcesInOrderAndRefreshesOnceForSourceReplacement()
     {

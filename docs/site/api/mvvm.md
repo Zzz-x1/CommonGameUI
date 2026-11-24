@@ -51,7 +51,7 @@ IDisposable BindCollection(this IUINode node, string path, ICollectionTarget tar
 void ObserveMvvmTask(this IUINode node, Task task);
 ```
 
-在创建业务节点前启用。`SetViewModel` 接受借用对象；`CreateViewModel` 的实例归节点所有。返回的绑定可提前解除，也会随节点清理。隐藏保留，关闭清理。
+`SetViewModel` 借用已有对象，`CreateViewModel` 创建的实例归节点所有。可以调用返回值的 `Dispose()` 提前解绑。隐藏或关闭后进入 `KeepAlive` 缓存时保留绑定，节点销毁时自动解绑。
 
 路径格式为 `Source.Member`，支持经过已织入 VM 的嵌套路径。四种模式为 `OneTime`、`OneWay`、`OneWayToViewModel`、`TwoWay`。`BindingOptions` 另有 `Convert`、`ConvertBack`、`HasNullValue`、`NullValue`。
 
@@ -68,6 +68,21 @@ IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string pa
 ```
 
 来源须可通知；输入按路径顺序传入，计算结果须可赋给目标。用任一来源的完整路径暂停整条绑定，用同一路径恢复时只刷新一次。释放绑定或销毁节点会解除全部订阅；隐藏或进入关闭缓存时保留。
+
+## 自定义控件双向输入
+
+```csharp
+IDisposable BindTwoWay<T>(this IUINode node, string path, Action<T> apply,
+    Func<Action<T>, Action> subscribe);
+IDisposable BindTwoWay<T1, TEdit>(this IUINode node, string path, Action<T1> apply,
+    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+IDisposable BindTwoWay<T1, T2, TEdit>(this IUINode node, string path1, string path2,
+    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+IDisposable BindTwoWay<T1, T2, T3, TEdit>(this IUINode node, string path1, string path2, string path3,
+    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+```
+
+`apply` 接收当前来源值。`subscribe` 接收输入处理函数，返回解除订阅的动作。单参数类型重载将控件输入写回当前可写属性。提供 `commit` 时，业务决定如何处理一次 `TEdit` 输入，显示来源可以是只读属性。提交成功后，绑定读取 VM 的最终值并重绘一次。
 
 ## 标记与转换
 

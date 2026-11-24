@@ -126,7 +126,7 @@ The framework rejects independent SO creation, SO factory results, and direct sh
 
 | Mode | Typical use | Released by |
 |---|---|---|
-| Create Instance | Equipment details and purchase flows | Node closure |
+| Create Instance | Equipment details and purchase flows | Node disposal |
 | Manual | Player state already created by gameplay services | Project |
 | Shared Asset | Currency or settings shared across windows | Last sharing Context closes |
 
@@ -173,6 +173,38 @@ this.Bind<int>("Cart.Quantity", quantityBadge.ShowCount);
 
 Pass a target and a function returning its value to update a control property. Pass a synchronous callback for custom presentation, such as the badge's `ShowCount` method. Both run when connected. If a VM along a path is replaced, the binding reads all sources from the current instances.
 
+## Connect a custom input control
+
+A **quantity picker** edits one property. Pass the control's display method to `apply`. In `subscribe`, connect its input event and return a callback that disconnects it. The methods and events on these controls belong to the project.
+
+```csharp
+this.BindTwoWay<int>("Cart.Quantity",
+    apply: quantityPicker.SetValueWithoutNotify,
+    subscribe: edited =>
+    {
+        quantityPicker.ValueEdited += edited;
+        return () => quantityPicker.ValueEdited -= edited;
+    });
+```
+
+When the window opens, the picker immediately displays `Cart.Quantity`. If a player enters 120 and the setter caps the value at 99, the picker displays 99. The binding subscribes to input once and ignores synchronous input events from initialization or display updates.
+
+A **price range slider** displays two properties. Let the control preview changes during a drag and emit a project-defined `PriceRange` on release. Use one `commit` call to set both limits. Looking up the current VM inside the callback sends future edits to the new instance if the filter is replaced.
+
+```csharp
+this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
+    apply: rangeSlider.SetRangeWithoutNotify,
+    subscribe: committed =>
+    {
+        rangeSlider.RangeCommitted += committed;
+        return () => rangeSlider.RangeCommitted -= committed;
+    },
+    commit: range => this.GetViewModel<FilterVm>("Filter")
+                         .SetPriceRange(range.Min, range.Max));
+```
+
+After a successful edit the slider redraws once. Other bindings still receive each property change. If the commit throws partway through, changes already made are retained. The binding tries to display the current values once and propagates the original exception. To configure the same control in the editor, [register its properties](#custom-control-properties).
+
 ## Pause bindings for animation
 
 After character training saves a new power value, pause its binding while the control displays the count-up animation, then resume:
@@ -188,7 +220,7 @@ The VM can keep updating while paused. Bindings neither overwrite animation nor 
 
 All controls bound to the same source property pause together. Other properties, child nodes, commands and lists continue. If the name matches different source paths, specify the full path, such as `"Hero.Power"`. Repeated pause, resume without pause and missing bindings raise errors.
 
-These are synchronous paired APIs without animation wrappers or automatic recovery. The application decides when to resume after cancellation or failure. Closing the node releases its bindings; do not resume afterward.
+Use any participating path to pause the whole multi-source binding. It ignores input while paused and redraws once with the latest values on resume. The project decides when to resume after animation completion, cancellation or failure. Hidden and cached nodes keep their bindings. Disposing a binding or its node disconnects the input event.
 
 ## Lists and commands
 
