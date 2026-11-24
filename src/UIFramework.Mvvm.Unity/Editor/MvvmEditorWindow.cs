@@ -95,9 +95,8 @@ namespace UIFramework.Mvvm.EditorUnity
             if (_view) _visible.AddRange(_view.Bindings.Where(b => ((b.Target ? b.Target.name : "") + b.Member + b.Source).IndexOf(_search.value, StringComparison.OrdinalIgnoreCase) >= 0));
             _bindings.itemsSource = _visible; _bindings.reorderable = _search.value.Length == 0; _bindings.Rebuild();
             _status.text = _view ? _view.Bindings.Count + " 条绑定 · 配置随 Prefab / 场景保存" : "选择界面上的 MvvmBindings，或通过控件 Inspector 添加绑定。";
-            var missing = _view ? _view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command &&
-                !(b.Kind == ViewBindingKind.Property && b.ConverterInput == ConverterInput.Constant) && !_sourceRows.Any(asset => asset.name == b.Source.Split('.')[0] && asset.name != "Item"))
-                .Select(b => b.Source).Distinct().ToArray() : Array.Empty<string>();
+            var missing = _view ? _view.Sources.Select(s => s.Name)
+                .Where(name => name == "Item" || !_sourceRows.Any(asset => asset.name == name)).ToArray() : Array.Empty<string>();
             rootVisualElement.Q<Button>("preview").SetEnabled(_view && missing.Length == 0);
             if (missing.Length != 0) _status.text = "缺少预览来源：" + string.Join(", ", missing);
         }

@@ -5,6 +5,7 @@ namespace UIFramework.Mvvm;
 public sealed class MvvmRuntime : IAsyncDisposable
 {
     static MvvmRuntime() => MvvmModule.Install();
+    internal readonly BindingPlans Plans = new();
     private readonly Dictionary<string, (object Definition, IGlobalViewModelProvider Provider)> _globals = new(StringComparer.Ordinal);
     private readonly Dictionary<Type, Func<object>> _factories = new();
     private readonly HashSet<object> _preparing = new(ReferenceComparer.Instance);
@@ -236,6 +237,7 @@ public sealed class MvvmRuntime : IAsyncDisposable
         foreach (var owned in _owned.AsEnumerable().Reverse())
             try { await Release(owned.Value, owned.Assets); } catch (Exception error) { Report(error, "MVVM shared VM release"); Failure(ref first, error); }
         _owned.Clear(); _shared.Clear(); _globals.Clear(); _commands.Clear(); _releases.Clear(); _tasks.Clear();
+        Plans.Clear();
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     // A canceled Task can synthesize a new TaskCanceledException on every await.

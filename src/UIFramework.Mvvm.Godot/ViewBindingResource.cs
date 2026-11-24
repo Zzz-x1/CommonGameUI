@@ -1,6 +1,5 @@
 using Godot;
 namespace UIFramework.Mvvm.Godot;
-public enum ViewBindingKind { Property, Command, Collection }
 [Tool, GlobalClass]
 public partial class ViewBindingResource : Resource
 {
@@ -22,13 +21,8 @@ public partial class ViewBindingResource : Resource
     [Export] public CommandParameterMode ParameterMode { get; set; }
     [Export] public string ParameterConstant { get; set; } = "";
     [Export] public string ParameterPath { get; set; } = "";
-    public CommandBindingOptions GetCommandOptions() => ParameterMode == CommandParameterMode.SourcePath
-        ? new CommandBindingOptions { ParameterPath = ParameterPath }
-        : new CommandBindingOptions { Mode = ParameterMode, ConstantText = ParameterMode == CommandParameterMode.Constant && !ParameterIsNull ? ParameterConstant : null };
-    public BindingOptions GetOptions(bool preview = false)
-    {
-        var options = Converters.Configure(Converter, ConvertBack, Mode, ConverterInput, ConverterConstant, HasNullValue, NullValue);
-        if (preview) { options.Mode = Mode == BindingMode.OneTime ? BindingMode.OneTime : BindingMode.OneWay; options.ConvertBack = null; }
-        return options;
-    }
+    public BindingRule Rule => new BindingRule(Kind, Source, Member, Mode, Converter, ConvertBack, ConverterInput,
+        ConverterConstant, HasNullValue, NullValue, ParameterMode, ParameterIsNull ? null : ParameterConstant,
+        ParameterPath, OneTimeCollection);
+
 }

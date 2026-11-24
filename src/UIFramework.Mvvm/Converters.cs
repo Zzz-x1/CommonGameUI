@@ -67,8 +67,8 @@ public static class Converters
         ConverterInput input, string constant, bool hasNullValue, object? nullValue)
     {
         var options = new BindingOptions { Mode = mode, HasNullValue = hasNullValue, NullValue = nullValue };
-        if (converter.Length != 0) options.Convert = Find(converter);
-        if (convertBack.Length != 0) options.ConvertBack = Find(convertBack);
+        if (converter.Length != 0) { options.ForwardConverter = Lookup(converter); options.Convert = options.ForwardConverter.Convert; }
+        if (convertBack.Length != 0) { options.BackwardConverter = Lookup(convertBack); options.ConvertBack = options.BackwardConverter.Convert; }
         if (input == ConverterInput.Constant)
         {
             if (converter.Length == 0) throw new InvalidOperationException("Constant input requires a converter.");

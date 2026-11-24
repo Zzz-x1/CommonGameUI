@@ -27,6 +27,8 @@ Converters are filtered by input and output types. Item sources are named `Item`
 
 The table supports search, deletion and reordering. Unity disables reordering while searching; clear search to change the full order. Unity controls provide an Inspector entry. Godot provides binding buttons beneath common control properties.
 
+A shop can instantiate the same item template 30 times. Configure `Item.Price` on the template once. Within one Runtime, matching rows reuse the resolved member and converter. Each row connects its own VM and control. A Prefab override or a different PackedScene can point to another label. Removing a row releases its subscriptions while the remaining prices keep updating.
+
 ## Configure converters
 
 To display the integer `Player.Gold` as currency text, select **OneWay → Forward converter → FormatNumber**. The input is bound to `Player.Gold`; currency changes update the text.
@@ -42,7 +44,7 @@ Custom functions are static methods marked `[Converter]`, with one argument and 
 
 ## 3. Preview initial values
 
-Select **Preview initial values**. Preview uses a separate Runtime and asset clones. It updates displays and lists without executing commands or writing back to original assets. Stopping restores control values.
+Select **Preview initial values**. The preview checks the saved direction, converter types and command parameters against temporary VM instances. A TwoWay slider displays the VM value and ignores edits. A View→VM row leaves the control untouched. Buttons stay disconnected. Stopping the preview restores the original controls and list. If a row fails, its error identifies the node, source and target. The preview releases the rows it already connected.
 
 Unity global preview resolves templates from the provider catalog and clones them independently. Local sources without samples cannot preview. Godot Manual sources still use explicit preview assets; runtime requires `SetViewModel`.
 

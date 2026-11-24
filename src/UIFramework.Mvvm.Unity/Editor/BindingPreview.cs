@@ -32,14 +32,12 @@ namespace UIFramework.Mvvm.EditorUnity
             public IReadOnlyList<ViewModelSource> Sources => View.Sources.Select(s => new ViewModelSource { Name = s.Name, Type = s.Type, Creation = ViewModelCreation.Manual, Template = s.Template }).ToArray();
             public void Apply(UINode node)
             {
-                View.Apply(node, true);
+                ViewBindingPlans.Apply(node, View, preview: true);
             }
         }
         public BindingPreview(MvvmBindings view)
         {
-            var required = new HashSet<string>(view.Bindings.Where(binding => binding.Enabled && binding.Kind != ViewBindingKind.Command &&
-                !(binding.Kind == ViewBindingKind.Property && binding.ConverterInput == ConverterInput.Constant)).Select(binding => binding.Source.Split('.')[0]));
-            var configuration = view.Sources.Where(source => required.Contains(source.Name)).ToArray();
+            var configuration = view.Sources;
             var provider = GlobalViewModelProvider.Load(preview: true);
             var missing = configuration.Where(source => source.Name == "Item" || !provider.ViewModels.ContainsKey(source.Name)).Select(source => source.Name).ToArray();
             if (missing.Length != 0) throw new InvalidOperationException("缺少预览来源：" + string.Join(", ", missing));
@@ -54,19 +52,16 @@ namespace UIFramework.Mvvm.EditorUnity
             {
                 var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview");
                 if (!attached.IsCompleted) throw new InvalidOperationException("Preview initialization must be immediate."); attached.GetAwaiter().GetResult();
-                foreach (var b in view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command))
-                {
-                    if (b.Kind == ViewBindingKind.Collection)
+                ViewBindingPlans.Apply(node, view, preview: true,
+                    captureProperty: target => _values.Add((target, target.Read())),
+                    captureCollection: target =>
                     {
-                        foreach (Transform child in b.Target.transform) { _children.Add((child.gameObject, child.gameObject.activeSelf)); child.gameObject.SetActive(false); }
-                        node.BindCollection(b.Source, view.GetCollectionTarget(node, b, true), b.OneTimeCollection);
-                    }
-                    else
-                    {
-                        var options = b.GetOptions(true); var target = EngineMvvm.BindingTargets.Property(b.Target, b.Member); _values.Add((target, target.Read()));
-                        node.Bind(b.Source, target, options);
-                    }
-                }
+                        foreach (Transform child in ((Component)target).transform)
+                        {
+                            _children.Add((child.gameObject, child.gameObject.activeSelf));
+                            child.gameObject.SetActive(false);
+                        }
+                    });
             }
             catch { Dispose(); throw; }
         }
@@ -78,9 +73,9 @@ namespace UIFramework.Mvvm.EditorUnity
         {
             Exception first = null;
             try { await _ui.DisposeAsync(); } catch (Exception e) { first = e; }
-            foreach (var value in _values)
+            foreach (var value in _values.AsEnumerable().Reverse())
                 try { value.Target.Write(value.Value); } catch (Exception e) { if (first == null) first = e; else first.Data["MVVM.Preview.RestoreError"] = e; }
-            foreach (var child in _children) if (child.Object) child.Object.SetActive(child.Active);
+            foreach (var child in _children.AsEnumerable().Reverse()) if (child.Object) child.Object.SetActive(child.Active);
             UnityEngine.Object.DestroyImmediate(_host);
             if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
         }

@@ -76,13 +76,30 @@ namespace NativeMvvm.Tests
             using (var preview = new BindingPreview(view))
             { Check(presentation.Delay == 10, "custom target preview"); Check(items.transform.childCount == 1 && items.transform.GetChild(0).GetComponent<Text>().text == "10", "mapped item preview"); buy.GetComponent<Button>().onClick.Invoke(); Check(vm.Gold == 10, "preview executed parameter command"); }
             Check(presentation.Delay == 7 && items.transform.childCount == 0, "custom target / item preview restore");
+            // Reopen a shop with 30 instances of the same authored row and record this editor run.
+            while (vm.Items.Count < 30) vm.Items.Add(vm);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            using (var preview = new BindingPreview(view))
+            {
+                clock.Stop();
+                Check(items.transform.childCount == 30, "30 preview rows created");
+                foreach (Transform product in items.transform)
+                    Check(product.GetComponent<Text>().text == "10", "each row resolves its own target");
+            }
+            Check(items.transform.childCount == 0, "30 preview rows released");
+            var invalid = view.Bindings.Single(b => b.Kind == ViewBindingKind.Command);
+            invalid.ParameterConstant = "bad";
+            try { using (new BindingPreview(view)) { } throw new InvalidOperationException("invalid preview command accepted"); }
+            catch (FormatException) { }
+            Check(presentation.Delay == 7 && items.transform.childCount == 0, "invalid command preview did not restore the view");
+            invalid.ParameterConstant = "2";
             PrefabUtility.SaveAsPrefabAsset(root, "Assets/ConverterChecks/Extended.prefab");
             var extended = PrefabUtility.LoadPrefabContents("Assets/ConverterChecks/Extended.prefab");
             Check(extended.GetComponent<MvvmBindings>().Bindings.Last().ItemSources.Single().ItemSource == "Player", "mapped sources Prefab reload");
             Check(extended.GetComponent<MvvmBindings>().Bindings.Single(b => b.Kind == ViewBindingKind.Command).ParameterConstant == "2", "command constant Prefab reload");
             PrefabUtility.UnloadPrefabContents(extended); vm.Items.Clear(); UnityEngine.Object.DestroyImmediate(item);
             AssetDatabase.DeleteAsset(catalogPath); window.Close(); UnityEngine.Object.DestroyImmediate(root);
-            File.WriteAllText("converter-checks.txt", "Passed: GUI constant configuration, preview, restoration, source asset, Prefab reload, target reference, Undo");
+            File.WriteAllText("converter-checks.txt", $"30 preview rows created/released, first open {clock.Elapsed.TotalMilliseconds:F2} ms. Passed: GUI constant configuration, preview, restoration, source asset, Prefab reload, target reference, Undo");
         }
         private static void Check(bool result, string message) { if (!result) throw new InvalidOperationException(message); }
     }

@@ -18,7 +18,7 @@ public sealed class BindingPreview : IAsyncDisposable
         public void Apply(UINode node)
         {
             if (View == null) return;
-            View.Apply(node, true);
+            ViewBindingPlans.Apply(node, View, preview: true);
         }
     }
     public BindingPreview(MvvmBindings view)
@@ -29,14 +29,16 @@ public sealed class BindingPreview : IAsyncDisposable
         try
         {
             var node = new UINode(); var attached = node.AttachAsync(_ui.Root, "Preview"); if (!attached.IsCompleted) throw new InvalidOperationException("Preview initialization must be immediate."); attached.GetAwaiter().GetResult();
-            foreach (var b in view.Bindings.Where(b => b.Enabled && b.Kind != ViewBindingKind.Command))
-            {
-                var control = view.GetTarget(b);
-                if (b.Kind == ViewBindingKind.Collection)
-                { foreach (var child in control.GetChildren().OfType<Control>()) { _children.Add((child, child.Visible)); child.Hide(); } node.BindCollection(b.Source, view.GetCollectionTarget(node, b, true), b.OneTimeCollection); }
-                else
-                { var options = b.GetOptions(true); var target = EngineMvvm.BindingTargets.Property(control, b.Member); _values.Add((target, target.Read())); node.Bind(b.Source, target, options); }
-            }
+            ViewBindingPlans.Apply(node, view, preview: true,
+                captureProperty: target => _values.Add((target, target.Read())),
+                captureCollection: target =>
+                {
+                    foreach (var child in ((Control)target).GetChildren().OfType<Control>())
+                    {
+                        _children.Add((child, child.Visible));
+                        child.Hide();
+                    }
+                });
         }
         catch { EditorMvvmTasks.Observe(DisposeAsync().AsTask()); throw; }
     }
@@ -46,8 +48,8 @@ public sealed class BindingPreview : IAsyncDisposable
     {
         Exception? first = null;
         try { await _ui.DisposeAsync(); } catch (Exception e) { first = e; }
-        foreach (var value in _values) try { value.Target.Write(value.Value); } catch (Exception e) { Failure(ref first, e); }
-        foreach (var child in _children) if (GodotObject.IsInstanceValid(child.Control)) child.Control.Visible = child.Visible;
+        foreach (var value in _values.AsEnumerable().Reverse()) try { value.Target.Write(value.Value); } catch (Exception e) { Failure(ref first, e); }
+        foreach (var child in _children.AsEnumerable().Reverse()) if (GodotObject.IsInstanceValid(child.Control)) child.Control.Visible = child.Visible;
         if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     private static void Failure(ref Exception? first, Exception error)

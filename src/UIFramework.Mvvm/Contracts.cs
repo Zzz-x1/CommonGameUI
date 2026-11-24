@@ -100,6 +100,7 @@ public interface ICollectionTarget : IDisposable
 }
 public sealed class BindingOptions
 {
+    internal ConverterInfo? ForwardConverter, BackwardConverter;
     public BindingMode Mode { get; set; } = BindingMode.OneWay;
     public Func<object?, object?>? Convert { get; set; }
     public Func<object?, object?>? ConvertBack { get; set; }

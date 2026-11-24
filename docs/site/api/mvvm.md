@@ -95,7 +95,7 @@ Godot `MvvmBindings` 保存具名来源和绑定配置，Unity 仅保存绑定�
 
 自定义适配实现 `IViewModelAssets`、`IBindingTarget`、`ICommandTarget`、`ICollectionTarget`，或使用 `BindingValueTarget<T>`。目标负责原生控件读写和事件；模块负责订阅、路径、转换、所有权及任务。
 
-`ViewBindingData`／`ViewBindingResource.GetOptions(bool preview = false)` 校验转换配置，预览只更新显示。Unity 来源使用字符串 `ViewBindingData.Source`，先查本地注入，再由 Provider 按名称解析；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
+`ViewBindingData.Rule`（Unity）和 `ViewBindingResource.Rule`（Godot）将配置行表示为 `BindingRule`。适配器通过 `IViewBindingSlots` 提供每个实例的目标控件和条目工厂，`ViewBindingPlans.Apply(UINode, IViewBindingSlots, ...)` 连接各行。预览沿用相同规则，校验命令但不执行。Unity 来源使用字符串 `ViewBindingData.Source`，先查本地注入，再由 Provider 按名称解析；Godot 使用 `ViewModelSourceResource.Template`，不存类型名。Godot `MvvmBindings.AddBinding(Control target, ViewBindingResource binding)` 同步添加引用与配置，`GetTarget(ViewBindingResource binding)` 返回原生控件。`Targets` 与 `Bindings` 按行对应，由 GUI 共同维护。
 
 相关：[入门](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 

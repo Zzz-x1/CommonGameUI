@@ -38,6 +38,57 @@ internal sealed class BindingScope : IAsyncDisposable
             if (!source.Type.IsInstanceOfType(Get(source.Name))) throw new InvalidCastException("VM source type mismatch: " + source.Name);
         _configuration.Apply(Node);
     }
+    internal void ApplyRows(IViewBindingSlots slots, bool preview, Action<IBindingTarget>? captureProperty, Action<object>? captureCollection)
+    {
+        Node.Context.Host.VerifyAccess();
+        if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
+        int start = _bindings.Count;
+        for (int slot = 0; slot < slots.Count; slot++)
+        {
+            BindingRule rule = default;
+            object? native = null;
+            try
+            {
+                if (!slots.IsEnabled(slot)) continue;
+                rule = slots.GetRule(slot);
+                native = slots.GetTarget(slot);
+                var plan = _runtime.Plans.Resolve(rule, native.GetType());
+                switch (rule.Kind)
+                {
+                    case ViewBindingKind.Property:
+                        var target = plan.Property!.CreateTarget(native, rule.Mode);
+                        try { captureProperty?.Invoke(target); }
+                        catch (Exception error)
+                        {
+                            try { target.Dispose(); } catch (Exception cleanup) { UIFailure.AddSecondary(error, cleanup); }
+                            throw;
+                        }
+                        Own(new PropertyBinding(this, rule.Source, target, plan.Options!, preview, plan));
+                        break;
+                    case ViewBindingKind.Command:
+                        if (!slots.CommandTargetType.IsInstanceOfType(native))
+                            throw new InvalidCastException("Command target must be " + slots.CommandTargetType.FullName);
+                        Own(new CommandBinding(this, rule.Source, preview ? null : slots.CreateCommandTarget(native), plan.Command!));
+                        break;
+                    case ViewBindingKind.Collection:
+                        captureCollection?.Invoke(native);
+                        Collection(rule.Source, slots.CreateCollectionTarget(Node, slot, preview), rule.OneTimeCollection);
+                        break;
+                    default: throw new ArgumentOutOfRangeException(nameof(rule.Kind));
+                }
+            }
+            catch (Exception error)
+            {
+                _runtime.Report(error, $"Bind {Node.Name} row {slot}: {rule.Source} -> {native?.GetType().Name}.{rule.Member}");
+                for (int i = _bindings.Count - 1; i >= start; i--)
+                {
+                    try { _bindings[i].Dispose(); } catch (Exception cleanup) { UIFailure.AddSecondary(error, cleanup); }
+                    _bindings.RemoveAt(i);
+                }
+                throw;
+            }
+        }
+    }
     internal async Task InitializeAsync(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -180,8 +231,7 @@ internal sealed class BindingScope : IAsyncDisposable
         internal event Action? Changed;
         internal Path(BindingScope scope, string path, bool observe, bool command = false)
         {
-            _scope = scope; _parts = path.Split('.'); _observe = observe; _command = command;
-            if (_parts.Length < 2 || _parts.Any(string.IsNullOrEmpty)) throw new ArgumentException("Use Source.Member paths.", nameof(path));
+            _scope = scope; _parts = scope._runtime.Plans.Path(path); _observe = observe; _command = command;
             scope.SourceChanged += OnSourceChanged;
             try { if (_observe) Watch(1, scope.Get(_parts[0])); } catch { Dispose(); throw; }
         }
@@ -214,7 +264,7 @@ internal sealed class BindingScope : IAsyncDisposable
                 var next = i + 1;
                 var leaf = next == _parts.Length;
                 if (leaf && _command) break;
-                if (!model.Describe().Single(m => m.Name == member).Observable)
+                if (!_scope._runtime.Plans.Member(model, member, MvvmMemberKind.Property).Observable)
                 {
                     if (!leaf) throw new InvalidOperationException("Reactive path requires FieldNotify: " + member);
                     break;
@@ -247,31 +297,60 @@ internal sealed class BindingScope : IAsyncDisposable
     {
         private readonly BindingScope _scope; private readonly Path? _path; private readonly IBindingTarget _target; private readonly BindingOptions _options;
         private bool _updating; private bool _disposed;
+        private readonly CompiledBinding? _plan;
+        private Type? _validatedOwner;
         internal string SourcePath { get; }
         internal string Member => SourcePath.Substring(SourcePath.LastIndexOf('.') + 1);
         internal bool HasSource => !_options.HasConstantValue;
         internal bool Disposed => _disposed;
         internal bool Paused { get; set; }
         internal void Refresh() => Pull();
-        internal PropertyBinding(BindingScope scope, string path, IBindingTarget target, BindingOptions options)
+        internal PropertyBinding(BindingScope scope, string path, IBindingTarget target, BindingOptions options, bool preview = false, CompiledBinding? plan = null)
         {
-            _scope = scope; _target = target; _options = options; SourcePath = path;
+            _scope = scope; _target = target; _options = options; _plan = plan; SourcePath = path;
             try
             {
                 if (options.HasConstantValue && options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
                     throw new InvalidOperationException("Constant input cannot be written back to a ViewModel.");
                 _path = options.HasConstantValue ? null : new Path(scope, path, options.Mode != BindingMode.OneTime);
-                if (_path != null && options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
+                if (_path != null)
                 {
                     var (owner, member) = _path.Resolve();
-                    if (owner != null && !owner.Describe().Single(m => m.Name == member).Observable) throw new InvalidOperationException("Reactive binding requires FieldNotify: " + path);
-                    _path.Changed += Pull;
+                    if (owner != null) ValidateMember(owner, member);
+                    if (options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
+                        _path.Changed += Pull;
                 }
-                if (options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel) _target.Changed += Push;
-                if (options.Mode == BindingMode.OneWayToViewModel) Push(); else Pull();
+                if (!preview && options.Mode is (BindingMode.TwoWay or BindingMode.OneWayToViewModel)) _target.Changed += Push;
+                if (options.Mode == BindingMode.OneWayToViewModel)
+                { if (!preview) Push(); }
+                else Pull();
             }
             catch (Exception error)
             { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
+        }
+        private void ValidateMember(IMvvmObject owner, string name)
+        {
+            var ownerType = owner.GetType();
+            if (ownerType == _validatedOwner || _plan?.ValidatedOwners.Contains(ownerType) == true) return;
+            var member = _scope._runtime.Plans.Member(owner, name, MvvmMemberKind.Property);
+            if (!member.Observable && _options.Mode is BindingMode.OneWay or BindingMode.TwoWay)
+                throw new InvalidOperationException("Reactive binding requires FieldNotify: " + SourcePath);
+            if (_options.Mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel)
+            {
+                if (!member.Writable) throw new InvalidOperationException("Binding requires a writable property: " + SourcePath);
+                ValidateConversion(_target.ValueType, member.Type, _options.ConvertBack, _options.BackwardConverter);
+            }
+            if (_options.Mode != BindingMode.OneWayToViewModel)
+                ValidateConversion(member.Type, _target.ValueType, _options.Convert, _options.ForwardConverter);
+            _validatedOwner = ownerType;
+            _plan?.ValidatedOwners.Add(ownerType);
+        }
+        private void ValidateConversion(Type from, Type to, Func<object?, object?>? convert, ConverterInfo? definition)
+        {
+            // Code bindings may provide an arbitrary delegate; its own invocation checks its contract.
+            if (definition == null && convert != null) return;
+            if (definition != null && !definition.Input.IsAssignableFrom(from) || !to.IsAssignableFrom(definition?.Output ?? from))
+                throw new InvalidCastException($"Binding {SourcePath} cannot convert {from.FullName} to {to.FullName}.");
         }
         private void Pull()
         {
@@ -290,7 +369,7 @@ internal sealed class BindingScope : IAsyncDisposable
                 object? value;
                 if (owner == null)
                 { if (!_options.HasNullValue) throw new InvalidOperationException("Null binding path."); value = _options.NullValue; }
-                else { value = owner.Read(member); if (_options.Convert != null) value = _options.Convert(value); }
+                else { ValidateMember(owner, member); value = owner.Read(member); if (_options.Convert != null) value = _options.Convert(value); }
                 _target.Write(value);
             }
             catch (Exception error) { _scope._runtime.Report(error, "MVVM read binding"); throw; }
@@ -305,6 +384,7 @@ internal sealed class BindingScope : IAsyncDisposable
             {
                 var (owner, member) = _path!.Resolve();
                 if (owner == null) throw new InvalidOperationException("Cannot write through a null VM path.");
+                ValidateMember(owner, member);
                 var value = _target.Read(); if (_options.ConvertBack != null) value = _options.ConvertBack(value); owner.Write(member, value);
             }
             catch (Exception error) { _scope._runtime.Report(error, "MVVM write binding"); throw; }
@@ -315,27 +395,51 @@ internal sealed class BindingScope : IAsyncDisposable
     }
     private sealed class CommandBinding : IDisposable
     {
-        private readonly BindingScope _scope; private readonly Path _path; private readonly ICommandTarget _target; private object? _parameter;
+        private readonly BindingScope _scope; private readonly Path _path; private readonly ICommandTarget? _target; private object? _parameter;
         private readonly Path? _parameterPath;
+        private readonly CommandBindingOptions _options;
+        private Type? _parameterType;
         private bool _disposed;
         internal CommandBinding(BindingScope scope, string path, ICommandTarget target, object? parameter)
             : this(scope, path, target, new CommandBindingOptions { Mode = parameter == null ? CommandParameterMode.None : CommandParameterMode.Constant, ConstantValue = parameter }) { }
-        internal CommandBinding(BindingScope scope, string path, ICommandTarget target, CommandBindingOptions options)
+        internal CommandBinding(BindingScope scope, string path, ICommandTarget? target, CommandBindingOptions options)
         {
-            _scope = scope; if (options == null) throw new ArgumentNullException(nameof(options)); _target = target; _path = new Path(scope, path, true, true);
+            _scope = scope; _target = target; _options = options;
             try
             {
+                if (options == null) throw new ArgumentNullException(nameof(options));
+                _path = new Path(scope, path, target != null, true);
                 if (options.Mode == CommandParameterMode.SourcePath) _parameterPath = new Path(scope, options.ParameterPath, false);
                 else _parameter = options.ConstantValue;
-                var (vm, member) = _path.Resolve(); var type = vm!.Describe().Single(m => m.Name == member && m.Kind == MvvmMemberKind.Command).Type;
-                if (options.Mode == CommandParameterMode.None && type != typeof(void)) throw new ArgumentException("Command requires a business parameter.");
-                if (options.ConstantText != null && options.Mode == CommandParameterMode.Constant) _parameter = CommandParameters.ParseConstant(options.ConstantText, type);
-                if (options.Mode != CommandParameterMode.SourcePath) CommandParameters.Validate(type, _parameter);
-                else { var (owner, valueMember) = _parameterPath!.Resolve(); if (owner == null) throw new InvalidOperationException("Null command parameter source."); var valueType = owner.Describe().Single(m => m.Name == valueMember).Type; if (!type.IsAssignableFrom(valueType)) throw new InvalidCastException("Command parameter source type mismatch."); }
+                var (vm, member) = _path.Resolve();
+                if (vm == null) throw new InvalidOperationException("Null command source.");
+                ValidateSignature(vm, member);
+                if (target == null) { _path.Dispose(); _parameterPath?.Dispose(); return; }
                 _path.Changed += Update; scope._runtime.CommandStateChanged += Update; target.Invoked += Invoke; Update();
             }
             catch (Exception error)
             { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
+        }
+        private void ValidateSignature(IMvvmObject vm, string member)
+        {
+            var type = _scope._runtime.Plans.Member(vm, member, MvvmMemberKind.Command).Type;
+            if (type == _parameterType) return;
+            if (_options.Mode == CommandParameterMode.None && type != typeof(void))
+                throw new ArgumentException("Command requires a business parameter.");
+            if (_parameterPath != null)
+            {
+                var (owner, name) = _parameterPath.Resolve();
+                if (owner == null) throw new InvalidOperationException("Null command parameter source.");
+                var property = _scope._runtime.Plans.Member(owner, name, MvvmMemberKind.Property);
+                if (!type.IsAssignableFrom(property.Type)) throw new InvalidCastException("Command parameter source type mismatch.");
+            }
+            else
+            {
+                if (_options.Mode == CommandParameterMode.Constant && _options.ConstantText != null)
+                    _parameter = CommandParameters.ParseConstant(_options.ConstantText, type);
+                CommandParameters.Validate(type, _parameter);
+            }
+            _parameterType = type;
         }
         private IMvvmObject? _model;
         private void Changed(object? sender, PropertyChangedEventArgs args) => Update();
@@ -346,11 +450,12 @@ internal sealed class BindingScope : IAsyncDisposable
             if (vm == null) throw new InvalidOperationException("Null command source.");
             if (!ReferenceEquals(_model, vm))
             {
+                ValidateSignature(vm, member);
                 if (_model != null) _model.PropertyChanged -= Changed;
                 _model = vm;
                 _model.PropertyChanged += Changed;
             }
-            _target.SetEnabled(!_scope._runtime.IsRunning(vm, member) && vm.CanExecute(member));
+            _target!.SetEnabled(!_scope._runtime.IsRunning(vm, member) && vm.CanExecute(member));
         }
         private void Invoke()
         {
@@ -359,12 +464,19 @@ internal sealed class BindingScope : IAsyncDisposable
                 var (vm, member) = _path.Resolve();
                 if (_scope._runtime.IsRunning(vm!, member) || !vm!.CanExecute(member)) throw new InvalidOperationException("Command is unavailable.");
                 var parameter = _parameterPath == null ? _parameter : _parameterPath.Read();
-                CommandParameters.Validate(vm.Describe().Single(m => m.Name == member && m.Kind == MvvmMemberKind.Command).Type, parameter);
+                CommandParameters.Validate(_scope._runtime.Plans.Member(vm, member, MvvmMemberKind.Command).Type, parameter);
                 _scope.Run(vm, member, parameter);
             }
             catch (Exception error) { _scope._runtime.Report(error, "MVVM command parameter"); throw; }
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Update; _scope._runtime.CommandStateChanged -= Update; _path.Dispose(); _parameterPath?.Dispose(); if (_model != null) _model.PropertyChanged -= Changed; _target.Invoked -= Invoke; _target.Dispose(); }
+        public void Dispose()
+        {
+            if (_disposed) return; _disposed = true;
+            if (_path != null) { _path.Changed -= Update; _path.Dispose(); }
+            _scope._runtime.CommandStateChanged -= Update;
+            _parameterPath?.Dispose(); if (_model != null) _model.PropertyChanged -= Changed;
+            if (_target != null) { _target.Invoked -= Invoke; _target.Dispose(); }
+        }
     }
     private sealed class CollectionBinding : IDisposable
     {
@@ -372,7 +484,7 @@ internal sealed class BindingScope : IAsyncDisposable
         private IEnumerable? _items;
         private bool _disposed;
         internal CollectionBinding(BindingScope scope, string path, ICollectionTarget target, bool oneTime)
-        { _scope = scope; _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
+        { _scope = scope; _target = target; _oneTime = oneTime; try { _path = new Path(scope, path, !oneTime); _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
         private void Reload()
         {
             var items = _path.Read() as IEnumerable ?? throw new InvalidOperationException("Collection source is null or not enumerable.");
@@ -403,6 +515,6 @@ internal sealed class BindingScope : IAsyncDisposable
                 case NotifyCollectionChangedAction.Reset: Rebuild(_items!); break;
             }
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Reload; _path.Dispose(); if (!_oneTime && _items is INotifyCollectionChanged collection) collection.CollectionChanged -= Changed; _items = null; if (_target is IAsyncDisposable asyncTarget) _scope.Observe(asyncTarget.DisposeAsync().AsTask()); else _target.Dispose(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; if (_path != null) { _path.Changed -= Reload; _path.Dispose(); } if (!_oneTime && _items is INotifyCollectionChanged collection) collection.CollectionChanged -= Changed; _items = null; if (_target is IAsyncDisposable asyncTarget) _scope.Observe(asyncTarget.DisposeAsync().AsTask()); else _target.Dispose(); }
     }
 }

@@ -46,6 +46,8 @@ public static class BindingTargetRegistry
     private static readonly List<BindingTargetDefinition> Definitions = new();
     private static readonly HashSet<Type> Providers = new();
     private static readonly Dictionary<(Type, string), BindingTargetDefinition> Cache = new();
+    internal static int Version => System.Threading.Volatile.Read(ref _version);
+    private static int _version;
 
     public static void Register(IBindingTargetProvider provider)
     {
@@ -58,6 +60,7 @@ public static class BindingTargetRegistry
             Definitions.AddRange(added);
             Providers.Add(provider.GetType());
             Cache.Clear();
+            System.Threading.Interlocked.Increment(ref _version);
         }
     }
     public static IReadOnlyList<BindingTargetDefinition> Members(Type targetType)
