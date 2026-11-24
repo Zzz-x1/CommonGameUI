@@ -57,7 +57,19 @@ public partial class MvvmVerification : global::Godot.Node
         owner.BindCollection("Player.Equipment", target); var first = new ClientInventoryItemVm { Id = 1 }; var second = new ClientInventoryItemVm { Id = 2 };
         player.Equipment.Add(first); player.Equipment.Add(second); player.Equipment.Move(0, 1); await ui.WhenMvvmIdleAsync();
         var row = mount.GetChild<CollectionRowNode>(0); Check(ReferenceEquals(row.ItemAtInitialize, second), "Native row keeps pending move order"); Check(ReferenceEquals(row.PlayerAtInitialize, player), "Additional source arrives before initialization"); Check(row.State == NodeState.Ready, "Async row initialized");
-        player.Equipment.RemoveAt(0); await ui.WhenMvvmIdleAsync(); Check(mount.GetChildCount() == 1, "Native row removal cleanup");
+        var select = new Button();
+        row.AddChild(select);
+        int selected = 0;
+        second.Open = () => { selected = second.Id; return Task.CompletedTask; };
+        row.BindCommand("Item.Select", select.ClickTarget());
+        player.Equipment.ApplySnapshot(new[] { 1, 2 }, item => item.Id, id => id,
+            id => new ClientInventoryItemVm { Id = id }, (item, id) => item.Title = "Item " + id);
+        await ui.WhenMvvmIdleAsync();
+        Check(ReferenceEquals(row, mount.GetChild<CollectionRowNode>(1)), "Snapshot keeps the native row");
+        select.EmitSignal(BaseButton.SignalName.Pressed);
+        await ui.WhenMvvmIdleAsync();
+        Check(selected == 2 && second.Title == "Item 2", "Reordered row selects the refreshed item");
+        player.Equipment.Remove(second); await ui.WhenMvvmIdleAsync(); Check(mount.GetChildCount() == 1, "Native row removal cleanup");
         player.Equipment.Add(second); await owner.DisposeAsync(); Check(mount.GetChildCount() == 0, "Close cancels pending native row"); await ui.DisposeAsync(); scene.Dispose(); mount.QueueFree();
     }
 

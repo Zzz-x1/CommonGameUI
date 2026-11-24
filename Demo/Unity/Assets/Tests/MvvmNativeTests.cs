@@ -155,7 +155,19 @@ namespace StarCourt.UnityDemo.Tests
             owner.BindCollection("Player.Items", target); var first = new ClientInventoryItemVm { Id = 1 }; var second = new ClientInventoryItemVm { Id = 2 };
             player.Items.Add(first); player.Items.Add(second); player.Items.Move(0, 1); await ui.WhenMvvmIdleAsync();
             var row = root.transform.GetChild(0).GetComponent<CollectionRowNode>(); Assert.That(row.ItemAtInitialize, Is.SameAs(second)); Assert.That(row.PlayerAtInitialize, Is.SameAs(player)); Assert.That(row.State, Is.EqualTo(NodeState.Ready));
-            player.Items.RemoveAt(0); await ui.WhenMvvmIdleAsync(); Assert.That(root.transform.childCount, Is.EqualTo(1));
+            var select = row.gameObject.AddComponent<Button>();
+            int selected = 0;
+            second.Open = () => { selected = second.Id; return Task.CompletedTask; };
+            row.BindCommand("Item.Select", select.ClickTarget());
+            player.Items.ApplySnapshot(new[] { 1, 2 }, item => item.Id, id => id,
+                id => new ClientInventoryItemVm { Id = id }, (item, id) => item.Text = "Item " + id);
+            await ui.WhenMvvmIdleAsync();
+            Assert.That(root.transform.GetChild(1).GetComponent<CollectionRowNode>(), Is.SameAs(row));
+            select.onClick.Invoke();
+            await ui.WhenMvvmIdleAsync();
+            Assert.That(selected, Is.EqualTo(2));
+            Assert.That(second.Text, Is.EqualTo("Item 2"));
+            player.Items.Remove(second); await ui.WhenMvvmIdleAsync(); Assert.That(root.transform.childCount, Is.EqualTo(1));
             player.Items.Add(second); await owner.DisposeAsync(); Assert.That(root.transform.childCount, Is.EqualTo(0)); await ui.DisposeAsync(); Assert.That(log.Errors.TrueForAll(error => error is OperationCanceledException), Is.True);
             UnityEngine.Object.Destroy(template); UnityEngine.Object.Destroy(root); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events);
         }

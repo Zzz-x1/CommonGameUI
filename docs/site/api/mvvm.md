@@ -99,6 +99,18 @@ Godot `MvvmBindings` 保存具名来源和绑定配置，Unity 仅保存绑定�
 
 相关：[入门](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 
+## 按键应用集合快照
+
+```csharp
+void ApplySnapshot<TRow, TData, TKey>(
+    this ObservableCollection<TRow> rows, IReadOnlyList<TData> snapshot,
+    Func<TRow, TKey> rowKey, Func<TData, TKey> dataKey,
+    Func<TData, TRow> create, Action<TRow, TData> update)
+    where TRow : class where TKey : notnull;
+```
+
+在 UI 线程调用 `UIFramework.Mvvm.CollectionSnapshotExtensions.ApplySnapshot`。集合与快照各自的键须唯一且非空，框架在修改前验证两侧键。`create` 提供相同键的新行，`update` 须保持键稳定，两个回调均不能重入修改该集合。回调或订阅者失败时传播原异常，已发布的更改保留。集合持有者继续管理 VM 的释放。
+
 ## 目标扩展与集合创建
 
 ```csharp

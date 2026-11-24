@@ -163,6 +163,16 @@ Dynamic lists use `ObservableCollection<T>` or `INotifyCollectionChanged`. Bind 
 
 Moving retains item instances; removal detaches bindings and releases the item. Ordinary arrays support one-time display. Project resources define layout. The module provides no virtualization, sorting or extra pool.
 
+When the inventory is sorted or receives a full server snapshot, call `ApplySnapshot` on the bound collection on the UI thread. Use an instance ID to distinguish two items of the same type.
+
+```csharp
+Equipment.ApplySnapshot(sortedItems,
+    row => row.InstanceId, item => item.InstanceId,
+    item => new EquipmentRowVm(item), (row, item) => row.UpdateFrom(item));
+```
+
+`create` builds and populates a VM for each new key. `update` refreshes retained rows, preserving their controls and pending loads. Missing keys trigger removal. If an item can switch templates, use `(InstanceId, LayoutKind)` as its key.
+
 Commands support `void` and `Task`, at most one business parameter, and an optional `CancellationToken` for asynchronous work. `async void` is rejected. `CanExecute` and execution state control buttons; the Runtime continuously observes the same task. Save business changes before presenting rewards. Cancelled confirmations do not commit.
 
 A command can await closure of its own window or an ancestor. Bindings detach during disposal; its VM stays alive until the command finishes. External disposal cancels and awaits commands. `ui.WhenMvvmIdleAsync()` also waits for deferred VM release. When a command awaits Runtime shutdown, it ends bindings first; full shutdown completes after that command returns.

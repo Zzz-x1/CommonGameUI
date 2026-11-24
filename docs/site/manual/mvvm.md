@@ -163,6 +163,16 @@ this.ResumeBinding(nameof(HeroVm.Power));
 
 移动保留条目实例，删除解除绑定并释放条目。普通数组只能一次性展示。布局由项目资源决定，模块不提供虚拟化、排序或对象池。
 
+背包排序或收到服务器整表时，在 UI 线程对已绑定的集合调用 `ApplySnapshot`。用装备实例 ID 区分同型号物品。
+
+```csharp
+Equipment.ApplySnapshot(sortedItems,
+    row => row.InstanceId, item => item.InstanceId,
+    item => new EquipmentRowVm(item), (row, item) => row.UpdateFrom(item));
+```
+
+`create` 为新键创建并填充 VM。`update` 刷新保留行，其控件和进行中的加载沿用原实例。缺失的键触发移除。若同一 ID 可能改用另一种模板，将 `(InstanceId, LayoutKind)` 作为键。
+
 命令支持 `void`、`Task`，最多一个业务参数，异步命令可接收 `CancellationToken`。不支持 `async void`。`CanExecute` 和执行状态控制按钮，Runtime 持续观察同一个任务。业务先保存，再展示奖励；取消确认时不提交。
 
 命令可以等待关闭自己的窗口或祖先节点。销毁时解除绑定，VM 保留到命令结束再释放；外部销毁仍取消并等待命令。`ui.WhenMvvmIdleAsync()` 同时等待延迟的 VM 释放。命令中等待 Runtime 关闭时先结束绑定，完整清理在该命令返回后完成。

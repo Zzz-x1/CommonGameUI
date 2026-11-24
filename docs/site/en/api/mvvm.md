@@ -99,6 +99,18 @@ Custom integrations implement `IViewModelAssets`, `IBindingTarget`, `ICommandTar
 
 Related: [Getting started](../manual/mvvm.md) · [GUI](../manual/mvvm-editor.md)
 
+## Keyed collection snapshots
+
+```csharp
+void ApplySnapshot<TRow, TData, TKey>(
+    this ObservableCollection<TRow> rows, IReadOnlyList<TData> snapshot,
+    Func<TRow, TKey> rowKey, Func<TData, TKey> dataKey,
+    Func<TData, TRow> create, Action<TRow, TData> update)
+    where TRow : class where TKey : notnull;
+```
+
+Call `UIFramework.Mvvm.CollectionSnapshotExtensions.ApplySnapshot` on the UI thread. Keys in each input must be unique and non-null. Both inputs are validated before mutation. `create` returns a row with the requested key. `update` preserves the key. Callbacks must not reenter the collection. Callback or observer failures propagate with previously notified changes intact. The collection owner manages VM disposal.
+
 ## Extensible targets and collection creation
 
 ```csharp
