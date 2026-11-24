@@ -137,6 +137,25 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(_mount.childCount, Is.EqualTo(0));
         }
         [UnityTest] public IEnumerator HidingAndShowingPanelRestoresNestedModalInput() => Await(HideModalParentAsync());
+        [UnityTest] public IEnumerator StackRestoresOriginalOrPreferredFocus() => Await(StackFocusAsync());
+        private async Task StackFocusAsync()
+        {
+            _ui.Register<ConfirmView>("UI/Confirm");
+            var pages = await _ui.Root.CreateContainerAsync<StackContainerNode>("Pages", _mount);
+            var page = await pages.PushAsync<ConfirmView>("Choose", playAnimation: false);
+            var events = _events.GetComponent<EventSystem>();
+            var yes = page.transform.Find("Panel/Yes").GetComponent<Button>();
+            var no = page.transform.Find("Panel/No").GetComponent<Button>();
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(no.gameObject));
+            events.SetSelectedGameObject(yes.gameObject);
+            await pages.PushAsync<Other>(playAnimation: false);
+            await pages.PopAsync(playAnimation: false);
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(yes.gameObject));
+            var details = await pages.PushAsync<Other>(playAnimation: false);
+            yes.interactable = false;
+            await details.DisposeAsync();
+            Assert.That(events.currentSelectedGameObject, Is.SameAs(no.gameObject));
+        }
         private async Task HideModalParentAsync()
         {
             var panels = await _ui.Root.CreateContainerAsync<PanelContainerNode>("Windows", _mount);

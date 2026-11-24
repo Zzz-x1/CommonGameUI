@@ -45,6 +45,7 @@ public class UINode : IUINode
     internal NodeCacheMode CacheMode;
     internal bool Cached, CacheReuse;
     internal PresentationSession? Presentation;
+    internal object? LastFocus;
     public bool IsCached => Cached || (Parent?.IsCached ?? false);
     public Guid Id { get; } = Guid.NewGuid();
     public string Name { get; private set; } = "";
@@ -272,13 +273,6 @@ public class UINode : IUINode
         _visible = _committedVisible = visible; _interactive = interactive; ApplyState();
     }
     internal void StageVisibility(bool visible) { _visible = visible; ApplyState(); }
-    internal void RestoreLocalState(bool visible, bool active)
-    {
-        Exception? first = null;
-        try { SetLocalState(visible, active); }
-        catch (Exception ex) { Context.Report(ex, $"Restore state {Name} ({Id})"); first = ex; }
-        if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
-    }
     internal void ApplyState()
     {
         Element?.SetVisible(IsVisible);

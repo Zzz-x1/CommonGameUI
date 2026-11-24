@@ -90,7 +90,7 @@ namespace StarCourt.UnityDemo
             finally
             {
                 if (owner.State == NodeState.Ready)
-                { display.SetInteractive(owner.IsInteractive); owner.Context.Host.RestoreFocus(focus); }
+                { display.SetInteractive(owner.IsInteractive); if (focus != null && owner.IsInteractive) owner.Context.Host.TryFocus(display, focus); }
             }
         });
         private async Task RunAsync(Func<Task> action)

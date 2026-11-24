@@ -26,8 +26,16 @@ public interface IUIHost
     /// <summary>Fail explicitly if called outside the host UI thread.</summary>
     void VerifyAccess();
     object? CaptureFocus();
-    void Focus(IUIElement? element);
-    void RestoreFocus(object? focus);
+    bool ContainsFocus(IUIElement scope, object target);
+    /// <summary>Try the target, or the first usable control in scope. A null scope limits explicit restoration to the host's root.</summary>
+    bool TryFocus(IUIElement? scope, object? target);
+    void ClearFocus();
+}
+
+/// <summary>Optional native control selected when the page takes focus without a valid history target.</summary>
+public interface IPreferredFocus
+{
+    object? PreferredFocus { get; }
 }
 
 public interface IUILog

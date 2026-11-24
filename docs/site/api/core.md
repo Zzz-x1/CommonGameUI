@@ -123,14 +123,16 @@ protected virtual Task OnDisposeAsync()
 protected virtual void OnChildRemoved(UINode child)
 protected virtual Task OnChildRemovedAsync(UINode child)
 protected virtual void OnApplyState()
-protected Task RunAsync(string operation, Func<CancellationToken, Task> action, CancellationToken cancellationToken = default, bool allowInitializing = false)
+protected Task RunAsync(string operation, Func<CancellationToken, Task> action, CancellationToken cancellationToken = default, bool allowInitializing = false, bool allowCached = false)
 // ContainerNode extension helpers:
+protected abstract bool IsPresented(UINode child)
+protected void CommitState(Action apply)
 protected virtual void OnOperationLockChanged(bool locked)
-protected Task<T> OperateAsync<T>(string operation, Func<CancellationToken, Task<T>> action, CancellationToken token, Action? beforeLock = null)
+protected Task<T> OperateAsync<T>(string operation, Func<CancellationToken, Task<T>> action, CancellationToken token, Action? beforeLock = null, bool allowCached = false)
 protected LifecycleContext Describe(UINode node, LifecycleReason reason, UINode? source, UINode? target)
-protected void CompleteChange(LifecycleContext operation, UINode? exiting, LifecycleContext? exit, UINode? entering, LifecycleContext? enter, Action? focus = null)
-protected Task FinishCloseAsync(IUINode node, Action notify)
-protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation, TransitionDirection direction = TransitionDirection.None)
+protected void CompleteChange(LifecycleContext operation, UINode? exiting, LifecycleContext? exit, UINode? entering, LifecycleContext? enter, Action? focus = null, ModalContainerNode? closingModal = null, object? restoreFocus = null)
+protected Task FinishCloseAsync(UINode node, Action notify)
+protected Task PrepareChangeAsync(LifecycleContext? exit, LifecycleContext? enter, CancellationToken token, bool playAnimation, TransitionDirection direction = TransitionDirection.None, Func<CancellationToken, Task>? accompanyingAnimation = null)
 ```
 
 </details>
@@ -301,8 +303,13 @@ public interface IUIHost
 {
     void VerifyAccess();
     object? CaptureFocus();
-    void Focus(IUIElement? element);
-    void RestoreFocus(object? focus);
+    bool ContainsFocus(IUIElement scope, object target);
+    bool TryFocus(IUIElement? scope, object? target);
+    void ClearFocus();
+}
+public interface IPreferredFocus
+{
+    object? PreferredFocus { get; }
 }
 public interface IUILog
 {

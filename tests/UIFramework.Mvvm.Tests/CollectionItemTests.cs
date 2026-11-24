@@ -5,7 +5,13 @@ namespace UIFramework.Mvvm.Tests;
 public sealed partial class CollectionItemTests
 {
     private sealed class Host : IUIHost
-    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? element) { } public void RestoreFocus(object? value) { } }
+    {
+        public void VerifyAccess() { }
+        public object? CaptureFocus() => null;
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
+    }
     private sealed class Element : IUIElement
     { public int Releases; public bool Visible; public void SetVisible(bool value) => Visible = value; public void SetInteractive(bool value) { } public void BringToFront() { } public object CaptureOrder() => 0; public void RestoreOrder(object value) { } public ValueTask DisposeAsync() { Releases++; return default; } }
     private sealed class Resource : IUIResource

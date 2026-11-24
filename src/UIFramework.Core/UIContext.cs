@@ -174,13 +174,102 @@ public sealed class UIContext : IAsyncDisposable
         if (ReferenceEquals(previous, current)) return false;
         InputOwnerNode = current;
         Root.ApplyState();
-        if (closing != null && (current == null || current.Parent == closing))
-            Host.RestoreFocus(restoreFocus);
-        else if (current != null)
-            Host.Focus(current.Element);
-        else if (previous?.Parent is ModalContainerNode suspended)
-            Host.RestoreFocus(suspended.BackgroundFocus);
+        var saved = restoreFocus as FocusBookmark;
+        if (current != null)
+        {
+            var history = current.Parent == closing ? saved?.Control ?? restoreFocus : current.LastFocus;
+            if (!FocusPage(current, history)) ClearDepartingFocus(previous);
+        }
+        else
+        {
+            var background = closing != null ? restoreFocus : (previous?.Parent as ModalContainerNode)?.BackgroundFocus;
+            var restored = background is FocusBookmark bookmark
+                ? bookmark.Page.IsInteractive && ReferenceEquals(bookmark.Page.Presentation, bookmark.Opening)
+                    && FocusPage(bookmark.Page, bookmark.Control)
+                : background != null && Host.TryFocus(null, background);
+            if (!restored) ClearDepartingFocus(previous);
+        }
         return true;
+    }
+
+    private sealed class FocusBookmark(object control, UINode page, PresentationSession? opening)
+    {
+        internal readonly object Control = control;
+        internal readonly UINode Page = page;
+        internal readonly PresentationSession? Opening = opening;
+    }
+
+    internal object? CaptureModalFocus(object? control)
+    {
+        if (control == null) return null;
+        UINode? Find(UINode parent)
+        {
+            foreach (var child in parent.ChildrenCore)
+            {
+                if (!child.IsInteractive) continue;
+                var nested = Find(child);
+                if (nested != null) return nested;
+                if (parent is ContainerNode && child.Element is { } scope && Host.ContainsFocus(scope, control)) return child;
+            }
+            return null;
+        }
+        var page = Find(Root);
+        return page == null ? control : new FocusBookmark(control, page, page.Presentation);
+    }
+
+    internal void RememberFocus(UINode node, object? captured)
+    {
+        if (captured != null && node.Element is { } scope && Host.ContainsFocus(scope, captured))
+            node.LastFocus = captured;
+    }
+
+    private bool FocusPage(UINode page, object? history)
+    {
+        if (page.Element is not { } scope) return false;
+        if (history != null && Host.TryFocus(scope, history)) return true;
+        var preferred = (page.Owner as IPreferredFocus)?.PreferredFocus;
+        if (preferred != null)
+        {
+            if (!Host.ContainsFocus(scope, preferred))
+                throw new InvalidOperationException($"Preferred focus for '{page.Name}' must belong to the page.");
+            if (Host.TryFocus(scope, preferred)) return true;
+        }
+        return Host.TryFocus(scope, null);
+    }
+
+    private void ClearDepartingFocus(UINode? exiting)
+    {
+        if (exiting?.Element is { } scope && Host.CaptureFocus() is { } selected && Host.ContainsFocus(scope, selected))
+            Host.ClearFocus();
+    }
+
+    internal void FocusAfterChange(ContainerNode container, UINode? exiting, UINode? entering, object? captured, bool modalChanged)
+    {
+        if (modalChanged && InputOwnerNode != null) return;
+        if (!container.IsInteractive || (InputOwnerNode != null && !IsWithin(container, InputOwnerNode))) return;
+        var current = Host.CaptureFocus();
+        if (modalChanged && current != null) return;
+        var wasInPage = captured != null && exiting?.Element is { } oldScope && Host.ContainsFocus(oldScope, captured);
+        // An operation lock may temporarily remove focus from a tab header or a sibling panel.
+        if (current == null && captured != null && !wasInPage && Host.TryFocus(InputOwnerNode?.Element, captured)) return;
+        if (container is not (StackContainerNode or TabContainerNode)) return;
+        if (container is TabContainerNode && !wasInPage) return;
+        if (current != null && (exiting?.Element == null || !Host.ContainsFocus(exiting.Element, current))) return;
+        if (entering == null || !FocusPage(entering, entering.LastFocus)) ClearDepartingFocus(exiting);
+    }
+
+    internal void RestoreInterruptedFocus(ContainerNode container, object? captured)
+    {
+        if (captured == null || Host.CaptureFocus() != null || !container.IsInteractive) return;
+        if (InputOwnerNode?.Element is { } scope) Host.TryFocus(scope, captured);
+        else Host.TryFocus(null, captured);
+    }
+
+    private static bool IsWithin(UINode node, UINode ancestor)
+    {
+        for (UINode? n = node; n != null; n = n.Parent)
+            if (ReferenceEquals(n, ancestor)) return true;
+        return false;
     }
     private int _modalInputBlocks;
     internal bool IsModalInputBlocked => _modalInputBlocks != 0;

@@ -120,7 +120,7 @@ public class ContainerReturnTests
         var (ui, host) = Create(); await using var scope = ui;
         var modals = await Attach<ModalContainerNode>(ui); var backdrops = new Backdrops(); modals.ConfigureBackdrop(backdrops, mode);
         var target = await modals.OpenAsync<CounterView>();
-        var focus = new object(); host.Focus = focus;
+        var focus = new MemoryFocus(target.Element!); host.Focus = focus;
         var middle = await modals.OpenAsync<CounterView>();
         var top = await modals.OpenAsync<CounterView>();
         var middleState = middle.TransitionState; var targetState = target.TransitionState;

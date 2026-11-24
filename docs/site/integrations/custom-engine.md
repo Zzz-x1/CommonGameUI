@@ -30,8 +30,9 @@ public interface IUIHost
 {
     void VerifyAccess();
     object? CaptureFocus();
-    void Focus(IUIElement? element);
-    void RestoreFocus(object? focus);
+    bool ContainsFocus(IUIElement scope, object target);
+    bool TryFocus(IUIElement? scope, object? target);
+    void ClearFocus();
 }
 public interface IUILog
 {

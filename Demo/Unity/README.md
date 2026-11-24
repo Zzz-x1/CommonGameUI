@@ -41,6 +41,8 @@ Unity 6000.3.24f1 / uGUI 的纯 UI 客户端，使用与 Godot 共用的 Core。
 | 任务 | 购买后领取一次奖励 |
 | 设置 | 内嵌分类、画质弹窗、演出偏好与默认恢复 |
 
+用键盘打开确认框时默认选中“取消”。在页面内选中控件并打开详情，返回时会选回原控件；原控件已失效时会尝试页面的 Preferred Focus。
+
 存档：Application.persistentDataPath/unity-client-save.json。保存成功后发布状态，失败直接报错；测试使用隔离档案。
 
 ## 动画

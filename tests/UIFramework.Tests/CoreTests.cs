@@ -26,6 +26,8 @@ public class MemoryElement : IUIElement
     }
 }
 
+public sealed record MemoryFocus(IUIElement Scope);
+
 public sealed class TestHost : IUIHost, IUILog, IUIResourceLoader
 {
     public readonly List<Exception> Errors = new();
@@ -38,9 +40,17 @@ public sealed class TestHost : IUIHost, IUILog, IUIResourceLoader
     public object? Focus;
     public void VerifyAccess() { }
     public object? CaptureFocus() => Focus;
-    public void FocusElement(IUIElement? element) => Focus = element;
-    void IUIHost.Focus(IUIElement? element) => FocusElement(element);
-    public void RestoreFocus(object? focus) => Focus = focus;
+    public bool ContainsFocus(IUIElement scope, object target) =>
+        ReferenceEquals(scope, target is MemoryFocus child ? child.Scope : target);
+    public bool TryFocus(IUIElement? scope, object? target)
+    {
+        if (scope != null && target != null && !ContainsFocus(scope, target)) return false;
+        var display = target is MemoryFocus child ? child.Scope : target ?? scope;
+        if (display is MemoryElement { Interactive: false }) return false;
+        Focus = target ?? scope;
+        return Focus != null;
+    }
+    public void ClearFocus() => Focus = null;
     public void Error(string message) => new ConsoleUILog().Error(message);
     public void Exception(Exception exception, string context) { Errors.Add(exception); ErrorReported?.TrySetResult(exception); }
     public async Task<IUIResource> LoadAsync(string resource, CancellationToken token)

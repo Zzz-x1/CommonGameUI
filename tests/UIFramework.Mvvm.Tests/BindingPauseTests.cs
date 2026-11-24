@@ -11,8 +11,9 @@ public sealed class BindingPauseTests
         public readonly List<Exception> Errors = new();
         public void VerifyAccess() { }
         public object? CaptureFocus() => null;
-        public void Focus(IUIElement? element) { }
-        public void RestoreFocus(object? value) { }
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
         public void Error(string message) => new ConsoleUILog().Error(message);
         public void Exception(Exception error, string context) => Errors.Add(error);
     }

@@ -34,7 +34,13 @@ public sealed class ConverterTests
 
     private const string Prefix = "UIFramework.Mvvm.Tests.EditorConverters.";
     private sealed class Host : IUIHost
-    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? element) { } public void RestoreFocus(object? value) { } }
+    {
+        public void VerifyAccess() { }
+        public object? CaptureFocus() => null;
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
+    }
     private sealed class Loader : IUIResourceLoader
     { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
     private sealed class Target : IBindingTarget

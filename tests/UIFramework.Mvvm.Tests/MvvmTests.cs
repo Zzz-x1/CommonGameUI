@@ -23,7 +23,13 @@ public static class TestConverters { [Converter] public static string Gold(int v
 public sealed class MvvmTests
 {
     private sealed class Host : IUIHost
-    { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? e) { } public void RestoreFocus(object? e) { } }
+    {
+        public void VerifyAccess() { }
+        public object? CaptureFocus() => null;
+        public bool ContainsFocus(IUIElement scope, object target) => false;
+        public bool TryFocus(IUIElement? scope, object? target) => false;
+        public void ClearFocus() { }
+    }
     private sealed class Loader : IUIResourceLoader { public Task<IUIResource> LoadAsync(string path, CancellationToken token) => throw new NotSupportedException(); }
     private sealed class Log : IUILog { public readonly List<Exception> Errors = new(); public void Error(string message) => new ConsoleUILog().Error(message);
         public void Exception(Exception error, string context) => Errors.Add(error); }

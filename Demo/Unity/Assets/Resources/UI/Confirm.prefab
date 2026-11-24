@@ -667,6 +667,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4453026174083c448b3a18f67f0c609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: StarCourt.UnityDemo::StarCourt.UnityDemo.ConfirmView
+  preferredFocus: {fileID: 712255249002691013}
 --- !u!1 &8167703255772682137
 GameObject:
   m_ObjectHideFlags: 0

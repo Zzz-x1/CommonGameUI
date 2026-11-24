@@ -25,6 +25,12 @@ async Task BackAsync()
 // Call only after the project verifies that the current layer is interactive.
 ```
 
+## 页面首选焦点与历史返回
+
+在窗口根脚本的 Inspector 中，把首选按钮拖到 **Preferred Focus**。Unity 使用 uGUI Selectable，Godot 使用 Control；需要动态决定时，原生节点可覆写同名的 `GetPreferredFocus()`。指定的控件必须属于此窗口。
+
+Stack 首次显示且没有其他窗口持有有效焦点时，选中首选控件。从装备行进入详情再返回，框架先尝试选中原来的装备行。若该行已移除或禁用，改选首选控件，再尝试窗口内首个可用控件。缓存重开按一次新打开处理。模态拥有输入时优先，显示普通 HUD 不会抢走其他页面的焦点。Tab 仅在焦点原属于切出的内容时把它移入新内容，分类按钮保留已有焦点。
+
 ## 要点
 
 - 只在当前层 IsInteractive 时提交操作；初始化和转场期间等待。
