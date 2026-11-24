@@ -15,6 +15,19 @@ public partial class ConverterChecks : Node
         var view = new MvvmBindings { Name = "MvvmBindings" }; root.AddChild(view); view.Owner = root;
         using var template = new ConverterVm();
         Check(ResourceSaver.Save(template, "res://Player.tres") == Error.Ok, "VM asset save");
+        await using (var context = UIFramework.Godot.UI.Create(root))
+        {
+            var control = new TargetPresentation();
+            root.AddChild(control);
+            var target = BindingTargetRegistry.Find(typeof(TargetPresentation), "Delay").CreateTarget(control);
+            var rowNode = new UIFramework.UINode();
+            await rowNode.AttachAsync(context.Root, "Offer");
+            rowNode.Bind("Shop.Gold", target, new BindingOptions { Convert = Converters.Find("NativeMvvm.Tests.ShopConverters.Price") });
+            Check(control.Delay == 20, "first binding resolves custom global, target and converter");
+            await using var second = UIFramework.Godot.UI.Create(root);
+            Check(!ReferenceEquals(context.GetMvvm().GetGlobalViewModel<ConverterVm>("Shop"),
+                second.GetMvvm().GetGlobalViewModel<ConverterVm>("Shop")), "global clones belong to their own context");
+        }
         view.ViewModels.Add(new ViewModelSourceResource { Name = "Player", Template = template });
         view.AddBinding(label, new ViewBindingResource { Member = "Text", Source = "Player.Gold", Converter = "FormatNumber", ConverterInput = ConverterInput.Constant, ConverterConstant = "125" });
         await using (var preview = new BindingPreview(view)) Check(label.Text == "125", "constant preview");

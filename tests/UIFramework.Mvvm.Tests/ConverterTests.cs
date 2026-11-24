@@ -12,6 +12,26 @@ public static class EditorConverters
 }
 public sealed class ConverterTests
 {
+    [Fact] public void FindsConverterInOtherwiseUnusedProjectReference() =>
+        Assert.Equal("7 gold", Converters.Find("ProviderFixture.Currency.Display")(7));
+
+    private sealed class Duplicate : IConverterProvider
+    {
+        public IEnumerable<ConverterInfo> GetConverters()
+        {
+            yield return new("Fixture.Unpublished", typeof(int), typeof(int), v => v);
+            yield return new("FormatNumber", typeof(int), typeof(int), v => v);
+        }
+    }
+    [Fact] public void DuplicateConverterIdentifiesBothSourcesAndPublishesNothing()
+    {
+        var failure = Assert.Throws<InvalidOperationException>(() => Converters.Register(new Duplicate()));
+        Assert.Contains("FormatNumber", failure.Message);
+        Assert.Contains("UIFramework.Mvvm and ", failure.Message);
+        Assert.Contains(typeof(Duplicate).FullName!, failure.Message);
+        Assert.Throws<InvalidOperationException>(() => Converters.Find("Fixture.Unpublished"));
+    }
+
     private const string Prefix = "UIFramework.Mvvm.Tests.EditorConverters.";
     private sealed class Host : IUIHost
     { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? element) { } public void RestoreFocus(object? value) { } }

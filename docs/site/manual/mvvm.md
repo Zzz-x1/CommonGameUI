@@ -179,6 +179,10 @@ await ui.DisposeAsync();
 
 实现 `IBindingTargetProvider.GetTargets()`，在程序集中声明 `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`，返回强类型 `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)`。显示绑定可省略 `subscribe`；双向及 View→VM 必须提供通知和解绑。运行时、属性选择器和预览共用定义，查询成员不连接控件事件。
 
+自定义目标、`[Converter]` 和全局 Provider 在构建时生成注册代码。Unity 项目程序集需引用 `UIFramework.Mvvm.dll`，编辑器预览和游戏启动都会注册。Godot／.NET 的入口项目以及声明 Provider 的类库都要导入 `build/UIFramework.Mvvm.targets`，并将类库作为随项目分发的引用。即使业务代码从未调用类库中的类型，也能使用其中的定义。Provider 需要公开无参构造函数。
+
+同一种商品行复用已解析的控件属性定义，每一行独立订阅和解绑。转换器按名称查找，名称须在项目内唯一。
+
 ## 命令参数与条目工厂
 
 命令可配置常量或来源路径。来源在点击时读取，不自动转换类型。GUI 常量支持文本、布尔、数字和枚举；取消 Token 由框架管理。

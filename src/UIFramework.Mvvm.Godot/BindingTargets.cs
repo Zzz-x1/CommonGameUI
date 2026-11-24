@@ -1,6 +1,5 @@
 using Godot;
 using UIFramework.Godot;
-[assembly: UIFramework.Mvvm.BindingTargetProvider(typeof(UIFramework.Mvvm.Godot.BuiltinBindingTargets))]
 namespace UIFramework.Mvvm.Godot;
 public static class BindingTargets
 {

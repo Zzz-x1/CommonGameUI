@@ -145,7 +145,7 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 }
 ```
 
-Unity 默认 Provider 由适配器自动注册；自定义 Provider 可用程序集标记自动注册，需有无参构造并为 IL2CPP 保留构造入口。Provider 只提供定义及资产适配，不持有 Context VM 实例。重复名称、缺失名称或资产和未织入 VM 直接报错。Godot 的来源编辑器本轮保持原行为。
+Unity 默认 Provider 由适配器自动注册；自定义 Provider 可用程序集标记自动注册，需要公开无参构造。Weaver 生成直接调用构造函数的工厂，Unity 启动入口会在 IL2CPP 裁剪后保留。Provider 只提供定义及资产适配，不持有 Context VM 实例。重复名称、缺失名称或资产和未织入 VM 直接报错。Godot 的来源编辑器本轮保持原行为。
 
 
 ## Unity 全局 SO VM

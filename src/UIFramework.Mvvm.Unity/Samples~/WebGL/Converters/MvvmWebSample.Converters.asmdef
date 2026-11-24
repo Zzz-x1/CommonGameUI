@@ -1,0 +1,6 @@
+{
+  "name": "MvvmWebSample.Converters",
+  "autoReferenced": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["UIFramework.Mvvm.dll"]
+}

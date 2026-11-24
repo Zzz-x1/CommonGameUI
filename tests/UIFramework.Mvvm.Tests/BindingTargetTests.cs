@@ -16,6 +16,37 @@ public sealed class TestTargetProvider : IBindingTargetProvider
 }
 public sealed class BindingTargetTests
 {
+    private sealed class LateControl : TestControl { }
+    private sealed class LateProvider : IBindingTargetProvider
+    {
+        public IEnumerable<BindingTargetDefinition> GetTargets()
+        {
+            yield return BindingTargetDefinition.Create<LateControl, int>("Value", t => t.Value + 1, (t,v) => t.Value = v - 1);
+        }
+    }
+    [Fact] public void LaterRegistrationReplacesCachedInheritedDefinition()
+    {
+        Assert.Equal(typeof(TestControl), BindingTargetRegistry.Find(typeof(LateControl), "Value").TargetType);
+        BindingTargetRegistry.Register(new LateProvider());
+        Assert.Equal(typeof(LateControl), BindingTargetRegistry.Find(typeof(LateControl), "Value").TargetType);
+    }
+    [Fact] public void RowsShareDefinitionButReleaseOnlyTheirOwnSubscription()
+    {
+        var definition = BindingTargetRegistry.Find(typeof(TestControl), "Value");
+        var rows = Enumerable.Range(0, 30).Select(_ => new TestControl()).ToArray();
+        var targets = rows.Select(row => BindingTargetRegistry.Find(row.GetType(), "Value").CreateTarget(row)).ToArray();
+        targets[0].Dispose();
+        for (var i = 1; i < rows.Length; i++)
+        {
+            Assert.Same(definition, BindingTargetRegistry.Find(rows[i].GetType(), "Value"));
+            targets[i].Write(i);
+            Assert.Equal(i, rows[i].Value);
+            Assert.Equal(1, rows[i].Listeners);
+            targets[i].Dispose();
+        }
+        Assert.All(rows, row => Assert.Equal(0, row.Listeners));
+    }
+
     [Fact] public void DiscoveryDoesNotSubscribeAndPrefersDerivedDefinition()
     {
         var control = new DerivedControl();

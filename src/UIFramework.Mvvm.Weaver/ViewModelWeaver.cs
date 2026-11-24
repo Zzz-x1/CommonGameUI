@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace UIFramework.Mvvm.Weaver;
 
-public sealed class ViewModelWeaver
+public sealed partial class ViewModelWeaver
 {
     private readonly ModuleDefinition _module;
     private readonly ModuleDefinition _runtime;
@@ -21,7 +21,7 @@ public sealed class ViewModelWeaver
         return false;
     }
     public bool Changed { get; private set; }
-    public int Process()
+    public int Process(IEnumerable<MethodReference>? dependencies = null)
     {
         Changed = false;
         var moduleType = _module.Types.Single(type => type.Name == "<Module>");
@@ -36,12 +36,13 @@ public sealed class ViewModelWeaver
         int count = 0;
         foreach (var type in Types(_module.Types).Where(IsViewModel).ToArray()) if (Weave(type)) count++;
         if (WeaveConverters()) count++;
+        GenerateRegistration(startup, dependencies ?? Enumerable.Empty<MethodReference>());
         Changed |= count != 0;
         return count;
     }
     private bool WeaveConverters()
     {
-        if (_module.Assembly.CustomAttributes.Any(a => a.AttributeType.FullName == Prefix + "ConverterProviderAttribute")) return false;
+        if (_module.GetType("UIFramework.Mvvm.Generated.ConverterProvider") != null) return false;
         var methods = Types(_module.Types).SelectMany(t => t.Methods).Where(m => Attribute(m, "ConverterAttribute")).ToArray();
         if (methods.Length == 0) return false;
         var provider = new TypeDefinition("UIFramework.Mvvm.Generated", "ConverterProvider", TypeAttributes.Public | TypeAttributes.Class, _module.TypeSystem.Object);

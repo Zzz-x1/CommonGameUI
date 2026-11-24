@@ -145,7 +145,7 @@ class GlobalViewModelProvider : IGlobalViewModelProvider
 }
 ```
 
-Unity automatically registers its default Provider. Assembly attributes register custom Providers; provide a parameterless constructor and preserve its entry point for IL2CPP. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
+Unity automatically registers its default Provider. Custom providers require an assembly attribute and a public parameterless constructor. The weaver generates a factory that calls the constructor directly, and the Unity startup entry survives IL2CPP stripping. Providers expose definitions and asset adapters, while the Runtime owns Context instances. Duplicate names, missing names or assets, and unwoven VMs are errors. Godot source editing remains unchanged in this iteration.
 
 
 ## Unity global SO VMs

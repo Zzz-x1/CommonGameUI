@@ -179,6 +179,10 @@ Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [L
 
 Implement `IBindingTargetProvider.GetTargets()` and mark the assembly with `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`. Return strongly typed `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)` definitions. `subscribe` is optional for display bindings; TwoWay and View→VM require it. Runtime, the property picker and preview use the same definitions. Member discovery does not subscribe to control events.
 
+The build generates registration code for custom targets, `[Converter]` methods and global providers. Unity project assemblies must reference `UIFramework.Mvvm.dll`. Registration runs in the editor for preview and on game startup. In Godot and .NET, import `build/UIFramework.Mvvm.targets` in both the entry project and provider libraries, and reference the libraries as copy-local dependencies. Their definitions are available even when game code never calls a type in the library. Providers need a public parameterless constructor.
+
+Rows of the same type reuse the resolved control property definition. Each row subscribes and disconnects independently. Converter names must be unique across the project.
+
 ## Command parameters and item factories
 
 A command binding can use a typed constant or a source path. The source is read when clicked, without implicit conversion. GUI constants support text, boolean, numbers and enums. CancellationToken remains framework-managed.

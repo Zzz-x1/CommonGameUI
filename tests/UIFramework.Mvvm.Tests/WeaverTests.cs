@@ -26,6 +26,7 @@ public class WeaverTests
     private static ViewModelWeaver Weaver(ModuleDefinition module, out ModuleDefinition runtime)
     { runtime = ModuleDefinition.ReadModule(typeof(ViewModelAttribute).Assembly.Location); return new(module, runtime); }
     [Theory]
+    [InlineData("[assembly: BindingTargetProvider(typeof(App))] public class App {}")]
     [InlineData("[ViewModel] public class Vm { [Command] public async void Execute() { await Task.Yield(); } }")]
     [InlineData("[ViewModel] public class Vm { [FieldNotify(nameof(B))] public int A {get;set;} [FieldNotify(nameof(A))] public int B {get;set;} }")]
     [InlineData("[ViewModel] public class Vm { [FieldNotify(\"Missing\")] public int A {get;set;} }")]
@@ -66,6 +67,22 @@ public class WeaverTests
             Assert.Equal(0, weaver.Process()); Assert.False(weaver.Changed);
             var startup = module.Types.Single(t => t.Name == "<Module>").Methods.Single(m => m.Name == ".cctor");
             Assert.Single(startup.Body.Instructions, i => i.Operand is MethodReference m && m.DeclaringType.FullName == "UIFramework.Mvvm.MvvmModule" && m.Name == "Install");
+        }
+    }
+
+    [Fact] public void ConverterOnlyLibraryGeneratesOneStartupCallAcrossReweaving()
+    {
+        using var module = Compile("public static class Prices { [Converter] public static string Text(int n) => n.ToString(); }");
+        var weaver = Weaver(module, out var runtime);
+        using (runtime)
+        {
+            weaver.Process();
+            var register = Assert.IsType<MethodDefinition>(weaver.Registration);
+            Assert.Contains(register.Body.Instructions, i => i.OpCode == OpCodes.Newobj);
+            weaver.Process();
+            Assert.False(weaver.Changed);
+            var startup = module.Types.Single(t => t.Name == "<Module>").Methods.Single(m => m.Name == ".cctor");
+            Assert.Single(startup.Body.Instructions, i => i.Operand == register);
         }
     }
 

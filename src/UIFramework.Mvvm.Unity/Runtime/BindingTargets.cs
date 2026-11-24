@@ -3,7 +3,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-[assembly: UIFramework.Mvvm.BindingTargetProvider(typeof(UIFramework.Mvvm.Unity.BuiltinBindingTargets))]
 
 namespace UIFramework.Mvvm.Unity
 {

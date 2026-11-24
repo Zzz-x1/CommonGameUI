@@ -13,6 +13,7 @@ using UIFramework.Unity;
 using UIFramework.Mvvm;
 using UIFramework.Mvvm.Unity;
 
+[assembly: GlobalViewModelProviderAttribute(typeof(MvvmWebSample.SampleGlobals))]
 [assembly: BindingTargetProvider(typeof(MvvmWebSample.SampleTargets))]
 
 namespace MvvmWebSample
@@ -33,7 +34,13 @@ namespace MvvmWebSample
     }
     public sealed class PlayerAsset : GlobalViewModel
     { [SerializeField] private int gold; [FieldNotify] public int Gold { get => gold; set => gold = value; } }
-    public static class TextConversions { [Converter] public static string Gold(int value) => "Gold " + value; }
+    public sealed class SampleGlobals : IGlobalViewModelProvider
+    {
+        public static PlayerAsset Template;
+        private readonly GlobalViewModelProvider _provider = new GlobalViewModelProvider(new[] { Template });
+        public System.Collections.Generic.IReadOnlyDictionary<string, object> ViewModels => _provider.ViewModels;
+        public IViewModelAssets Assets => _provider.Assets;
+    }
     public sealed class SamplePresentation { public float Delay; public bool Visible; public int Count; public Vector2 Request; }
     public sealed class SampleTargets : IBindingTargetProvider
     {
@@ -75,6 +82,8 @@ namespace MvvmWebSample
         private void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); _checks++; Debug.Log("MVVM CHECK " + _checks + ": " + message); }
         private async Task Run()
         {
+            var asset = ScriptableObject.CreateInstance<PlayerAsset>();
+            asset.name = "SharedPlayer"; asset.Gold = 42; SampleGlobals.Template = asset;
             var canvas = new GameObject("Canvas", typeof(Canvas)); canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var events = new GameObject("Events", typeof(EventSystem)); var views = new Views(); var ui = EngineUI.UI.Create(canvas.GetComponent<Canvas>(), events.GetComponent<EventSystem>(), views); views.Host = (EngineUI.UIHost)ui.Host;
             var runtime = ui.GetMvvm(); var node = new UINode(); await node.AttachAsync(ui.Root, "Bindings");
@@ -89,7 +98,7 @@ namespace MvvmWebSample
             node.ResumeBinding("Player.Gold"); Check(label.text == "Gold 55" && slider.value == 55, "Resume latest VM value");
             var nested = new GameObject("Selected", typeof(RectTransform), typeof(Text)).GetComponent<Text>(); vm.Selected = new PlayerVm { Gold = 3 };
             node.Bind("Player.Selected.Gold", BindingTargets.Property(nested, "text"), new BindingOptions { Convert = Converters.Find("FormatNumber"), HasNullValue = true, NullValue = "none" }); vm.Selected = new PlayerVm { Gold = 7 }; Check(nested.text == "7", "Nested replacement"); vm.Selected = null; Check(nested.text == "none", "Null presentation");
-            var asset = ScriptableObject.CreateInstance<PlayerAsset>(); asset.name = "SharedPlayer"; asset.Gold = 42; runtime.RegisterGlobalViewModelProvider(new GlobalViewModelProvider(new[] { asset })); var clone = runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer"); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer")), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
+            var clone = runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer"); Check(clone != asset && clone.Gold == 42, "Asset clone"); Check(ReferenceEquals(clone, runtime.GetGlobalViewModel<PlayerAsset>("SharedPlayer")), "Shared identity"); clone.Gold = 9; Check(asset.Gold == 42, "Original unchanged");
             var described = ((IMvvmObject)(object)vm).Describe(); Check(Array.Exists(described, p => p.Name == "Gold" && p.Observable), "Generated metadata");
             await ((IMvvmObject)(object)vm).Execute("Wait", null, default); Check(true, "Async command");
             var presentation = new SamplePresentation();
