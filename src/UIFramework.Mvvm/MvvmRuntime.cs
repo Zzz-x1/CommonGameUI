@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace UIFramework.Mvvm;
 
-public sealed class MvvmRuntime : IAsyncDisposable
+public sealed partial class MvvmRuntime : IAsyncDisposable
 {
     static MvvmRuntime() => MvvmModule.Install();
     internal readonly BindingPlans Plans = new();
@@ -190,20 +190,23 @@ public sealed class MvvmRuntime : IAsyncDisposable
     /// <summary>Engine adapters call this from their persistent frame observer.</summary>
     public void ObserveTasks()
     {
+        Exception? first = null;
         RemoveCompletedCommands();
         foreach (var task in _tasks.ToArray())
         {
             if (!task.IsCompleted) continue;
             _tasks.Remove(task); _releases.Remove(task);
-            Exception? failure = null;
-            CollectFaults(task, ref failure);
-            task.GetAwaiter().GetResult();
+            if (task.IsFaulted) CollectFaults(task, ref first);
+            else if (task.IsCanceled)
+                try { task.GetAwaiter().GetResult(); }
+                catch (OperationCanceledException error) { Failure(ref first, Cancellations.GetValue(task, _ => error)); }
         }
         if (_observeDisposal && _dispose?.IsCompleted == true)
         {
             _observeDisposal = false;
-            _dispose.GetAwaiter().GetResult();
+            try { _dispose.GetAwaiter().GetResult(); } catch (Exception error) { Failure(ref first, error); }
         }
+        if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
     public ValueTask DisposeAsync()
     {
@@ -214,6 +217,8 @@ public sealed class MvvmRuntime : IAsyncDisposable
             var closed = new TaskCompletionSource<Task>();
             var disposed = new TaskCompletionSource<Task>();
             _close = closed.Task.Unwrap(); _dispose = disposed.Task.Unwrap();
+            _pendingBindings.Clear();
+            _frameBindings.Clear();
             closed.SetResult(CloseAsync()); disposed.SetResult(DisposeCoreAsync());
         }
         return new ValueTask(caller ? _close! : _dispose);
@@ -316,8 +321,9 @@ public static partial class MvvmExtensions
     public static void SetViewModel(this IUINode node, string name, object vm) => Scope(node.Node).Set(name, vm);
     public static T GetViewModel<T>(this IUINode node, string name) where T : class => (T)Scope(node.Node).Get(name, typeof(T));
     public static T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class => Scope(node.Node).Create<T>(name, template);
-    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay) =>
-        Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode });
+    public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingMode mode = BindingMode.OneWay,
+        BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame) =>
+        Scope(node.Node).Bind(path, target, new BindingOptions { Mode = mode, UpdateTiming = timing });
     public static IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options) => Scope(node.Node).Bind(path, target, options);
     public static void PauseBinding(this IUINode node, string propertyName) => Scope(node.Node).PauseBinding(propertyName);
     public static void ResumeBinding(this IUINode node, string propertyName) => Scope(node.Node).ResumeBinding(propertyName);

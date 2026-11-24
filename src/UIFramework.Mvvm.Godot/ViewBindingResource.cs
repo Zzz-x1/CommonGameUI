@@ -7,6 +7,7 @@ public partial class ViewBindingResource : Resource
     [Export] public string Member { get; set; } = "Text";
     [Export] public string Source { get; set; } = "";
     [Export] public BindingMode Mode { get; set; } = BindingMode.OneWay;
+    [Export] public BindingUpdateTiming UpdateTiming { get; set; } = BindingUpdateTiming.EndOfFrame;
     [Export] public ViewBindingKind Kind { get; set; }
     [Export] public string Converter { get; set; } = "";
     [Export] public ConverterInput ConverterInput { get; set; }
@@ -23,6 +24,6 @@ public partial class ViewBindingResource : Resource
     [Export] public string ParameterPath { get; set; } = "";
     public BindingRule Rule => new BindingRule(Kind, Source, Member, Mode, Converter, ConvertBack, ConverterInput,
         ConverterConstant, HasNullValue, NullValue, ParameterMode, ParameterIsNull ? null : ParameterConstant,
-        ParameterPath, OneTimeCollection);
+        ParameterPath, OneTimeCollection, UpdateTiming);
 
 }

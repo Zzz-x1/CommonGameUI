@@ -11,13 +11,14 @@ namespace UIFramework.Mvvm.Unity
     {
         public bool Enabled = true; public Component Target; public string Member = "text"; public string Source = "";
         public BindingMode Mode = BindingMode.OneWay; public ViewBindingKind Kind;
+        public BindingUpdateTiming UpdateTiming = BindingUpdateTiming.EndOfFrame;
         public string Converter = "", ConvertBack = ""; public ConverterInput ConverterInput; public string ConverterConstant = ""; public bool HasNullValue; public string NullValue = "";
         public GameObject ItemPrefab; public bool OneTimeCollection; public Component ItemFactory;
         public List<CollectionSourceMapping> ItemSources = new List<CollectionSourceMapping>();
         public bool ParameterIsNull; public CommandParameterMode ParameterMode; public string ParameterConstant = "", ParameterPath = "";
         public BindingRule Rule => new BindingRule(Kind, Source, Member, Mode, Converter, ConvertBack, ConverterInput,
             ConverterConstant, HasNullValue, NullValue, ParameterMode, ParameterIsNull ? null : ParameterConstant,
-            ParameterPath, OneTimeCollection);
+            ParameterPath, OneTimeCollection, UpdateTiming);
     }
     public sealed class MvvmBindings : MonoBehaviour, IViewBindingConfiguration, IViewBindingSlots
     {

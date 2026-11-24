@@ -56,9 +56,13 @@ public sealed class CallbackInputTests
         Assert.Equal(new[] { 5 }, picker.Displayed);
         Assert.Equal(1, cart.SetterCalls);
         picker.Edit(120);
+        Assert.Equal(100, cart.Amount);
+        Assert.Equal(new[] { 5 }, picker.Displayed);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(new[] { 5, 100 }, picker.Displayed);
         Assert.Equal(2, cart.SetterCalls);
         picker.Edit(120);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(new[] { 5, 100, 100 }, picker.Displayed);
         Assert.Equal(3, cart.SetterCalls);
 
@@ -94,7 +98,7 @@ public sealed class CallbackInputTests
         page.SetViewModel("Low", left);
         page.SetViewModel("High", right);
         var observed = new List<(int, int)>();
-        page.Bind("Low.Gold", "High.Gold", (int a, int b) => observed.Add((a, b)));
+        page.Bind("Low.Gold", "High.Gold", (int a, int b) => observed.Add((a, b)), timing: BindingUpdateTiming.Immediate);
         var picker = new Picker<(int Low, int High)>();
         page.BindTwoWay<int, int, (int Low, int High)>("Low.Gold", "High.Gold",
             (a, b) => picker.Display((a, b)), picker.Connect, edit =>
@@ -103,6 +107,8 @@ public sealed class CallbackInputTests
                 right.Gold = edit.High;
             });
         picker.Edit((3, 9));
+        Assert.Single(picker.Displayed);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(new[] { (1, 8), (3, 9) }, picker.Displayed);
         Assert.Equal(new[] { (1, 8), (3, 8), (3, 9) }, observed);
         page.PauseBinding("High.Gold");
@@ -137,9 +143,12 @@ public sealed class CallbackInputTests
         Assert.Same(failure, Assert.Throws<IOException>(() => picker.Edit("5")));
         Assert.Contains(failure, host.Errors);
         Assert.Equal(5, vm.Gold);
+        Assert.Equal(new[] { "0" }, picker.Displayed);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(new[] { "0", "5" }, picker.Displayed);
         picker.Edit("6");
         vm.Gold = 7;
+        ui.GetMvvm().FlushBindings();
         Assert.Equal("7", picker.Displayed.Last());
     }
 
@@ -163,7 +172,7 @@ public sealed class CallbackInputTests
         {
             cart.Gold = value;
             if (value == 5) throw saveError;
-        });
+        }, timing: BindingUpdateTiming.Immediate);
         Assert.Same(saveError, Assert.Throws<IOException>(() => picker.Edit(5)));
         Assert.Contains(displayError, UIFailure.GetSecondaryExceptions(saveError));
         picker.Edit(6);
@@ -190,6 +199,7 @@ public sealed class CallbackInputTests
             });
         vm.Selected = new PlayerVm { Gold = 3 };
         old.Gold = 100;
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(new[] { 20, 6 }, picker.Displayed);
         picker.Edit(9);
         Assert.Equal(9, vm.Selected.Gold);

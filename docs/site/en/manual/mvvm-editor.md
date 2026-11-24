@@ -23,6 +23,8 @@ Select the control and target property, then drag a member or enter a path such 
 | Buy button | Command, `Shop.Buy` |
 | Inventory list | Collection, item Prefab / PackedScene |
 
+For a OneWay or TwoWay property row with VM input, the timing field defaults to `EndOfFrame`. A price label displays the final value once per UI frame. Select `Immediate` when a control must reflect changes inside the current input handler. The first preview value appears immediately.
+
 Converters are filtered by input and output types. Item sources are named `Item`, for example `Item.Title`. Configure layout in resources: VBoxContainer / GridContainer in Godot, or LayoutGroup / project layout code in Unity.
 
 The table supports search, deletion and reordering. Unity disables reordering while searching; clear search to change the full order. Unity controls provide an Inspector entry. Godot provides binding buttons beneath common control properties.

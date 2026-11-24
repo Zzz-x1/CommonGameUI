@@ -84,7 +84,7 @@ Resources/UI 保存业务 Prefab；ClientRoot 用于隔离测试。ClientSceneAu
 
 商店条目由异步资源工厂创建，借用共享金币与商店来源，点击时读取商品 ID 作为命令参数。金币不足时卡片变暗，仍可进入详情查看。列表移动／删除保持或释放对应实例。
 
-打开商店并选择商品，在购买窗口切换数量下拉框。下拉框通过 `BindTwoWay<int>` 把选项序号换算为购买数量。报价同时读取 `Purchase.Quantity` 和 `Player.Gold`。提高数量使总价超过余额时，窗口显示还差多少金币，购买按钮随之禁用。
+打开商店并选择商品，在购买窗口切换数量下拉框。下拉框通过 `BindTwoWay<int>` 同步写入数量，显式使用 `BindingUpdateTiming.Immediate` 回显。报价使用默认的 `EndOfFrame`，在 Canvas 更新前一次读取最新数量和金币；同帧改动两者只刷新一次。余额不足时购买命令立即禁用，报价显示还差多少金币。
 
 ## 关闭后缓存
 

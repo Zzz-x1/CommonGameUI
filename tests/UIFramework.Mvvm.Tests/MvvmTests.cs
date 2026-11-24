@@ -61,7 +61,11 @@ public sealed class MvvmTests
         await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var vm = new PlayerVm { Amount = 25 }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Amount", target, BindingMode.TwoWay); Assert.Equal(25, target.Value);
-        target.Edit(150); Assert.Equal(100, target.Value); Assert.Equal(100, vm.Amount);
+        target.Edit(150);
+        Assert.Equal(100, vm.Amount);
+        Assert.Equal(150, target.Value);
+        runtime.FlushBindings();
+        Assert.Equal(100, target.Value);
         await node.DisposeAsync(); vm.Amount = 50; Assert.Equal(100, target.Value); await ui.DisposeAsync();
     }
     [Fact] public async Task NestedReplacementAndNullPresentation()
@@ -69,6 +73,9 @@ public sealed class MvvmTests
         await using var runtime = new MvvmRuntime(); var ui = new UIContext(new Host(), new Loader()); ui.ConfigureMvvm(runtime);
         var node = new UINode(); await node.AttachAsync(ui.Root, "View"); var old = new PlayerVm { Gold = 10 }; var vm = new PlayerVm { Selected = old }; node.SetViewModel("Player", vm);
         var target = new Target(); node.Bind("Player.Selected.Gold", target, new BindingOptions { HasNullValue = true, NullValue = -1 });
-        vm.Selected = new PlayerVm { Gold = 30 }; old.Gold = 99; Assert.Equal(30, target.Value); vm.Selected = null; Assert.Equal(-1, target.Value); await ui.DisposeAsync();
+        vm.Selected = new PlayerVm { Gold = 30 }; old.Gold = 99;
+        runtime.FlushBindings(); Assert.Equal(30, target.Value);
+        vm.Selected = null; runtime.FlushBindings();
+        Assert.Equal(-1, target.Value); await ui.DisposeAsync();
     }
 }

@@ -201,6 +201,8 @@ public partial class MvvmEditorPlugin : EditorPlugin
             }
             return;
         }
+        if (b.Mode is BindingMode.OneWay or BindingMode.TwoWay && b.ConverterInput == ConverterInput.ViewModel)
+            Choice("刷新时机", b.UpdateTiming, timing => Edit(b.UpdateTiming, timing, value => b.UpdateTiming = value));
         if (b.Mode is BindingMode.OneWay or BindingMode.OneTime) Choice("转换器输入", b.ConverterInput, v => Edit(b.ConverterInput, v, value => b.ConverterInput = value));
         Converter("正向转换", b.Converter, sourceType, targetType, b.ConverterInput == ConverterInput.Constant, v => Edit(b.Converter, v, value => b.Converter = value));
         if (b.Converter.Length != 0)

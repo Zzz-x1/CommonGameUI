@@ -65,8 +65,11 @@ public sealed class ConverterTests
         var target = new Target(); node.Bind("Player.Selected.Gold", target, Options("Amount"));
         Assert.Equal("Gold 10", target.Value);
         vm.Selected = new PlayerVm { Gold = 25 }; old.Gold = 99;
+        ui.GetMvvm().FlushBindings();
         Assert.Equal("Gold 25", target.Value);
-        vm.Selected.Gold = 40; Assert.Equal("Gold 40", target.Value);
+        vm.Selected.Gold = 40;
+        ui.GetMvvm().FlushBindings();
+        Assert.Equal("Gold 40", target.Value);
         await node.DisposeAsync(); vm.Selected.Gold = 50;
         Assert.Equal("Gold 40", target.Value); Assert.True(target.Disposed);
     }

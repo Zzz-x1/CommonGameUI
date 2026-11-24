@@ -26,7 +26,7 @@ namespace StarCourt.UnityDemo
                     var changed = quantityPicker.onValueChanged;
                     changed.AddListener(SelectQuantity);
                     return () => changed.RemoveListener(SelectQuantity);
-                });
+                }, timing: BindingUpdateTiming.Immediate);
             int unitPrice = ClientStore.Prices[Parameters];
             this.Bind("Purchase.Quantity", "Player.Gold", this.GetControl<Text>("Panel/Text").TextTarget(),
                 (int quantity, int gold) =>

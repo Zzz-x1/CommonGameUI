@@ -173,12 +173,15 @@ namespace StarCourt.UnityDemo.Tests
             var quantity = purchase.GetControl<Dropdown>("Panel/Quantity");
             var quote = purchase.GetControl<Text>("Panel/Text");
             Assert.That(quantity.value, Is.Zero);
+            string initialQuote = quote.text;
             quantity.value = 1;
             Assert.That(purchase.GetViewModel<ClientPurchaseVm>("Purchase").Quantity, Is.EqualTo(2));
-            Assert.That(quote.text, Does.Contain($"合计 {total} 金币"));
             _app.Store.Change(state => state.Gold = total - 1);
-            Assert.That(quote.text, Does.Contain("还差 1 金币"));
             Assert.That(purchase.GetControl<Button>("Panel/Buy").interactable, Is.False);
+            Assert.That(quote.text, Is.EqualTo(initialQuote));
+            await Frame();
+            Assert.That(quote.text, Does.Contain($"合计 {total} 金币"));
+            Assert.That(quote.text, Does.Contain("还差 1 金币"));
             _app.Store.Change(state => state.Gold = gold);
             await Click(purchase, "Panel/Buy"); await WaitFor<ConfirmView>();
             Assert.That(_app.Modals.Current.GetControl<Text>("Panel/Text").text, Does.Contain($"花费 {total} 金币"));

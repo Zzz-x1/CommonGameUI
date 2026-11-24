@@ -23,6 +23,8 @@
 | 购买按钮 | Command，`Shop.Buy` |
 | 背包列表 | Collection，条目 Prefab／PackedScene |
 
+来源为 VM 的 OneWay／TwoWay 属性行可以设置**刷新时机**。金币或报价使用默认 `EndOfFrame`，每个 UI 帧合并刷新；需要在输入回调结束前改变的控件状态选择 `Immediate`。打开预览时首次值直接显示。
+
 转换器按输入、输出类型筛选。条目来源名称固定为 `Item`，例如 `Item.Title`。列表布局在资源中配置；Godot 可使用 VBoxContainer／GridContainer，Unity 可使用 LayoutGroup 或项目布局代码。
 
 绑定表支持搜索、删除和重排。Unity 搜索结果中禁用重排；清除搜索后调整完整顺序。Unity 控件 Inspector 有绑定入口，Godot 常见控件属性下有绑定按钮。

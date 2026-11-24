@@ -16,6 +16,7 @@ T GetGlobalViewModel<T>(string name) where T : class;
 Task WhenIdleAsync();
 void Observe(Task task);
 void ObserveTasks();
+void FlushBindings();
 ValueTask DisposeAsync();
 ```
 
@@ -24,6 +25,8 @@ ValueTask DisposeAsync();
 `ObserveTasks` 由引擎帧观察器调用，完成的失败原样抛出。`WhenIdleAsync` 等待已观察任务及执行期间产生的延迟释放。项目也应等待自己启动的 UI 操作，退出前完成清理。
 
 命令内等待 Runtime 关闭时，先结束绑定，VM 保留到命令返回后释放。外部 `DisposeAsync` 等待完整释放；`IsDisposed` 表示完整清理已经结束。
+
+Unity 和 Godot 自动驱动刷新。自定义宿主用 `MvvmFrameDriver.Attach(runtime)` 登记 Runtime，在 UI 帧刷新点调用一次 `Tick()`。无引擎测试可用 `runtime.FlushBindings()` 同步刷新待处理的属性。延迟转换或显示失败时，帧入口会在执行其余绑定后传播原始异常。
 
 ## Context 与 Node
 
@@ -40,7 +43,8 @@ void NotifyChanged<TVm>(this TVm vm, string propertyName) where TVm : class;
 T GetViewModel<T>(this IUINode node, string name) where T : class;
 T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
-    BindingMode mode = BindingMode.OneWay);
+    BindingMode mode = BindingMode.OneWay,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
 void PauseBinding(this IUINode node, string propertyName);
 void ResumeBinding(this IUINode node, string propertyName);
@@ -58,13 +62,18 @@ void ObserveMvvmTask(this IUINode node, Task task);
 ## 泛型回调与多来源投影
 
 ```csharp
-IDisposable Bind<T>(this IUINode node, string path, Action<T> apply);
-IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply);
-IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply);
+IDisposable Bind<T>(this IUINode node, string path, Action<T> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind<T1, T2, TResult>(this IUINode node, string path1, string path2,
-    IBindingTarget target, Func<T1, T2, TResult> project);
+    IBindingTarget target, Func<T1, T2, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string path2, string path3,
-    IBindingTarget target, Func<T1, T2, T3, TResult> project);
+    IBindingTarget target, Func<T1, T2, T3, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 ```
 
 来源须可通知；输入按路径顺序传入，计算结果须可赋给目标。用任一来源的完整路径暂停整条绑定，用同一路径恢复时只刷新一次。释放绑定或销毁节点会解除全部订阅；隐藏或进入关闭缓存时保留。
@@ -73,16 +82,20 @@ IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string pa
 
 ```csharp
 IDisposable BindTwoWay<T>(this IUINode node, string path, Action<T> apply,
-    Func<Action<T>, Action> subscribe);
+    Func<Action<T>, Action> subscribe,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, TEdit>(this IUINode node, string path, Action<T1> apply,
-    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, T2, TEdit>(this IUINode node, string path1, string path2,
-    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, T2, T3, TEdit>(this IUINode node, string path1, string path2, string path3,
-    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 ```
 
-`apply` 接收当前来源值。`subscribe` 接收输入处理函数，返回解除订阅的动作。单参数类型重载将控件输入写回当前可写属性。提供 `commit` 时，业务决定如何处理一次 `TEdit` 输入，显示来源可以是只读属性。提交成功后，绑定读取 VM 的最终值并重绘一次。
+`apply` 接收当前来源值。`subscribe` 接收输入处理函数，返回解除订阅的动作。单参数类型重载将控件输入写回当前可写属性。提供 `commit` 时，业务决定如何处理一次 `TEdit` 输入，显示来源可以是只读属性。输入同步提交，回显由 `timing` 决定。属性目标也可在 `BindingOptions.UpdateTiming` 配置。`EndOfFrame` 合并刷新，`Immediate` 在当前调用结束前更新。
 
 ## 标记与转换
 

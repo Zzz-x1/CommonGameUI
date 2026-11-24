@@ -16,6 +16,7 @@ T GetGlobalViewModel<T>(string name) where T : class;
 Task WhenIdleAsync();
 void Observe(Task task);
 void ObserveTasks();
+void FlushBindings();
 ValueTask DisposeAsync();
 ```
 
@@ -24,6 +25,8 @@ Factories create fresh instances with project-provided constructor dependencies.
 Engine frame observers call `ObserveTasks`, which rethrows completed failures unchanged. `WhenIdleAsync` waits for observed tasks and deferred release created while they run. Projects must also await their UI operations and finish cleanup before exiting.
 
 When a command awaits Runtime disposal, bindings end first and its VM remains alive until the command returns. External `DisposeAsync` awaits complete release; `IsDisposed` indicates that complete phase has ended.
+
+Unity and Godot advance bindings automatically. A custom host attaches each runtime to a `MvvmFrameDriver` using `Attach(runtime)` and calls `Tick()` once at its UI frame boundary. A headless test can call `runtime.FlushBindings()` to present pending properties. Delayed conversion and display errors propagate from the frame call after the remaining bindings run.
 
 ## Context and Node
 
@@ -40,7 +43,8 @@ void NotifyChanged<TVm>(this TVm vm, string propertyName) where TVm : class;
 T GetViewModel<T>(this IUINode node, string name) where T : class;
 T CreateViewModel<T>(this IUINode node, string name, object? template = null) where T : class;
 IDisposable Bind(this IUINode node, string path, IBindingTarget target,
-    BindingMode mode = BindingMode.OneWay);
+    BindingMode mode = BindingMode.OneWay,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind(this IUINode node, string path, IBindingTarget target, BindingOptions options);
 void PauseBinding(this IUINode node, string propertyName);
 void ResumeBinding(this IUINode node, string propertyName);
@@ -58,13 +62,18 @@ Paths use `Source.Member` and may traverse woven intermediate VMs. Modes are `On
 ## Typed callbacks and multi-source projections
 
 ```csharp
-IDisposable Bind<T>(this IUINode node, string path, Action<T> apply);
-IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply);
-IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply);
+IDisposable Bind<T>(this IUINode node, string path, Action<T> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2>(this IUINode node, string path1, string path2, Action<T1, T2> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
+IDisposable Bind<T1, T2, T3>(this IUINode node, string path1, string path2, string path3, Action<T1, T2, T3> apply,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind<T1, T2, TResult>(this IUINode node, string path1, string path2,
-    IBindingTarget target, Func<T1, T2, TResult> project);
+    IBindingTarget target, Func<T1, T2, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable Bind<T1, T2, T3, TResult>(this IUINode node, string path1, string path2, string path3,
-    IBindingTarget target, Func<T1, T2, T3, TResult> project);
+    IBindingTarget target, Func<T1, T2, T3, TResult> project,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 ```
 
 Sources must support change notification. Arguments follow path order, and the result must be assignable to the target. Pause with any participating path, then resume with that same path for a single refresh. Disposing the binding or its node releases all subscriptions. Hiding or caching the window keeps them connected.
@@ -73,16 +82,20 @@ Sources must support change notification. Arguments follow path order, and the r
 
 ```csharp
 IDisposable BindTwoWay<T>(this IUINode node, string path, Action<T> apply,
-    Func<Action<T>, Action> subscribe);
+    Func<Action<T>, Action> subscribe,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, TEdit>(this IUINode node, string path, Action<T1> apply,
-    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, T2, TEdit>(this IUINode node, string path1, string path2,
-    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Action<T1, T2> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 IDisposable BindTwoWay<T1, T2, T3, TEdit>(this IUINode node, string path1, string path2, string path3,
-    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit);
+    Action<T1, T2, T3> apply, Func<Action<TEdit>, Action> subscribe, Action<TEdit> commit,
+    BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame);
 ```
 
-`apply` receives the current source values. `subscribe` connects the input handler it receives and returns an unsubscribe action. The overload with one type parameter writes edits to the current writable property. With `commit`, the project handles one `TEdit` input and the display sources can be read-only. After each successful commit the binding reads the final VM values and redraws once.
+`apply` receives the current source values. `subscribe` connects the input handler it receives and returns an unsubscribe action. The overload with one type parameter writes edits to the current writable property. With `commit`, the project handles one `TEdit` input and the display sources can be read-only. Input is synchronous. Display uses `timing` (or `BindingOptions.UpdateTiming` on property targets). `EndOfFrame` coalesces changes; `Immediate` updates before the call returns.
 
 ## Attributes and conversions
 

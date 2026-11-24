@@ -9,6 +9,7 @@ public readonly record struct BindingRule
     public readonly string Source, Member, Converter, ConvertBack, ConverterConstant, NullValue, ParameterPath;
     public readonly string? ParameterLiteral;
     public readonly BindingMode Mode;
+    public readonly BindingUpdateTiming UpdateTiming;
     public readonly ConverterInput Input;
     public readonly CommandParameterMode ParameterMode;
     public readonly bool HasNullValue, OneTimeCollection;
@@ -17,13 +18,13 @@ public readonly record struct BindingRule
         string converter = "", string convertBack = "", ConverterInput input = ConverterInput.ViewModel,
         string converterConstant = "", bool hasNullValue = false, string nullValue = "",
         CommandParameterMode parameterMode = CommandParameterMode.None, string? parameterLiteral = null,
-        string parameterPath = "", bool oneTimeCollection = false)
+        string parameterPath = "", bool oneTimeCollection = false, BindingUpdateTiming timing = BindingUpdateTiming.EndOfFrame)
     {
         Kind = kind; Source = source; Member = member; Mode = mode;
         Converter = converter; ConvertBack = convertBack; Input = input; ConverterConstant = converterConstant;
         HasNullValue = hasNullValue; NullValue = nullValue;
         ParameterMode = parameterMode; ParameterLiteral = parameterLiteral; ParameterPath = parameterPath;
-        OneTimeCollection = oneTimeCollection;
+        OneTimeCollection = oneTimeCollection; UpdateTiming = timing;
     }
 }
 
@@ -93,6 +94,7 @@ internal sealed class CompiledBinding
             Property = BindingTargetRegistry.Find(target, rule.Member);
             Options = Converters.Configure(rule.Converter, rule.ConvertBack, rule.Mode, rule.Input,
                 rule.ConverterConstant, rule.HasNullValue, rule.NullValue);
+            Options.UpdateTiming = rule.UpdateTiming;
             if (Options.HasConstantValue && !Property.ValueType.IsAssignableFrom(Options.ForwardConverter!.Output))
                 throw new InvalidCastException($"Converter {rule.Converter} cannot write to {target.Name}.{rule.Member}.");
         }

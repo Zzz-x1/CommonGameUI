@@ -32,6 +32,12 @@ namespace StarCourt.UnityDemo.Editor
             window.rootVisualElement.Q<ListView>("bindings").selectedIndex = 0;
             var name = window.rootVisualElement.Q<ScrollView>("details").Query<TextField>().ToList().Find(field => field.label == "来源路径"); name.value = "PreviewPlayer.CanBuy";
             Check(cfg.Bindings[0].Source == "PreviewPlayer.CanBuy", "Binding GUI failed"); Undo.PerformUndo(); Check(cfg.Bindings[0].Source == "PreviewPlayer.Gold", "GUI Undo failed");
+            var timing = window.rootVisualElement.Q<ScrollView>("details").Query<DropdownField>().ToList().Find(field => field.label == "刷新时机");
+            Check(timing.value == nameof(BindingUpdateTiming.EndOfFrame), "Expected the frame-end default");
+            timing.value = nameof(BindingUpdateTiming.Immediate);
+            Check(cfg.Bindings[0].UpdateTiming == BindingUpdateTiming.Immediate, "Update timing was not serialized");
+            Undo.PerformUndo();
+            Check(cfg.Bindings[0].UpdateTiming == BindingUpdateTiming.EndOfFrame, "Update timing Undo failed");
             using (var preview = new BindingPreview(cfg)) { Check(label.GetComponent<Text>().text == "100", "Preview failed"); Check(template.Gold == 100, "Asset changed in preview"); }
             await Task.Yield(); Check(label.GetComponent<Text>().text == "original", "Preview did not restore");
             using (var preview = new BindingPreview(cfg))
@@ -41,8 +47,9 @@ namespace StarCourt.UnityDemo.Editor
             var prefabPath = "Assets/Temp/MvvmVerification.prefab"; System.IO.Directory.CreateDirectory("Assets/Temp"); PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath)); var instanceConfig = instance.GetComponent<MvvmBindings>();
             window.rootVisualElement.Q<ObjectField>("view").value = instanceConfig; window.rootVisualElement.Q<ListView>("bindings").selectedIndex = 0;
-            window.rootVisualElement.Q<ScrollView>("details").Query<TextField>().ToList().Find(field => field.label == "来源路径").value = "PreviewPlayer.CanBuy";
-            Check(PrefabUtility.HasPrefabInstanceAnyOverrides(instance, false), "Prefab override missing");
+            window.rootVisualElement.Q<ScrollView>("details").Query<DropdownField>().ToList().Find(field => field.label == "刷新时机").value = nameof(BindingUpdateTiming.Immediate);
+            Check(instanceConfig.Bindings[0].UpdateTiming == BindingUpdateTiming.Immediate &&
+                cfg.Bindings[0].UpdateTiming == BindingUpdateTiming.EndOfFrame && PrefabUtility.HasPrefabInstanceAnyOverrides(instance, false), "Timing prefab override missing");
             AssetDatabase.DeleteAsset(catalogPath); window.Close(); UnityEngine.Object.DestroyImmediate(instance); UnityEngine.Object.DestroyImmediate(root); AssetDatabase.DeleteAsset("Assets/Temp/PreviewPlayer.asset"); AssetDatabase.DeleteAsset(prefabPath);
         }
         private static void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); }

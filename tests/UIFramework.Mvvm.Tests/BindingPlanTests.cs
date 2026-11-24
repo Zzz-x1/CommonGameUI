@@ -133,9 +133,12 @@ public sealed class BindingPlanTests
         rows[6].Target.Edit(42);
         Assert.Equal(42, rows[6].Model.Price);
         rows[7].Model.Write("Price", 84);
+        Assert.Equal(7, rows[7].Target.Value);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(84, rows[7].Target.Value);
         Assert.Equal(8, rows[8].Target.Value);
-        Assert.Throws<InvalidOperationException>(() => rows[8].Node.SetViewModel("Item", new ReadOnlyProduct()));
+        rows[8].Node.SetViewModel("Item", new ReadOnlyProduct());
+        Assert.Throws<InvalidOperationException>(ui.GetMvvm().FlushBindings);
     }
 
     [Fact]
@@ -157,6 +160,7 @@ public sealed class BindingPlanTests
         var error = Assert.Throws<FormatException>(() => ViewBindingPlans.Apply(row, new Slots((Price, detached), (broken, new CommandTarget())), preview: true));
         Assert.Null(detached.Changed);
         model.Write("Price", 3);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(3, label.Value);
         Assert.Equal(42, detached.Value);
         Assert.Contains(host.Errors, entry => ReferenceEquals(entry.Error, error) && entry.Context.Contains("row 1") && entry.Context.Contains("Item.Buy"));
@@ -233,6 +237,7 @@ public sealed class BindingPlanTests
         BindingTargetRegistry.Register(new Overrides());
         ViewBindingPlans.Apply(await Row(ui, 2, model), new Slots((rule, second)));
         model.Write("Price", 10);
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(10, first.Value);
         Assert.Equal(20, second.Value);
     }

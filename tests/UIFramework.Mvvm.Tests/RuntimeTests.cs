@@ -165,7 +165,8 @@ public class RuntimeTests
         Assert.Same(runtime.GetGlobalViewModel<OwnedVm>("Player"), node.Model);
         var displayed = 0;
         node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
-        Assert.Equal(42, displayed); node.Model.Gold = 60; Assert.Equal(60, displayed);
+        Assert.Equal(42, displayed); node.Model.Gold = 60;
+        runtime.FlushBindings(); Assert.Equal(60, displayed);
         var items = new ListTarget(); node.BindCollection("Player.Items", items);
         node.Model.Items.Add(new OwnedVm()); Assert.Single(items.Items);
         await node.DisposeAsync(); Assert.Equal(0, node.Model.Disposals);
@@ -180,8 +181,10 @@ public class RuntimeTests
         var shared = node.GetViewModel<OwnedVm>("Player"); var displayed = 0;
         node.Bind("Player.Gold", new BindingValueTarget<int>(() => displayed, value => displayed = value, _ => { }, () => { }));
         var local = new OwnedVm { Gold = 20 }; node.SetViewModel("Player", local);
-        Assert.Same(local, node.GetViewModel<OwnedVm>("Player")); Assert.Equal(20, displayed);
-        shared.Gold = 99; Assert.Equal(20, displayed); local.Gold = 30; Assert.Equal(30, displayed);
+        Assert.Same(local, node.GetViewModel<OwnedVm>("Player"));
+        runtime.FlushBindings(); Assert.Equal(20, displayed);
+        shared.Gold = 99; runtime.FlushBindings(); Assert.Equal(20, displayed);
+        local.Gold = 30; runtime.FlushBindings(); Assert.Equal(30, displayed);
         await node.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(0, shared.Disposals);
         await ui.DisposeAsync(); Assert.Equal(0, local.Disposals); Assert.Equal(1, shared.Disposals);
     }

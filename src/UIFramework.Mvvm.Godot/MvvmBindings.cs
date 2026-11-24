@@ -43,16 +43,3 @@ public static class MvvmExtensions
     public static T GetSharedViewModel<T>(this MvvmRuntime runtime, T template) where T : Resource => runtime.GetSharedViewModel(template, new ViewModelAssets());
 
 }
-internal static class MvvmObserver
-{
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SceneTree, HashSet<MvvmRuntime>> Runtimes = new();
-    internal static void Attach(SceneTree tree, MvvmRuntime runtime)
-    {
-        if (!Runtimes.TryGetValue(tree, out var runtimes))
-        {
-            runtimes = new HashSet<MvvmRuntime>(); Runtimes.Add(tree, runtimes);
-            tree.ProcessFrame += () => { foreach (var value in runtimes.ToArray()) { value.ObserveTasks(); if (value.IsDisposed) runtimes.Remove(value); } };
-        }
-        runtimes.Add(runtime);
-    }
-}

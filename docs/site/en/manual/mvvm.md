@@ -152,13 +152,24 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 });
 ```
 
-Two-way bindings initially use the VM value. After control input, the normalized setter value is synchronized back. Configure forward and reverse conversions separately with `Convert` and `ConvertBack`.
+A two-way binding initially displays the VM value. Player input writes to the VM immediately. Set forward and reverse conversions separately with `Convert` and `ConvertBack`.
+
+### Choose when the control updates
+
+The first display and `ResumeBinding` are synchronous. Subsequent property changes default to `EndOfFrame`. At the UI frame boundary each dirty binding reads its latest source values once and updates the control once. Manual notifications and the display of a value corrected by a setter use the same timing.
+
+Use `Immediate` when the control must be up to date before the current call returns, such as disabling order confirmation when the budget changes. A purchase command still checks the current VM when invoked.
+
+```csharp
+this.Bind<bool>("Order.CanConfirm", SetConfirmEnabled,
+    timing: BindingUpdateTiming.Immediate);
+```
 
 Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive properties also require `FieldNotify`. Null paths throw by default. Explicit null presentation neither hides missing members or wrong types nor creates missing objects.
 
 ## Calculate a quote from multiple VMs
 
-List the source paths in the same order as the lambda parameters. A change to the quantity, price or wallet balance updates the quote. This example displays the total when affordable and the shortfall as a negative number otherwise.
+When quantity, price and wallet balance change in the same frame, this binding calculates the quote once. List the source paths in lambda parameter order. The label shows the total when affordable and the shortfall as a negative number otherwise.
 
 ```csharp
 this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
@@ -184,7 +195,7 @@ this.BindTwoWay<int>("Cart.Quantity",
     {
         quantityPicker.ValueEdited += edited;
         return () => quantityPicker.ValueEdited -= edited;
-    });
+    }, timing: BindingUpdateTiming.Immediate);
 ```
 
 When the window opens, the picker immediately displays `Cart.Quantity`. If a player enters 120 and the setter caps the value at 99, the picker displays 99. The binding subscribes to input once and ignores synchronous input events from initialization or display updates.
@@ -203,7 +214,7 @@ this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
                          .SetPriceRange(range.Min, range.Max));
 ```
 
-After a successful edit the slider redraws once. Other bindings still receive each property change. If the commit throws partway through, changes already made are retained. The binding tries to display the current values once and propagates the original exception. To configure the same control in the editor, [register its properties](#custom-control-properties).
+With the default timing, edits within one UI frame yield a single redraw with the final range. Other bindings use their own timing. A failing commit propagates the original exception immediately. Changes already applied to the VM are displayed at the selected time. For editor configuration, [register the control properties](#custom-control-properties).
 
 ## Pause bindings for animation
 

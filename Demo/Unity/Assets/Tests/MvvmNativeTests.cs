@@ -186,7 +186,25 @@ namespace StarCourt.UnityDemo.Tests
             config.Bindings.Add(new ViewBindingData { Target = button.GetComponent<Button>(), Source = template.name + ".Buy", Kind = ViewBindingKind.Command });
             var node = new UINode(); await node.AttachToAsync(ui.Root, "View", (RectTransform)rect.transform);
             var vm = node.GetViewModel<NativePlayerVm>(template.name); Assert.That(vm.InitializationCount, Is.EqualTo(1)); Assert.That(template.InitializationCount, Is.EqualTo(0)); Assert.That(vm, Is.Not.SameAs(template)); Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
-            button.GetComponent<Button>().onClick.Invoke(); Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
+            var host = (EngineUI.UIHost)ui.Host;
+            await host.NextFrameAsync();
+            var amounts = new List<int>();
+            node.Bind<int>(template.name + ".Gold", amounts.Add);
+            var previousScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0;
+                vm.Gold = 50;
+                vm.Gold = 100;
+                button.GetComponent<Button>().onClick.Invoke();
+                Assert.That(vm.Gold, Is.EqualTo(90)); Assert.That(template.Gold, Is.EqualTo(100));
+                Assert.That(label.GetComponent<Text>().text, Is.EqualTo("100"));
+                Assert.That(amounts, Is.EqualTo(new[] { 100 }));
+                await host.NextFrameAsync();
+                Assert.That(label.GetComponent<Text>().text, Is.EqualTo("90"));
+                Assert.That(amounts, Is.EqualTo(new[] { 100, 90 }));
+            }
+            finally { Time.timeScale = previousScale; }
             var slider = new GameObject("Amount", typeof(RectTransform), typeof(Slider)); slider.transform.SetParent(rect.transform, false);
             slider.GetComponent<Slider>().maxValue = 200;
             node.Bind(template.name + ".Gold", slider.GetComponent<Slider>().ValueTarget(), new BindingOptions { Mode = BindingMode.TwoWay, Convert = Converters.Find("IntToFloat"), ConvertBack = Converters.Find("FloatToInt") });
@@ -210,7 +228,11 @@ namespace StarCourt.UnityDemo.Tests
             }
             await otherUi.DisposeAsync();
             UnityEngine.Object.Destroy(otherCanvas); UnityEngine.Object.Destroy(otherEvents);
-            await node.DisposeAsync(); vm.Gold = 50; Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
+            await host.NextFrameAsync();
+            vm.Gold = 30;
+            await node.DisposeAsync(); vm.Gold = 50;
+            await host.NextFrameAsync();
+            Assert.That(label.GetComponent<Text>().text, Is.EqualTo("0"));
             await ui.DisposeAsync(); await runtime.DisposeAsync();
             UnityEngine.Object.Destroy(rect); UnityEngine.Object.Destroy(canvas); UnityEngine.Object.Destroy(events); UnityEngine.Object.Destroy(template);
         }

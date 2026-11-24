@@ -112,16 +112,21 @@ public partial class ClientModalView : EngineUI.UINode<ModalArgs>
                 if (GodotObject.IsInstanceValid(quantityPicker))
                     quantityPicker.ValueChanged -= SelectQuantity;
             };
-        });
+        }, timing: BindingUpdateTiming.Immediate);
         var price = Get<Label>("Center/Pages/Shop/Price");
         var confirm = Get<Button>("Center/Confirm");
+        this.Bind("Order.Quantity", "Player.Gold", price.TextTarget(), (int quantity, int gold) =>
+        {
+            int total = item.Price * quantity;
+            string budget = gold < total ? $"可用 {gold} 金币" : $"单价 {item.Price} 金币";
+            return $"{budget}\n总计 {total} 金币";
+        });
         this.Bind("Order.Quantity", "Player.Gold", (int quantity, int gold) =>
         {
             int total = item.Price * quantity;
-            price.Text = $"单价 {item.Price} 金币\n总计 {total} 金币";
             confirm.Disabled = gold < total;
             confirm.Text = gold < total ? $"还差 {total - gold} 金币" : "确认订单";
-        });
+        }, timing: BindingUpdateTiming.Immediate);
     }
 
     private async Task InitializeSettingsAsync(CancellationToken token)

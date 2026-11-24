@@ -7,13 +7,21 @@ public sealed partial class BindingPauseTests
 {
     private sealed class OfferSource : IMvvmObject
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
-        public int Subscribers => PropertyChanged?.GetInvocationList().Length ?? 0;
+        private PropertyChangedEventHandler? _changed;
+        public Action? OnSubscribe;
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add { OnSubscribe?.Invoke(); _changed += value; }
+            remove { _changed -= value; }
+        }
+        public int Subscribers => _changed?.GetInvocationList().Length ?? 0;
+        public int Price = 7;
+        public int PriceReads;
         public OfferSource? Selected;
         public Action? OnReadSelected;
         public object? Read(string member)
         {
-            if (member == "Price") return 7;
+            if (member == "Price") { PriceReads++; return Price; }
             if (member != "Selected") throw new MissingMemberException(member);
             OnReadSelected?.Invoke();
             return Selected;
@@ -23,7 +31,7 @@ public sealed partial class BindingPauseTests
             new MvvmMember("Selected", typeof(OfferSource), MvvmMemberKind.Property, true, false),
             new MvvmMember("Price", typeof(int), MvvmMemberKind.Property, true, false)
         };
-        public void NotifyChanged(string propertyName) => MvvmNotifications.Raise(PropertyChanged, this, propertyName);
+        public void NotifyChanged(string propertyName) => MvvmNotifications.Raise(_changed, this, propertyName);
         public void Write(string member, object? value) => throw new NotSupportedException();
         public bool CanExecute(string command) => throw new NotSupportedException();
         public Task Execute(string command, object? parameter, CancellationToken token) => throw new NotSupportedException();
@@ -48,6 +56,7 @@ public sealed partial class BindingPauseTests
             Assert.Equal(1, old.Subscribers);
             Assert.Equal(1, old.Selected.Subscribers);
             node.SetViewModel("Shop", next);
+            ui.GetMvvm().FlushBindings();
         }
         await closing;
         Assert.Equal(replace ? 1 : 0, renders);
@@ -55,6 +64,7 @@ public sealed partial class BindingPauseTests
         Assert.Equal(0, old.Selected.Subscribers);
         Assert.Equal(0, next.Subscribers);
         Assert.Equal(0, next.Selected.Subscribers);
+        Assert.Equal(0, next.Selected.PriceReads);
     }
 
     [Fact]
@@ -68,7 +78,7 @@ public sealed partial class BindingPauseTests
         node.SetViewModel("Offer", offer);
         var quotes = new List<(int Wallet, int Price, int Count)>();
         node.Bind("Buyer.Gold", "Offer.Gold", "Offer.Amount",
-            (int wallet, int price, int count) => quotes.Add((wallet, price, count)));
+            (int wallet, int price, int count) => quotes.Add((wallet, price, count)), timing: BindingUpdateTiming.Immediate);
         buyer.Gold = 80;
         offer.Amount = 4;
         node.SetViewModel("Offer", new PlayerVm { Gold = 7, Amount = 2 });
@@ -86,7 +96,7 @@ public sealed partial class BindingPauseTests
         node.SetViewModel("Buyer", owner);
         node.SetViewModel("Shop", owner);
         var values = new List<(int, int)>();
-        node.Bind("Buyer.Selected.Gold", "Shop.Selected.Amount", (int gold, int amount) => values.Add((gold, amount)));
+        node.Bind("Buyer.Selected.Gold", "Shop.Selected.Amount", (int gold, int amount) => values.Add((gold, amount)), timing: BindingUpdateTiming.Immediate);
         owner.Selected = new PlayerVm { Gold = 8, Amount = 3 };
         oldItem.Gold = 55;
         owner.Selected.Amount = 6;
@@ -141,6 +151,7 @@ public sealed partial class BindingPauseTests
             return sum;
         });
         model.Amount = 3;
+        ui.GetMvvm().FlushBindings();
         node.PauseBinding("Amount");
         model.Amount = 4;
         node.ResumeBinding("Amount");
@@ -185,7 +196,7 @@ public sealed partial class BindingPauseTests
         {
             if (gold == 3) throw failure;
             values.Add(gold);
-        });
+        }, timing: BindingUpdateTiming.Immediate);
         Assert.Same(failure, Assert.Throws<IOException>(() => model.Gold = 3));
         model.Gold = 4;
         Assert.Equal(new[] { 0, 4 }, values);

@@ -5,10 +5,11 @@ namespace UIFramework.Mvvm;
 
 internal sealed partial class BindingScope
 {
-    internal IDisposable BindCallback(string[] paths, Type[] types, Action<object?[]> apply,
-        IBindingTarget? target = null, Type? resultType = null, Action<CallbackBinding>? connect = null, bool writeBack = false)
+    internal IDisposable BindCallback(string[] paths, Type[] types, Action<object?[]>? apply, BindingUpdateTiming timing,
+        IBindingTarget? target = null, Type? resultType = null, Func<object?[], object?>? project = null,
+        Action<CallbackBinding>? connect = null, bool writeBack = false)
     {
-        var binding = new CallbackBinding(this, paths, types, apply, target, writeBack);
+        var binding = new CallbackBinding(this, paths, types, apply, target, project, writeBack, timing);
         try
         {
             Node.Context.Host.VerifyAccess();
@@ -21,12 +22,12 @@ internal sealed partial class BindingScope
         catch (Exception error)
         {
             try { binding.Dispose(); } catch (Exception cleanup) { UIFailure.AddSecondary(error, cleanup); }
-            _runtime.Report(error, $"Bind {Node.Name}: {string.Join(", ", paths)}");
+            binding.Report(error);
             throw;
         }
     }
 
-    internal sealed class CallbackBinding : IPropertyBinding
+    internal sealed class CallbackBinding : PropertyConnection
     {
         private sealed class ModelWatch(PropertyChangedEventHandler handler)
         {
@@ -34,46 +35,47 @@ internal sealed partial class BindingScope
             internal int References = 1;
         }
 
-        private readonly BindingScope _scope;
         private readonly Path[] _paths;
+        private readonly int[] _firstInput;
         private readonly Type[] _types;
         private readonly object?[] _values;
-        private readonly Action<object?[]> _apply;
+        private readonly Action<object?[]>? _apply;
         private readonly IBindingTarget? _target;
+        private readonly Func<object?[], object?>? _project;
         private readonly bool _writeBack;
         private Action? _disconnectInput;
         private readonly Dictionary<IMvvmObject, ModelWatch> _models = new(MvvmRuntime.ReferenceComparer.Instance);
         private bool _initialized;
-        private bool _updating;
 
-        public IReadOnlyList<string> SourcePaths { get; }
-        public bool Paused { get; set; }
-        public bool Disposed { get; private set; }
-
-        internal CallbackBinding(BindingScope scope, string[] paths, Type[] types, Action<object?[]> apply, IBindingTarget? target, bool writeBack)
+        internal CallbackBinding(BindingScope scope, string[] paths, Type[] types, Action<object?[]>? apply, IBindingTarget? target,
+            Func<object?[], object?>? project, bool writeBack, BindingUpdateTiming timing) : base(scope, paths, timing)
         {
-            _scope = scope;
-            SourcePaths = paths;
             _paths = new Path[paths.Length];
+            _firstInput = new int[paths.Length];
+            for (int i = 0; i < paths.Length; i++) _firstInput[i] = Array.IndexOf(paths, paths[i]);
             _types = types;
             _values = new object?[paths.Length];
             _apply = apply;
             _target = target;
+            _project = project;
             _writeBack = writeBack;
         }
 
         internal void Initialize(Type? resultType)
         {
+            ValidateTiming();
             if (resultType != null)
             {
                 if (_target == null) throw new ArgumentNullException("target");
                 if (!_target.ValueType.IsAssignableFrom(resultType))
                     throw new InvalidCastException($"Binding result {resultType.FullName} cannot be assigned to {_target.ValueType.FullName}.");
             }
-            _scope.SourceChanged += SourceReplaced;
+            Scope.SourceChanged += SourceReplaced;
             for (int i = 0; i < _paths.Length; i++)
             {
-                var path = new Path(_scope, SourcePaths[i], observe: true, group: this);
+                if (_firstInput[i] != i) continue;
+                var path = new Path(Scope, SourcePaths[i], observe: true, group: this,
+                    deferWatch: Timing == BindingUpdateTiming.EndOfFrame);
                 if (Disposed) { path.Dispose(); return; }
                 _paths[i] = path;
             }
@@ -107,42 +109,45 @@ internal sealed partial class BindingScope
             if (Disposed || !_initialized) return;
             try
             {
-                _scope.Node.Context.Host.VerifyAccess();
+                Scope.Node.Context.Host.VerifyAccess();
                 bool changed = false;
                 Exception? first = null;
                 foreach (var path in _paths)
                 {
+                    if (path == null) continue;
                     try { changed |= model == null ? path.SourceReplaced(source!) : path.MemberChanged(model, member); }
                     catch (Exception error) { MvvmRuntime.Failure(ref first, error); }
                 }
                 if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
-                if (changed) Refresh();
+                if (changed) RequestRefresh();
             }
             catch (Exception error)
             {
-                _scope._runtime.Report(error, $"MVVM binding {string.Join(", ", SourcePaths)}");
+                Report(error);
                 throw;
             }
         }
-        private (IMvvmObject Owner, MvvmMember Member) ResolveMember(int index)
+        private (IMvvmObject Owner, MvvmMember Member)? ResolveMember(int index, bool reconnect = false)
         {
-            var (owner, name) = _paths[index].Resolve();
+            var (owner, name) = _paths[index].Resolve(reconnect);
+            if (!Active) return null;
             var path = SourcePaths[index];
             if (owner == null) throw new InvalidOperationException("Null binding path: " + path);
-            var member = _scope._runtime.Plans.Member(owner, name, MvvmMemberKind.Property);
+            var member = Scope._runtime.Plans.Member(owner, name, MvvmMemberKind.Property);
+            if (!Active) return null;
             if (!member.Observable) throw new InvalidOperationException("Reactive binding requires FieldNotify: " + path);
             if (_writeBack && !member.Writable)
                 throw new InvalidOperationException("Binding requires a writable property: " + path);
             if (_writeBack && !member.Type.IsAssignableFrom(_types[index]))
                 throw new InvalidCastException($"Binding '{path}' cannot accept input of type {_types[index].FullName}.");
-            if (!_types[index].IsAssignableFrom(member.Type))
-                throw new InvalidCastException($"Binding '{path}' provides {member.Type.FullName}, expected {_types[index].FullName}.");
+            for (int slot = index; slot < _types.Length; slot++)
+                if (_firstInput[slot] == index && !_types[slot].IsAssignableFrom(member.Type))
+                    throw new InvalidCastException($"Binding '{path}' provides {member.Type.FullName}, expected {_types[slot].FullName}.");
             return (owner, member);
         }
         internal void WriteValue<T>(T value)
         {
-            var (owner, member) = ResolveMember(0);
-            owner.Write(member.Name, value);
+            if (ResolveMember(0) is { } resolved) resolved.Owner.Write(resolved.Member.Name, value);
         }
         internal void ConnectInput<T>(Func<Action<T>, Action> subscribe, Action<T> commit)
         {
@@ -158,46 +163,47 @@ internal sealed partial class BindingScope
         }
         private void OnEdit<T>(T value, Action<T> commit)
         {
-            if (Paused || Disposed || _updating) return;
+            if (Paused || Disposed || Updating) return;
             try
             {
-                _scope.Node.Context.Host.VerifyAccess();
-                _updating = true;
+                Scope.Node.Context.Host.VerifyAccess();
+                Updating = true;
                 Exception? failure = null;
                 try { commit(value); }
                 catch (Exception error) { failure = error; }
-                finally { _updating = false; }
+                finally { Updating = false; }
                 // Even a failed edit can have changed the VM. Keep the original failure if rendering also fails.
-                try { Refresh(); } catch (Exception error) { MvvmRuntime.Failure(ref failure, error); }
+                try { RequestRefresh(); } catch (Exception error) { MvvmRuntime.Failure(ref failure, error); }
                 if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
             }
             catch (Exception error)
             {
-                _scope._runtime.Report(error, $"MVVM input {string.Join(", ", SourcePaths)}");
+                Scope._runtime.Report(error, $"MVVM input {Scope.Node.Name}: {string.Join(", ", SourcePaths)}");
                 throw;
             }
         }
-        public void Refresh()
+        protected override void ApplyCurrent()
         {
-            if (Disposed || Paused || _updating) return;
-            _updating = true;
-            try
+            for (int i = 0; i < _paths.Length && !Disposed && !Paused; i++)
             {
-                for (int i = 0; i < _paths.Length && !Disposed && !Paused; i++)
+                if (_firstInput[i] == i)
                 {
-                    var (owner, member) = ResolveMember(i);
-                    _values[i] = owner.Read(member.Name);
+                    if (ResolveMember(i, reconnect: true) is not { } resolved) return;
+                    _values[i] = resolved.Owner.Read(resolved.Member.Name);
                 }
-                if (!Disposed && !Paused) _apply(_values);
+                else _values[i] = _values[_firstInput[i]];
             }
-            finally { _updating = false; }
+            if (!Active) return;
+            if (_project == null) _apply!(_values);
+            else
+            {
+                var result = _project(_values);
+                if (Active) _target!.Write(result);
+            }
         }
-        public void Dispose()
+        protected override void Disconnect()
         {
-            if (Disposed) return;
-            Disposed = true;
-            _scope.SourceChanged -= SourceReplaced;
-            if (_scope._dispose == null) _scope._bindings.Remove(this);
+            Scope.SourceChanged -= SourceReplaced;
             Exception? first = null;
             var disconnect = _disconnectInput;
             _disconnectInput = null;

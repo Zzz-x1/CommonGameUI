@@ -82,6 +82,7 @@ namespace UIFramework.Mvvm.EditorUnity
                 row.FindPropertyRelative("Target").objectReferenceValue = target;
                 row.FindPropertyRelative("Source").stringValue = source; row.FindPropertyRelative("Member").stringValue = "text";
                 row.FindPropertyRelative("Mode").intValue = (int)BindingMode.OneWay; row.FindPropertyRelative("Kind").intValue = 0;
+                row.FindPropertyRelative("UpdateTiming").intValue = (int)BindingUpdateTiming.EndOfFrame;
                 row.FindPropertyRelative("Converter").stringValue = ""; row.FindPropertyRelative("ConvertBack").stringValue = "";
                 row.FindPropertyRelative("ConverterInput").intValue = 0; row.FindPropertyRelative("ConverterConstant").stringValue = "";
                 row.FindPropertyRelative("HasNullValue").boolValue = false; row.FindPropertyRelative("NullValue").stringValue = "";
@@ -154,6 +155,8 @@ namespace UIFramework.Mvvm.EditorUnity
             if (b.Kind == ViewBindingKind.Property)
             {
                 Choice("方向", b.Mode, v => { Binding(b, "Mode", property => property.intValue = (int)v); if (v is BindingMode.TwoWay or BindingMode.OneWayToViewModel) Binding(b, "ConverterInput", property => property.intValue = (int)ConverterInput.ViewModel); BindingDetails(); });
+                if (b.ConverterInput == ConverterInput.ViewModel && (b.Mode == BindingMode.OneWay || b.Mode == BindingMode.TwoWay))
+                    Choice("刷新时机", b.UpdateTiming, v => Binding(b, "UpdateTiming", property => property.intValue = (int)v));
                 if (b.Mode is BindingMode.OneWay or BindingMode.OneTime)
                     Choice("转换器输入", b.ConverterInput, v => { Binding(b, "ConverterInput", property => property.intValue = (int)v); BindingDetails(); });
                 Converter("正向转换", b.Converter, b, false, v => Binding(b, "Converter", property => property.stringValue = v));

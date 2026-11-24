@@ -64,7 +64,9 @@ public sealed partial class BindingPauseTests
         vm.Gold = 80; Assert.Equal(1, target.Value);
         node.ResumeBinding("Player.Gold"); Assert.Equal(80, target.Value); Assert.Equal(80, vm.Gold);
         target.Edit(2); Assert.Equal(mode is BindingMode.TwoWay or BindingMode.OneWayToViewModel ? 2 : 80, vm.Gold);
-        vm.Gold = 90; Assert.Equal(mode is BindingMode.OneWay or BindingMode.TwoWay ? 90 : 2, target.Value);
+        vm.Gold = 90;
+        ui.GetMvvm().FlushBindings();
+        Assert.Equal(mode is BindingMode.OneWay or BindingMode.TwoWay ? 90 : 2, target.Value);
     }
     [Fact] public async Task MatchingControlsPauseTogetherButOtherPropertiesAndChildNodesContinue()
     {
@@ -73,6 +75,7 @@ public sealed partial class BindingPauseTests
         var first = new Target(); var second = new Target(); var unrelated = new Target(); var childTarget = new Target();
         node.Bind("Player.Gold", first); node.Bind("Player.Gold", second); node.Bind("Player.Amount", unrelated); child.Bind("Player.Gold", childTarget);
         node.PauseBinding("Gold"); vm.Gold = 40; vm.Amount = 30;
+        ui.GetMvvm().FlushBindings();
         Assert.Equal(20, first.Value); Assert.Equal(20, second.Value); Assert.Equal(30, unrelated.Value); Assert.Equal(40, childTarget.Value);
         node.ResumeBinding("Gold"); Assert.Equal(40, first.Value); Assert.Equal(40, second.Value);
     }
@@ -82,7 +85,9 @@ public sealed partial class BindingPauseTests
         var player = new PlayerVm { Gold = 10 }; var shop = new PlayerVm { Gold = 20 }; node.SetViewModel("Player", player); node.SetViewModel("Shop", shop);
         var left = new Target(); var right = new Target(); node.Bind("Player.Gold", left); node.Bind("Shop.Gold", right);
         var ambiguous = Assert.Throws<InvalidOperationException>(() => node.PauseBinding("Gold")); Assert.Contains(ambiguous, host.Errors);
-        player.Gold = 30; shop.Gold = 40; Assert.Equal(30, left.Value); Assert.Equal(40, right.Value);
+        player.Gold = 30; shop.Gold = 40;
+        ui.GetMvvm().FlushBindings();
+        Assert.Equal(30, left.Value); Assert.Equal(40, right.Value);
         node.PauseBinding("Shop.Gold"); shop.Gold = 50; Assert.Equal(40, right.Value); node.ResumeBinding("Shop.Gold"); Assert.Equal(50, right.Value);
         Assert.Throws<KeyNotFoundException>(() => node.PauseBinding("Missing")); Assert.Throws<ArgumentException>(() => node.PauseBinding(""));
     }
@@ -103,7 +108,9 @@ public sealed partial class BindingPauseTests
         Assert.Throws<InvalidOperationException>(() => node.PauseBinding("Gold"));
         var second = new Target(); node.Bind("Player.Gold", second);
         Assert.Throws<InvalidOperationException>(() => node.ResumeBinding("Gold"));
-        vm.Gold = 20; Assert.Equal(10, first.Value); Assert.Equal(20, second.Value);
+        vm.Gold = 20;
+        ui.GetMvvm().FlushBindings();
+        Assert.Equal(10, first.Value); Assert.Equal(20, second.Value);
     }
     [Fact] public async Task ResumeReportsOriginalErrorAndStillRefreshesOtherTargets()
     {

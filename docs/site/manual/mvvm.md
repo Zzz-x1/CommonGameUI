@@ -152,13 +152,24 @@ this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
 });
 ```
 
-双向初始以 VM 为准；控件写入 VM 后再次同步，显示 setter 归一化后的值。正向、反向转换分别配置 `Convert`、`ConvertBack`。
+双向绑定首次显示 VM 的值。玩家输入立即写入 VM。正向和反向转换分别配置 `Convert`、`ConvertBack`。
+
+### 选择控件的刷新时机
+
+首次显示和 `ResumeBinding` 同步执行。之后的属性变化默认使用 `EndOfFrame`。到了 UI 帧刷新点，每条待刷新的绑定只读取一次各来源的最新值，更新一次控件。手动通知、setter 校正后的回显也遵循这个时机。
+
+后续代码需要在当前调用内使用新的控件状态时，显式选择 `Immediate`，例如余额变化后立即禁用订单确认。购买命令在执行时依然读取最新的 VM。
+
+```csharp
+this.Bind<bool>("Order.CanConfirm", SetConfirmEnabled,
+    timing: BindingUpdateTiming.Immediate);
+```
 
 中间对象替换后重新订阅。响应路径的中间属性也需要 `FieldNotify`。空路径默认报错；显式空值不会隐藏成员缺失或类型错误，也不会创建缺失对象。
 
 ## 使用多个 VM 计算报价
 
-购物车数量、单价或玩家余额变化时，报价都会重新计算。按 lambda 的参数顺序列出来源路径。下例在余额足够时显示总价，余额不足时显示还差多少金币。
+购物车数量、单价或玩家余额在同一帧变化，下面的报价只计算一次。按 lambda 参数顺序列出来源路径。余额足够时显示总价，余额不足时显示还差多少金币。
 
 ```csharp
 this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
@@ -184,7 +195,7 @@ this.BindTwoWay<int>("Cart.Quantity",
     {
         quantityPicker.ValueEdited += edited;
         return () => quantityPicker.ValueEdited -= edited;
-    });
+    }, timing: BindingUpdateTiming.Immediate);
 ```
 
 打开窗口时，选择器立即显示 `Cart.Quantity`。玩家输入 120，如果 setter 将数量限制为 99，选择器最终显示 99。框架只订阅一次输入，初始化和回显时控件同步发出的事件不会写回 VM。
@@ -203,7 +214,7 @@ this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
                          .SetPriceRange(range.Min, range.Max));
 ```
 
-一次成功提交后，滑杆只重绘一次，其他绑定照常接收每个属性的通知。若提交中途抛错，已完成的修改保留。绑定会尝试读取并显示已生效的值，调用方仍收到原异常。需要通过编辑器配置同一控件时，可[注册控件属性](#自定义控件属性)。
+默认情况下，一帧内多次提交只回显一次最终区间。其他绑定按各自的时机刷新。提交中途失败会立即传播原始异常，已生效的值按所选时机回显。需要通过编辑器配置时，可以[注册控件属性](#自定义控件属性)。
 
 ## 暂停绑定，让动画接管
 

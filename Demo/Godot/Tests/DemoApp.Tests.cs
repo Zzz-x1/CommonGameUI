@@ -30,6 +30,12 @@ public partial class DemoApp
         throw new InvalidOperationException("Expected " + typeof(T).Name);
     }
 
+    private async Task WaitForUIFrameAsync()
+    {
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree().CreateTimer(0), SceneTreeTimer.SignalName.Timeout);
+    }
+
     private async Task RunClientTestsAsync()
     {
         int checks = 0;
@@ -163,12 +169,16 @@ public partial class DemoApp
         int wallet = Store.State.Gold;
         int total = Catalog.Items[0].Price * 2;
         Pass(quantityPicker.Value == 3, "order supplies initial quantity");
+        var quote = detail.GetControl<Label>("Center/Pages/Shop/Price");
+        string initialQuote = quote.Text;
         quantityPicker.Value = 2;
-        Pass(detail.GetViewModel<ClientOrderVm>("Order").Quantity == 2 &&
-            detail.GetControl<Label>("Center/Pages/Shop/Price").Text.Contains($"总计 {total} 金币"), "quantity edit updates order and quote");
+        Pass(detail.GetViewModel<ClientOrderVm>("Order").Quantity == 2 && quote.Text == initialQuote,
+            "quantity commits before the quote refresh");
         Store.Change(state => state.Gold = total - 1);
         var orderButton = detail.GetControl<Button>("Center/Confirm");
-        Pass(orderButton.Disabled && orderButton.Text == "还差 1 金币", "wallet updates open order");
+        Pass(orderButton.Disabled && orderButton.Text == "还差 1 金币", "wallet disables confirmation immediately");
+        await WaitForUIFrameAsync();
+        Pass(quote.Text == $"可用 {total - 1} 金币\n总计 {total} 金币", "frame quote reads final balance and quantity");
         Store.Change(state => state.Gold = wallet);
         await detail.ConfirmAsync();
         var confirmation = (ClientModalView)Modals.Current!;
@@ -191,6 +201,7 @@ public partial class DemoApp
         var equippedHero = await Shell.Pages.PushAsync<HeroDetailsView>(2);
         await ModalAsync(new ModalArgs("Equip", 2));
         await ((ClientModalView)Modals.Current!).PickAsync(0);
+        await WaitForUIFrameAsync();
         Pass(Store.State.Equipment[2] == "eq0" && equippedHero.GetControl<Label>("Stats").Text.Contains("280"), "purchased equipment updates visible attributes");
         await ModalAsync(new ModalArgs("Equip", 3));
         await ((ClientModalView)Modals.Current!).PickAsync(0);
