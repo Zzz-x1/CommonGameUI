@@ -3,6 +3,7 @@ namespace UIFramework;
 public abstract class ContainerNode : UINode
 {
     private readonly Dictionary<Type, UINode> _cache = new();
+    private protected object? FocusBeforeOperation { get; private set; }
     private ContainerOperations? _operations;
     private ContainerOperations Operations => _operations ??= new ContainerOperations(this);
     internal bool HasPendingOperations => _operations?.IsBusy == true;
@@ -89,6 +90,7 @@ public abstract class ContainerNode : UINode
     }
     protected void MarkClosed(UINode node)
     {
+        node.LastFocus = null;
         if (node.Presentation is { Ended: false } session) session.End(Operations.CurrentTask);
     }
 
@@ -107,6 +109,7 @@ public abstract class ContainerNode : UINode
             catch (Exception ex) { await Context.CleanupAsync(ex, async () => await node.DisposeAsync()); throw; }
         }
         else node = await Context.CreateAsync<T>(this, args, token);
+        node.LastFocus = null;
         node.Presentation = CreateOpening(node);
         return node;
     }
@@ -151,6 +154,7 @@ public abstract class ContainerNode : UINode
 
     protected override void OnChildRemoved(UINode child)
     {
+        child.LastFocus = null;
         if (child.RegisteredType != null && _cache.TryGetValue(child.RegisteredType, out var cached) && ReferenceEquals(cached, child))
             _cache.Remove(child.RegisteredType);
     }
@@ -178,14 +182,28 @@ public abstract class ContainerNode : UINode
         await RunAsync(operation, async ct =>
         {
             Exception? primary = null;
-            try { beforeLock?.Invoke(); LockOperation(true); result = await action(ct); }
+            try
+            {
+                FocusBeforeOperation = Context.Host.CaptureFocus();
+                beforeLock?.Invoke();
+                if (Context.InputOwnerNode is { } modal) Context.RememberFocus(modal, FocusBeforeOperation);
+                LockOperation(true);
+                result = await action(ct);
+            }
             catch (Exception ex) { primary = ex; throw; }
             finally
             {
+                var captured = FocusBeforeOperation;
+                FocusBeforeOperation = null;
                 if (State == NodeState.Ready)
                 {
-                    if (primary == null) LockOperation(false);
-                    else await Context.CleanupAsync(primary, () => { LockOperation(false); return Task.CompletedTask; });
+                    void Unlock()
+                    {
+                        LockOperation(false);
+                        Context.RestoreInterruptedFocus(this, captured);
+                    }
+                    if (primary == null) Unlock();
+                    else await Context.CleanupAsync(primary, () => { Unlock(); return Task.CompletedTask; });
                 }
                 else
                 {
@@ -209,7 +227,9 @@ public abstract class ContainerNode : UINode
             ApplyPresentation(entering);
             if (entering != null) entering.HasEntered = true;
             LockOperation(false);
-            Context.ReconcileModalInput(closingModal, restoreFocus);
+            var modalChanged = Context.ReconcileModalInput(closingModal, restoreFocus);
+            Context.FocusAfterChange(this, exiting, entering, FocusBeforeOperation, modalChanged);
+            FocusBeforeOperation = null;
             focus?.Invoke();
         }
         catch (Exception error) { BlockOperations(error); throw; }
@@ -234,6 +254,8 @@ public abstract class ContainerNode : UINode
     {
         var outgoing = exit?.Node.Node;
         var incoming = enter?.Node.Node;
+        if (outgoing != null && this is StackContainerNode or TabContainerNode)
+            Context.RememberFocus(outgoing, FocusBeforeOperation);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token,
             outgoing?.Lifetime ?? default, incoming?.Lifetime ?? default);
         try
@@ -462,7 +484,8 @@ public class StackContainerNode : ContainerNode
         CommitState(() =>
         {
             ApplyPresentation(previous);
-            Context.ReconcileModalInput();
+            var modalChanged = Context.ReconcileModalInput();
+            Context.FocusAfterChange(this, child, previous, null, modalChanged);
         });
         Context.PublishChanges(Describe(previous, LifecycleReason.Return, child, previous));
     }
@@ -538,14 +561,21 @@ public class TabContainerNode : ContainerNode
 /// <summary>Topmost modal owns input; this container owns its configured backdrop displays.</summary>
 public class ModalContainerNode : ContainerNode
 {
+    // The opening that owned the control can end while a newer dialog is still open or loading.
+    private readonly struct ReturnFocus(object? target, ModalRecord? source)
+    {
+        internal readonly object? Target = target;
+        internal readonly ModalRecord? Source = source;
+    }
     private sealed class ModalRecord(ModalContainerNode container, UINode node) : PresentationSession(container, node)
     {
-        internal object? Focus;
+        internal ReturnFocus Focus;
         internal IUIBackdrop? Backdrop;
         // The outcome is shared with result waiters, including failed close attempts.
         public TaskCompletionSource<Exception?>? CloseAttempt;
     }
     private readonly List<ModalRecord> _modals = new();
+    private ReturnFocus _loadingFocus;
     private protected override PresentationSession CreateOpening(UINode node) => new ModalRecord(this, node);
     protected override bool IsPresented(UINode child) =>
         child.Presentation is ModalRecord record && _modals.Contains(record);
@@ -569,8 +599,8 @@ public class ModalContainerNode : ContainerNode
             return null;
         }
     }
-    internal object? FocusBefore(UINode modal) => ((ModalRecord)modal.Presentation!).Focus;
-    internal object? BackgroundFocus => _modals.FirstOrDefault()?.Focus;
+    internal object? FocusBefore(UINode modal) => ((ModalRecord)modal.Presentation!).Focus.Target;
+    internal object? BackgroundFocus => _modals.FirstOrDefault()?.Focus.Target;
 
     public void ConfigureBackdrop(IUIBackdropFactory factory, ModalBackdropMode mode = ModalBackdropMode.Shared)
     {
@@ -655,7 +685,7 @@ public class ModalContainerNode : ContainerNode
         OpenCoreAsync<T>(args, playAnimation, cancellationToken);
     private Task<T> OpenCoreAsync<T>(object? args, bool playAnimation, CancellationToken cancellationToken, Action<T, ModalRecord>? opened = null) where T : class, IUINode
     {
-        object? focus = null;
+        ReturnFocus focus = default;
         return OperateAsync("OpenModal", async ct =>
         {
             ct.ThrowIfCancellationRequested();
@@ -674,7 +704,10 @@ public class ModalContainerNode : ContainerNode
                 }
             }
             var backdropFactory = _backdropDisabled ? null : _backdropFactory ?? Context.DefaultBackdropFactory;
-            var node = await AcquireAsync<T>(args, ct);
+            _loadingFocus = focus;
+            UINode node;
+            try { node = await AcquireAsync<T>(args, ct); focus = _loadingFocus; }
+            finally { _loadingFocus = default; }
             var previous = CurrentNode;
             var enter = Describe(node, LifecycleReason.Open, previous, node);
             IUIBackdrop? backdrop = null;
@@ -733,7 +766,10 @@ public class ModalContainerNode : ContainerNode
         {
             if (Context.IsModalInputBlocked || (Context.InputOwnerNode != null && Context.InputOwnerNode.Parent != this))
                 throw new InvalidOperationException("Another modal container owns input or is preparing a modal operation.");
-            focus = Context.Host.CaptureFocus();
+            var source = Context.InputOwnerNode?.Presentation as ModalRecord;
+            if (FocusBeforeOperation != null && (source?.Node.Element is not { } scope || !Context.Host.ContainsFocus(scope, FocusBeforeOperation)))
+                source = null;
+            focus = new ReturnFocus(Context.CaptureModalFocus(FocusBeforeOperation), source);
         });
     }
 
@@ -769,7 +805,7 @@ public class ModalContainerNode : ContainerNode
         var removed = _modals.Skip(firstRemoved).Reverse().ToArray();
         var current = removed[0].Node;
         var target = firstRemoved == 0 ? null : _modals[firstRemoved - 1].Node;
-        var focus = removed[removed.Length - 1].Focus;
+        var focus = removed[removed.Length - 1].Focus.Target;
         var outcome = new TaskCompletionSource<Exception?>();
         foreach (var entry in removed) entry.CloseAttempt = outcome;
         Exception? failure = null;
@@ -799,7 +835,7 @@ public class ModalContainerNode : ContainerNode
             // Commit the final history and input owner once. Intermediate modals never activate.
             _modals.RemoveRange(_modals.Count - removed.Length, removed.Length);
             if (_modals.Count == 0) Context.TrackModal(this, false);
-            foreach (var entry in removed) MarkClosed(entry.Node);
+            foreach (var entry in removed) { entry.Focus = default; MarkClosed(entry.Node); }
             Exception? first = null;
             void Attempt(Action action)
             {
@@ -884,10 +920,19 @@ public class ModalContainerNode : ContainerNode
         base.OnChildRemoved(child);
         var ownsInput = ReferenceEquals(Context.InputOwnerNode, child);
         if (child.Presentation is not ModalRecord record) return;
-        if (_modals.Remove(record) && _modals.Count == 0) Context.TrackModal(this, false);
+        var focus = record.Focus;
+        var index = _modals.IndexOf(record);
+        if (index >= 0)
+        {
+            _modals.RemoveAt(index);
+            if (index < _modals.Count && _modals[index].Focus.Source == record) _modals[index].Focus = focus;
+            if (_loadingFocus.Source == record) _loadingFocus = focus;
+            if (_modals.Count == 0) Context.TrackModal(this, false);
+        }
+        record.Focus = default;
         if (ownsInput)
         {
-            CommitState(() => Context.ReconcileModalInput(this, record.Focus));
+            CommitState(() => Context.ReconcileModalInput(this, focus.Target));
             Context.PublishChanges(new LifecycleContext(child, this, LifecycleReason.Disposal, child, CurrentNode), continueOnFailure: true);
         }
     }
