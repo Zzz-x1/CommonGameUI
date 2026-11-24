@@ -119,7 +119,9 @@ Task<IUINode> CollectionItemContext.LoadAsync(string resource,
 
 `BindingTargetDefinition` exposes TargetType, Member, ValueType and Observable. Providers implement `GetTargets()` and are declared with the assembly attribute `BindingTargetProvider`. Subscribe returns a disconnect action. `CommandBindingOptions` exposes Mode (None/Constant/SourcePath), ConstantValue, ConstantText and ParameterPath; assigning ParameterPath selects SourcePath. `MvvmMember.ParameterType` is null for commands without a business argument.
 
-Both engine CollectionTarget constructors add optional preview, factory and sources arguments. `CollectionItemContext.CreateAsync` is an engine extension accepting GameObject or PackedScene, the configure callback and token. Factory returns the node created by that context. Built-in targets implement IAsyncDisposable; custom ICollectionTarget implementations may do so for awaited cleanup. `Changed` signals layout changes.
+Both engine CollectionTarget constructors accept optional preview, factory and sources arguments. `CollectionItemContext.CreateAsync` is an engine extension accepting GameObject or PackedScene, the configure callback and token. Return the node created by that context. Built-in targets implement IAsyncDisposable. Custom ICollectionTarget implementations can also implement it for awaited cleanup.
+
+When a shop row finishes loading, the target inserts it at its position in the collection. Moving a row repositions that row alone. Removing a row preserves the order of the remaining rows. Subscribe to `Changed` to update layout. Clearing a nonempty list raises the event once.
 
 Built-in targets and `CollectionTargetBase` include item creation and removal cleanup in the owning node's initialization wait, including nested collections. Changes after the node is ready remain incremental updates. Implement `ICollectionTarget` for synchronous targets; derive asynchronous targets from `CollectionTargetBase` for preparation, cancellation and release. `ObserveMvvmTask` observes tasks rather than acting as an initialization barrier.
 

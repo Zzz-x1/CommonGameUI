@@ -119,7 +119,9 @@ Task<IUINode> CollectionItemContext.LoadAsync(string resource,
 
 `BindingTargetDefinition` 提供 TargetType、Member、ValueType、Observable。提供者实现 `GetTargets()` 并使用程序集 `BindingTargetProvider` 标记；Subscribe 返回解绑函数。`CommandBindingOptions` 包含 Mode（None/Constant/SourcePath）、ConstantValue、ConstantText、ParameterPath；设置 ParameterPath 自动选择 SourcePath。无业务参数的命令其 `MvvmMember.ParameterType` 为 null。
 
-两端 CollectionTarget 构造增加可选 preview、factory、sources 参数。`CollectionItemContext.CreateAsync` 为引擎扩展，接收 GameObject／PackedScene、配置回调与取消 Token。工厂须返回该 context 创建的节点。内置目标实现 IAsyncDisposable；自定义 ICollectionTarget 可实现它以等待清理。`Changed` 通知布局更新。
+两端 CollectionTarget 构造增加可选 preview、factory、sources 参数。`CollectionItemContext.CreateAsync` 为引擎扩展，接收 GameObject／PackedScene、配置回调与取消 Token。工厂须返回该 context 创建的节点。内置目标实现 IAsyncDisposable；自定义 ICollectionTarget 可实现它以等待清理。
+
+商品行异步就绪后，目标将该行插到集合指定的位置。移动只调整这一行，删除保留其余行的相对顺序。需要刷新布局时可订阅 `Changed`，清空非空列表只通知一次。
 
 两端内置目标及 `CollectionTargetBase` 在所属节点初始化期间，将条目创建和移除收尾纳入初始化等待；嵌套集合同样等待。节点就绪后的集合变化只增量更新。自定义同步目标实现 `ICollectionTarget`；自定义异步目标继承 `CollectionTargetBase`，统一参与等待、取消和释放。`ObserveMvvmTask` 仅观察任务，不作为初始化屏障。
 

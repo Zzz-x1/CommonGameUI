@@ -30,7 +30,13 @@ public sealed partial class CollectionItemTests
         { var context = new Context(_owner, item, index, new[] { new CollectionSourceMapping { ParentSource = "Player", ItemSource = "Player" } }); Contexts.Add(context); return context; }
         protected override async Task<IUINode> CreateItemAsync(CollectionItemContext context, CancellationToken token)
         { if (CancelError != null) token.Register(() => throw CancelError); if (Error != null) throw Error; if (Load) return await context.LoadAsync("Delayed", cancellationToken: token); if (Gates.TryGetValue(context.Item, out var gate)) await gate.Task; if (Failures.TryGetValue(context.Item, out var failure)) throw failure; return await ((Context)context).CreateAsync(token, ConfigureItem); }
-        protected override void Place(IUINode node, int index) { Ordered.Remove(node); Ordered.Insert(index, node); }
+        public int Placements { get; private set; }
+        protected override void Place(IUINode node, int index)
+        {
+            Placements++;
+            Ordered.Remove(node);
+            Ordered.Insert(index, node);
+        }
         protected override void Detach(IUINode node) => Ordered.Remove(node);
     }
     private sealed class Window : UINode
@@ -182,6 +188,36 @@ public sealed partial class CollectionItemTests
         Assert.Same(player, target.Ordered[1].GetViewModel<ParameterVm>("Player")); Assert.True(target.Ordered[1].IsVisible);
         target.Remove(0); await ui.WhenMvvmIdleAsync(); Assert.Equal(1, target.Contexts[1].Display.Releases);
     }
+    [Fact] public async Task BulkListCreationPlacesEachRowOnceAndClearSignalsOneLayoutChange()
+    {
+        await using var ui = new UIContext(new Host(), new Loader());
+        var owner = new UINode();
+        await owner.AttachAsync(ui.Root, "Shop");
+        owner.SetViewModel("Player", new ParameterVm());
+        await using var target = new Target(owner);
+        var items = Enumerable.Range(0, 100).Select(_ => new ParameterVm()).ToList();
+        int changes = 0;
+        target.Changed += () => changes++;
+
+        for (int i = 0; i < items.Count; i++) target.Insert(i, items[i]);
+        await ui.WhenMvvmIdleAsync();
+        Assert.Equal(items, target.Ordered.Select(node => node.GetViewModel<ParameterVm>("Item")));
+        Assert.Equal(100, target.Placements);
+
+        var last = target.Ordered[99];
+        target.Move(99, 0);
+        Assert.Same(last, target.Ordered[0]);
+        Assert.Equal(101, target.Placements);
+        target.Remove(2);
+        int beforeClear = changes;
+        target.Clear();
+        await ui.WhenMvvmIdleAsync();
+        Assert.Equal(beforeClear + 1, changes);
+        Assert.Equal(101, target.Placements);
+        Assert.Empty(target.Ordered);
+        Assert.All(target.Contexts, context => Assert.Equal(1, context.Display.Releases));
+    }
+
     [Fact] public async Task ResetAndRemovalDoNotPublishLateItems()
     {
         await using var ui = new UIContext(new Host(), new Loader()); var owner = new UINode(); await owner.AttachAsync(ui.Root, "Owner"); owner.SetViewModel("Player", new ParameterVm());
