@@ -182,9 +182,11 @@ public abstract class ContainerNode : UINode
         await RunAsync(operation, async ct =>
         {
             Exception? primary = null;
+            UINode? focusedPage = null;
             try
             {
                 FocusBeforeOperation = Context.Host.CaptureFocus();
+                focusedPage = Context.CaptureStackFocusOwner(this, FocusBeforeOperation);
                 beforeLock?.Invoke();
                 if (Context.InputOwnerNode is { } modal) Context.RememberFocus(modal, FocusBeforeOperation);
                 LockOperation(true);
@@ -200,7 +202,7 @@ public abstract class ContainerNode : UINode
                     void Unlock()
                     {
                         LockOperation(false);
-                        Context.RestoreInterruptedFocus(this, captured);
+                        Context.RestoreInterruptedFocus(this, captured, primary == null ? null : focusedPage);
                     }
                     if (primary == null) Unlock();
                     else await Context.CleanupAsync(primary, () => { Unlock(); return Task.CompletedTask; });

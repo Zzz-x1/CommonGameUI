@@ -5,6 +5,10 @@ namespace UIFramework.Tests;
 public class ModalFocusChainTests
 {
     private sealed class DelayedDialog : UINode { }
+    private sealed class Inventory : UINode, IPreferredFocus
+    {
+        public object PreferredFocus => Element!;
+    }
 
     private static UIContext Create(out TestHost host)
     {
@@ -76,5 +80,63 @@ public class ModalFocusChainTests
         var top = await opening;
         await modals.CloseAsync(top);
         Assert.Same(opener, host.Focus);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReopeningCachedParentInvalidatesFocusFromItsRetainedTabOrInnerStack(bool useTab)
+    {
+        await using var ui = Create(out var host);
+        ui.Register(() => new Inventory(), "inventory", cacheMode: NodeCacheMode.KeepAlive);
+        var panels = await Attach<PanelContainerNode>(ui);
+        var inventory = await panels.OpenAsync<Inventory>();
+        UINode content;
+        if (useTab)
+        {
+            var tabs = new TabContainerNode();
+            await tabs.AttachAsync(inventory, "Categories");
+            content = new UINode();
+            await tabs.BindAsync("Equipment", content, new MemoryElement());
+            await tabs.SwitchAsync("Equipment");
+        }
+        else
+        {
+            var pages = new StackContainerNode();
+            await pages.AttachAsync(inventory, "DetailPages");
+            content = await pages.PushAsync<CounterView>();
+        }
+        host.Focus = new MemoryFocus(content.Element!);
+        var modals = await Attach<ModalContainerNode>(ui);
+        var dialog = await modals.OpenAsync<CounterView>();
+        await panels.CloseAsync(inventory);
+        Assert.Same(inventory, await panels.OpenAsync<Inventory>());
+        await modals.CloseAsync(dialog);
+        Assert.Same(inventory.PreferredFocus, host.Focus);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CanceledPushFinishesForcedReturnsFocusAfterUnlockWithoutTakingHudFocus(bool focusWasInPage)
+    {
+        await using var ui = Create(out var host);
+        var pages = await Attach<StackContainerNode>(ui);
+        var lobby = await pages.PushAsync<CounterView>();
+        var lobbySelection = new MemoryFocus(lobby.Element!);
+        host.Focus = lobbySelection;
+        var details = await pages.PushAsync<CounterView>();
+        var hud = new object();
+        host.Focus = focusWasInPage ? new MemoryFocus(details.Element!) : hud;
+        host.LoadGate = new TaskCompletionSource<bool>();
+        using var cancel = new CancellationTokenSource();
+        var loading = pages.PushAsync<DelayedDialog>(cancellationToken: cancel.Token);
+        await details.DisposeAsync();
+        Assert.False(lobby.IsInteractive);
+        host.Focus = null; // Native controls may surrender selection while their container is locked.
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading);
+        Assert.True(lobby.IsInteractive);
+        Assert.Same(focusWasInPage ? lobbySelection : hud, host.Focus);
     }
 }
