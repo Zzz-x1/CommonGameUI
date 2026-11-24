@@ -88,8 +88,8 @@ var godotLifetime = gameUI.BindLifetime(sceneRoot);
 - 同步通知只读框架；生命周期中不能销毁自己或祖先。
 - AddLifecycle 在挂载前或初始化期间、处理器开始初始化前注册（集合条目工厂的配置回调在此窗口内）；空闲时可移除通知，已初始化行为仍需最终清理。
 
-[阶段签名](../api/core.md) · [错误与提交](async-and-errors.md)
-
 同一窗口挂载多行内容时，普通挂载只检查新增子树。可见性与激活状态先统一提交，再按退出时子节点优先、进入时父节点优先的顺序发送变化通知。
 
 KeepAlive 关闭只退出和失活，初始化不重复，Lifetime 保留。重开时更新参数，`IsCacheReuse` 为 true；最终释放才执行 Dispose。见[关闭后缓存](resources.md#关闭后缓存)。
+
+[阶段签名](../api/core.md) · [错误与提交](async-and-errors.md)

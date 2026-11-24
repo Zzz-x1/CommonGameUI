@@ -52,6 +52,6 @@ Task<InventoryView> OpenInventoryViewAsync(this PanelContainerNode container, bo
 Task<InventoryView> OpenInventoryViewAsync(this ModalContainerNode container, bool playAnimation = true, CancellationToken cancellationToken = default)
 ```
 
-[节点参数](nodes-and-parameters.md) · [API](../api/core.md)
-
 购买弹窗同时实现 `IParameterizedNode<int>` 和 `IDialogNode<bool>` 时，`bool confirmed = await dialogs.ShowPurchaseViewAsync(productId);` 会把商品 ID 传给弹窗，并等待本次确认结果。
+
+[节点参数](nodes-and-parameters.md) · [API](../api/core.md)
