@@ -7,7 +7,8 @@
 | Core | netstandard2.1；源码 ProjectReference 或构建 DLL |
 | Godot | 4.7.2 .NET、.NET 10 SDK；引用 Core 与 Godot 项目 |
 | Unity | 当前编译验证为 6000.3.24f1、uGUI 2.0.0；准备 DLL 后添加本地 UPM 包 |
-| Generator | 可选 Roslyn 生成器，通过 Analyzer 项目引用接入；Unity 工作流尚未集成 |
+| 节点资源生成器 | 可选的 `UIFramework.Generators`，通过 Analyzer 项目引用接入；Unity 手写资源注册 |
+| MVVM 控件生成器 | 随 Unity MVVM 包或 Godot／.NET 的 MVVM targets 接入。[控件绑定](../manual/mvvm.md#声明控件绑定) |
 
 教程都从一个可打开和关闭的窗口开始，包含资源结构、脚本和宿主挂载步骤。
 

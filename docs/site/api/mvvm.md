@@ -128,11 +128,13 @@ Weaver 为 `IMvvmObject` 生成 `Read`、`Write`、`CanExecute`、`Execute`、`D
 |---|---|---|
 | 启用配置和观察器 | 自动 | 自动 |
 | 共享资产 | `ui.GetSharedViewModel(resource)` | `ui.GetGlobalViewModel<PlayerVm>("Player")` |
-| 文本 | Label／LineEdit `.TextTarget()` | Text／TMP／InputField `.TextTarget()` |
-| 滑杆 | Range `.ValueTarget()` | Slider `.ValueTarget()` |
-| 开关 | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
-| 命令 | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
+| 文本 | Label／LineEdit `.Bindable().Text` | Text／TMP／InputField `.Bindable().Text` |
+| 滑杆 | Range `.Bindable().Value` | Slider `.Bindable().Value` |
+| 开关 | BaseButton `.Bindable().ButtonPressed` | Toggle `.Bindable().IsOn` |
+| 命令 | BaseButton `.Bindable().Click` | Button `.Bindable().Click` |
 | 列表 | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
+
+Godot 和 Unity uGUI 的命名空间为 `UIFramework.Mvvm.Godot` 和 `UIFramework.Mvvm.Unity`。`TMP_Text`、`TMP_InputField` 的 `.Bindable()` 来自 `UIFramework.Mvvm.Unity.TMP`，使用它们的 asmdef 需引用 `Unity.TextMeshPro`。已声明的属性返回 `IBindingTarget`，命令返回 `ICommandTarget`。Unity 的 `.Bindable().Text`、`.Value`、`.IsOn` 分别对应序列化键 `text`、`value`、`isOn`；Godot 保留 `Text`、`Value`、`ButtonPressed`。按成员名动态创建属性目标可用两端的 `BindingTargets.Property(control, member)`，可选参数 `mode` 默认为 `BindingMode.OneWay`。
 
 Godot `MvvmBindings` 保存具名来源和绑定配置，Unity 仅保存绑定列表。Godot 使用 `ViewModelSourceResource`／`ViewBindingResource`；Unity 使用保存来源字符串的 `ViewBindingData`。配置种类为 Property、Command、Collection。
 
@@ -156,12 +158,22 @@ void ApplySnapshot<TRow, TData, TKey>(
 
 ## 目标扩展与集合创建
 
+以下标记来自 `UIFramework.Mvvm`，加在独立声明类上，填写的成员名也是 GUI 属性键。见[声明与追加示例](../manual/mvvm.md#声明控件绑定)。
+
+| 标记 | 生成结果 |
+|---|---|
+| `[ControlAdapter(typeof(TControl))]` | 该类型的主适配、`control.Bindable()` 和可补全的属性。已适配基类的成员也可用 |
+| `[ExtendControlAdapter(typeof(TControl))]` | 为现有主适配追加扩展方法，导入声明类所在的命名空间后可用 |
+| `[BindProperty(member, Read = ..., Write = ..., Changed = ...)]` | 默认使用同名原生属性读写。可指定访问方法和原生变化事件。提供通知的属性支持输入回写 |
+| `[BindCommand(member, Factory = nameof(CreateClick))]` | 工厂接受控件并返回 `ICommandTarget`，供代码传给 `BindCommand` |
+
 ```csharp
 BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
     string member, Func<TTarget, TValue> read, Action<TTarget, TValue> write,
     Func<TTarget, Action, Action>? subscribe = null) where TTarget : class;
 IReadOnlyList<BindingTargetDefinition> BindingTargetRegistry.Members(Type targetType);
 BindingTargetDefinition BindingTargetRegistry.Find(Type targetType, string member);
+bool BindingTargetDefinition.Supports(BindingMode mode);
 IBindingTarget BindingTargetDefinition.CreateTarget(object target,
     BindingMode mode = BindingMode.OneWay);
 IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,

@@ -27,6 +27,8 @@
 42. [容器状态、页面焦点与 MVVM 绑定](#42-容器状态页面焦点与-mvvm-绑定)
 43. [游戏 UI 场景覆盖评估](#43-游戏-ui-场景覆盖评估)
 44. [MVVM 自定义控件输入与回调](#44-mvvm-自定义控件输入与回调)
+45. [MVVM 属性绑定的刷新时机](#45-mvvm-属性绑定的刷新时机)
+46. [MVVM 内置控件的声明式适配](#46-mvvm-内置控件的声明式适配)
 
 ## 阅读约定
 
@@ -1948,7 +1950,7 @@ Unity 程序集同步（2026-10-07）：用户反馈 Modal 并行动画修改未
 
 针对 Fruit-platter 迁移报告 F-01～F-06，统一补齐两端属性目标扩展、运行／预览共用解析、命令参数及异步集合工厂。I-01～I-06 属于现有扩展点或项目集成规则，不另建 Addressables、业务导航或状态作用域机制。生命周期通知继续只读，不放宽结构重入保护。外部项目不修改。
 
-属性目标由程序集 BindingTargetProvider 标记的 IBindingTargetProvider 显式提供强类型 BindingTargetDefinition。运行时与编辑器共用 BindingTargetRegistry，发现成员不创建绑定、不订阅事件；基类定义适用于派生组件，同成员优先最具体定义，重复／歧义直接报错。双向及 View→VM 要求目标声明通知。Unity 增加 enabled／color／alpha，Godot 增加 Modulate／SelfModulate；其他自定义属性显式注册，不反射调用业务成员。Unity ILPostProcessor 保留提供者和方法，沿用 IL2CPP 强类型调用。
+属性目标通过程序集 BindingTargetProvider 标记的 IBindingTargetProvider 提供强类型 BindingTargetDefinition。第 46 节的声明式适配自动生成该 Provider，手写 Provider 可用于动态定义。运行时与编辑器共用 BindingTargetRegistry，发现成员不创建绑定、不订阅事件；基类定义适用于派生组件，同成员优先最具体定义，重复／歧义直接报错。双向及 View→VM 要求目标声明通知。Unity 增加 enabled／color／alpha，Godot 增加 Modulate／SelfModulate；其他自定义属性显式注册，不反射调用业务成员。Unity ILPostProcessor 保留提供者和方法，沿用 IL2CPP 强类型调用。
 
 阶段一：MVVM 54 项通过，包含无订阅发现、派生定义优先、通知解绑及不可观察目标拒绝双向。两端 GUI 与预览已迁移注册表；原生编辑器和 IL2CPP 验证在本轮后续集成阶段集中执行，尚未计为通过。
 
@@ -2137,7 +2139,7 @@ PresentationSession 统一记录结束任务与关闭信号，容器提交关闭
 
 创建商店列表时，同类型控件只解析一次成员定义，每行分别持有控件、订阅与解绑操作。目标注册表按控件类型与成员名缓存，新增定义会清空解析缓存。按名称索引的转换器在注册时检查重名，异常列出两个来源。全局 Provider 只登记工厂，每个 Context 建立自己的 Provider。三条运行时路径均取消程序集扫描和反射构造。
 
-Cecil 为带 Provider 标记或转换函数的程序集生成直接注册入口。Unity 在编辑器加载和游戏启动时调用，并让裁剪器处理只有注册入口的程序集。Godot／.NET 在模块初始化中直接调用复制到输出的已织入依赖库入口。重复织入和重复启动不会重复登记。引擎内置目标由适配器注册。
+Cecil 为带 Provider 标记或转换函数的程序集生成直接注册入口。Unity 在编辑器加载和游戏启动时调用，并让裁剪器处理只有注册入口的程序集。Godot／.NET 在模块初始化中直接调用复制到输出的已织入依赖库入口。重复织入和重复启动不会重复登记。内置控件的属性 Provider 从第 46 节的适配声明生成，沿用同一注册入口。
 
 现有业务绑定、控件引用和字符串路径沿用原配置。普通 VM 默认构造、Unity SO 序列化字段重映射和编辑器 VM 成员浏览沿用现有实现。
 
@@ -2616,7 +2618,7 @@ await modals.CloseAsync(settings);      // 此时才释放遮罩
 默认时机为 `BindingUpdateTiming.EndOfFrame = 0`，需要同一调用栈内更新控件时显式选 `Immediate = 1`。现有目标绑定、泛型回调、投影和 `BindTwoWay` 在末尾接受可选参数 `timing`。使用 `BindingOptions` 的重载通过 `UpdateTiming` 配置。Unity 和 Godot 编辑器的 OneWay／TwoWay 属性绑定行提供同一选项，存入 `BindingRule`。省略参数的代码和未配置时机的现有资产都采用帧末刷新。OneTime 首次读取、纯输入、命令、集合增删移动沿用已有语义。
 
 ```csharp
-this.Bind("Cart.Quantity", "Offer.UnitPrice", "Player.Gold", quoteLabel.TextTarget(),
+this.Bind("Cart.Quantity", "Offer.UnitPrice", "Player.Gold", quoteLabel.Bindable().Text,
     (int quantity, int price, int gold) =>
     {
         long total = (long)quantity * price;
@@ -2637,3 +2639,19 @@ this.Bind("Cart.Quantity", "Offer.UnitPrice", "Player.Gold", quoteLabel.TextTarg
 验收以只读 getter 和显示回调计数，覆盖重复来源、替换嵌套 VM、提交期间再次写入、暂停与销毁、输入后立即购买和共享 Runtime。
 
 验证通过：核心与生成器 260 项、MVVM 152 项；Godot headless 客户端 160 项、重启 4 项、MVVM 30 项。Unity Play Mode 41 项通过，编辑器验证了 Undo、Prefab Override、预览恢复及关闭 Domain Reload 后连续进入两次。最终 Debug 程序集另经 Unity 商店与 MVVM 专项 5 项复核。两端实际使用的 DLL 和 PDB 已核对 SHA-256，中英文站点构建通过。
+
+## 46. MVVM 内置控件的声明式适配
+
+设置页的音量滑杆既可在代码中绑定，也可在编辑器配置。两个入口从同一份声明取得原生属性、无通知写入方法及变化事件。每个滑杆实例独立接收和释放输入；单向显示和预览只更新画面。
+
+- **主适配与追加。** 在独立声明类使用 `[ControlAdapter(typeof(TControl))]`，每个原生控件类型只有一个主适配。生成 `control.Bindable()`，成员采用 PascalCase 属性，例如 `slider.Bindable().Value` 和 `button.Bindable().Click`。项目使用 `[ExtendControlAdapter(typeof(TControl))]` 为已有适配追加扩展方法，例如 `slider.Bindable().MinValue()`。声明命名空间控制扩展方法的可见性，变量的静态类型控制编译期可访问的包装成员；派生包装继承已适配基类的成员。
+- **读写与输入。** 类级 `[BindProperty]` 默认直接读写原生成员，可显式指定 `Read`、`Write` 和 `Changed`。变化事件通知框架重读属性。Unity 的 `Slider.value` 用 `SetValueWithoutNotify` 写入；Godot 的 `Range.Value` 用静态读写方法维持对外的 `float`，写入 `SetValueNoSignal`。OneTime／OneWay 支持纯显示目标，OneWayToViewModel／TwoWay 要求目标可通知。运行时校验实际绑定方向，GUI 按同一规则列出选项，打开不支持的旧配置时显示原方向及原因。
+- **命令。** `[BindCommand("Click", Factory = nameof(CreateClick))]` 的工厂为指定按钮生成 `ICommandTarget`。代码和 GUI 按钮命令通过同一工厂连接业务回调。命令事件和属性输入按各自接口执行。
+- **序列化。** GUI 继续保存原生控件引用与已注册属性名。C# 属性 `Value` 对应 Unity 键 `value`、Godot 键 `Value`；开关分别为 `isOn` 和 `ButtonPressed`。运行时按真实控件类型、原始键和最近的适配基类解析。动态成员可通过 `BindingTargets.Property(control, member)` 创建。预览使用相同属性定义，并恢复控件原值。
+- **生成与分发。** Roslyn 从独立声明生成包装、扩展方法与强类型属性 Provider。Cecil 继续生成 VM 通知、读写、命令和程序集注册入口。Unity 可选 MVVM 包交付带 `RoslynAnalyzer` 标签的生成器 DLL；普通 uGUI 的代码入口位于 `UIFramework.Mvvm.Unity`，TMP_Text 和 TMP_InputField 位于 `UIFramework.Mvvm.Unity.TMP`，仅使用 TMP 的业务程序集另行引用 `Unity.TextMeshPro`。Godot／.NET 的 `build/UIFramework.Mvvm.targets` 引入生成器并执行织入。Core 及节点资源的可选生成器独立于 MVVM 控件适配。
+
+用户用法见[控件声明和项目扩展](site/manual/mvvm.md#声明控件绑定)。
+
+验证通过：生成器专项 10 项、共享 MVVM 测试 154 项、Godot headless MVVM 检查 34 项、Unity 原生 MVVM Play Mode 测试 5 项。两端编辑器均验证了绑定配置。Unity 还验证了只包含追加声明的程序集在预览前注册、Prefab Override、Undo 和结束预览后恢复控件。WebGL 示例与 TMP 成员已使用 Unity 引擎程序集离线编译，本轮未执行 WebGL 导出。Unity 包中的生成器、Debug MVVM DLL 与 PDB 已比对散列，中英文站点构建通过。
+
+Godot 编辑器检查通过时仍会报告旧主题 `Themes/Adventure.tres` 引用的 9 张缺失贴图和 1 个字体；这些资源引用在本次重构前已经存在。

@@ -38,6 +38,6 @@ DLLs and PDBs are copied into the existing packages' Plugins directories; no sou
 
 ## Verification status
 
-Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime, saved Timeline and AnimationClip resources passed 31 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The standalone tutorial scripts compile in Unity 6000.3.24f1 batch mode; native UI execution of the tutorial remains unverified. The Unity Source Generator workflow is not integrated.
+Current environment: Unity 6000.3.24f1/uGUI 2.0.0. The client, adapters, lifetime, saved Timeline and AnimationClip resources passed 31 native Play Mode tests. MVVM editor Undo/Prefab overrides and preview were verified. The standalone tutorial scripts compile in Unity 6000.3.24f1 batch mode; native UI execution of the tutorial remains unverified. Unity uses handwritten node resource registration. The optional MVVM package includes a separate generator for [control bindings](../manual/mvvm.md#declare-control-bindings).
 
 [Unity API](../api/unity.md) · [Timelines](../manual/timeline-animation.md)

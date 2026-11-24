@@ -4,7 +4,7 @@ MVVM 是可选模块。它把金币、设置、背包等界面数据放在 VM �
 
 ## 安装
 
-- **Unity**：运行 `scripts/Prepare-Mvvm.ps1`，通过本地 UPM 路径安装 `src/UIFramework.Mvvm.Unity`。项目 asmdef 引用 `UIFramework.Mvvm.Unity`；使用文本目标时同时引用 `Unity.TextMeshPro`。Unity 的 ILPostProcessor 自动织入项目程序集。
+- **Unity**：运行 `scripts/Prepare-Mvvm.ps1`，通过本地 UPM 路径安装 `src/UIFramework.Mvvm.Unity`。项目 asmdef 引用 `UIFramework.Mvvm.Unity`。普通 uGUI 使用 `UIFramework.Mvvm.Unity` 命名空间；绑定 TextMeshPro 控件时，再引用 `Unity.TextMeshPro` 并导入 `UIFramework.Mvvm.Unity.TMP`。Unity 的 ILPostProcessor 自动织入项目程序集。
 - **Godot**：运行 `scripts/Prepare-GodotMvvm.ps1 -Project <项目目录>`，安装源代码插件。项目引用 `UIFramework.Mvvm.csproj` 和现有 Godot 适配器，并导入 `build/UIFramework.Mvvm.targets`。在项目设置启用 **UIFramework MVVM**。
 - **普通 .NET**：引用 `UIFramework.Mvvm.csproj`，导入上述 targets。构建工具需要 .NET 10 SDK；游戏运行时模块仍为 `netstandard2.1`。
 
@@ -37,14 +37,14 @@ var ui = UI.Create(this); // Unity: UI.Create(canvas, events)
 
 ```csharp
 this.SetViewModel("Player", player);
-this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
+this.Bind("Player.Gold", goldLabel.Bindable().Text, new BindingOptions
 {
     Convert = Converters.Find("FormatNumber")
 });
-this.BindCommand("Player.Buy", buyButton.ClickTarget());
+this.BindCommand("Player.Buy", buyButton.Bindable().Click);
 ```
 
-控件扩展位于 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`。纯 C# 项目由 Weaver 自动接入，自行提供目标接口。GUI 配置与代码绑定使用同一执行逻辑。
+导入 `UIFramework.Mvvm.Godot` 或 `UIFramework.Mvvm.Unity`，在控件后输入 `.Bindable().` 即可补全可用成员。标签的 `Text` 用于显示，按钮的 `Click` 用于执行命令。纯 C# 项目自行提供目标接口。
 
 ### 通知 UI 重读服务数据
 
@@ -144,8 +144,8 @@ this.SetViewModel("Player", player);
 ## 双向与嵌套绑定
 
 ```csharp
-this.Bind("Settings.Volume", volumeSlider.ValueTarget(), BindingMode.TwoWay);
-this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
+this.Bind("Settings.Volume", volumeSlider.Bindable().Value, BindingMode.TwoWay);
+this.Bind("Player.Selected.Name", nameLabel.Bindable().Text, new BindingOptions
 {
     HasNullValue = true,
     NullValue = "No selection"
@@ -172,7 +172,7 @@ this.Bind<bool>("Order.CanConfirm", SetConfirmEnabled,
 购物车数量、单价或玩家余额在同一帧变化，下面的报价只计算一次。按 lambda 参数顺序列出来源路径。余额足够时显示总价，余额不足时显示还差多少金币。
 
 ```csharp
-this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.Bindable().Text,
     (int gold, int price, int quantity) =>
     {
         long total = (long)price * quantity;
@@ -214,7 +214,7 @@ this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
                          .SetPriceRange(range.Min, range.Max));
 ```
 
-默认情况下，一帧内多次提交只回显一次最终区间。其他绑定按各自的时机刷新。提交中途失败会立即传播原始异常，已生效的值按所选时机回显。需要通过编辑器配置时，可以[注册控件属性](#自定义控件属性)。
+默认情况下，一帧内多次提交只回显一次最终区间。其他绑定按各自的时机刷新。提交中途失败会立即传播原始异常，已生效的值按所选时机回显。编辑器配置见[声明控件绑定](#声明控件绑定)。
 
 ## 暂停绑定，让动画接管
 
@@ -265,13 +265,60 @@ await ui.DisposeAsync();
 
 相关：[GUI 配置](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [生命周期](lifecycle.md)
 
-## 自定义控件属性
+## 声明控件绑定
 
-实现 `IBindingTargetProvider.GetTargets()`，在程序集中声明 `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`，返回强类型 `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)`。显示绑定可省略 `subscribe`；双向及 View→VM 必须提供通知和解绑。运行时、属性选择器和预览共用定义，查询成员不连接控件事件。
+### 适配新的引擎控件
 
-自定义目标、`[Converter]` 和全局 Provider 在构建时生成注册代码。Unity 项目程序集需引用 `UIFramework.Mvvm.dll`，编辑器预览和游戏启动都会注册。Godot／.NET 的入口项目以及声明 Provider 的类库都要导入 `build/UIFramework.Mvvm.targets`，并将类库作为随项目分发的引用。即使业务代码从未调用类库中的类型，也能使用其中的定义。Provider 需要公开无参构造函数。
+任务列表使用 Unity `Scrollbar` 记录滚动位置时，可在项目中为它声明主适配。将下面的类放入项目的 C# 程序集。
 
-同一种商品行复用已解析的控件属性定义，每一行独立订阅和解绑。转换器按名称查找，名称须在项目内唯一。
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ControlAdapter(typeof(Scrollbar))]
+    [BindProperty(nameof(Scrollbar.value),
+        Write = nameof(Scrollbar.SetValueWithoutNotify),
+        Changed = nameof(Scrollbar.onValueChanged))]
+    internal static class QuestScrollbarAdapter { }
+}
+```
+
+在界面脚本导入 `Game.UI.Bindings`，调用 `this.Bind("Quest.ScrollPosition", scrollbar.Bindable().Value, BindingMode.TwoWay)`。读取使用原生 `value` 属性，VM 回显调用无通知 setter，控件事件通知绑定重读当前值。纯显示属性可以省略 `Changed`。在 GUI 中选择注册名 `value` 即可使用同一属性。
+
+### 给已有适配追加成员
+
+Unity 的 `Slider` 已有主适配。设置页需要绑定允许的最低音量时，在项目中追加 `minValue`。
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ExtendControlAdapter(typeof(Slider))]
+    [BindProperty(nameof(Slider.minValue))]
+    internal static class SettingsSliderAdapter { }
+}
+```
+
+在界面脚本导入 `UIFramework.Mvvm.Unity` 和 `Game.UI.Bindings` 后即可绑定：
+
+```csharp
+this.Bind("Settings.MinVolume", slider.Bindable().MinValue());
+this.Bind("Settings.Volume", slider.Bindable().Value, BindingMode.TwoWay);
+```
+
+主适配暴露**属性**，例如 `Value`；追加声明暴露**扩展方法**，例如 `MinValue()`。在 View Bindings 里选择同一个滑杆，成员为 `minValue` 或 `value`。每种原生控件只能声明一个主适配。代码补全取决于变量的声明类型：声明为 `Slider` 可看到 `Value`；声明为 `Selectable` 时只显示该类型和已适配基类的成员。
+
+Godot 的声明方式相同。内置 `Range.Value` 绑定以 `float` 读写，回显调用 `SetValueNoSignal`。Godot Demo 为 `Godot.Range` 追加 `[BindProperty(nameof(Godot.Range.MinValue))]`，代码入口为 `slider.Bindable().MinValue()`，GUI 成员名为 `MinValue`。
+
+### 构建与注册
+
+Roslyn 生成可补全的 C# 入口及强类型属性 Provider，Cecil 织入 VM 访问和 Provider 的注册入口。两者都是构建工具。Unity 的 MVVM UPM 包内含标记为 `RoslynAnalyzer` 的生成器。Godot／.NET 的入口项目和每个声明适配或 Provider 的类库都要导入 `build/UIFramework.Mvvm.targets`；类库作为随项目复制的引用交付，启动和预览时会自动注册。
+
+运行时才能确定成员名时，使用引擎适配层的 `BindingTargets.Property(control, member)`。手工实现的 `IBindingTargetProvider` 也可向同一注册表提供定义。代码绑定、属性选择器和预览复用定义，每个控件实例独立持有订阅。
 
 ## 命令参数与条目工厂
 
@@ -280,7 +327,7 @@ await ui.DisposeAsync();
 条目映射在创建时借用父 VM 实例，不克隆，也不自动跟随父来源替换。
 
 ```csharp
-node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+node.BindCommand("Shop.Buy", buyButton.Bindable().Click,
     new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
 
 var target = new CollectionTarget(node, mount, itemResource,

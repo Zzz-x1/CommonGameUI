@@ -23,6 +23,8 @@ Select the control and target property, then drag a member or enter a path such 
 | Buy button | Command, `Shop.Buy` |
 | Inventory list | Collection, item Prefab / PackedScene |
 
+For volume, select the slider, choose `value` in Unity or `Value` in Godot, set the source to `Settings.Volume`, and choose `TwoWay`. This uses the definition behind `slider.Bindable().Value`. A label's text offers OneTime and OneWay. Slider values publish changes, so they also offer TwoWay and OneWayToViewModel. If a saved row has an unsupported direction, the panel shows the reason and lets you choose a valid direction.
+
 For a OneWay or TwoWay property row with VM input, the timing field defaults to `EndOfFrame`. A price label displays the final value once per UI frame. Select `Immediate` when a control must reflect changes inside the current input handler. The first preview value appears immediately.
 
 Converters are filtered by input and output types. Item sources are named `Item`, for example `Item.Title`. Configure layout in resources: VBoxContainer / GridContainer in Godot, or LayoutGroup / project layout code in Unity.
@@ -66,6 +68,6 @@ For commands, choose None, Constant or SourcePath; the editor shows the business
 
 For collections, select an item resource and add parent-to-item source mappings. An optional factory references a Unity component or Godot node implementing `ICollectionItemFactory`. Factories also receive `IsPreview`: provide presentation-only preparation there. Preview never executes commands and restores controls when stopped. Item is supplied automatically.
 
-Custom control members registered through `IBindingTargetProvider` appear in the property picker and work in preview without a separate resolver.
+Project members added with `[BindProperty]` appear in the picker after compilation. For example, Unity's `slider.Bindable().MinValue()` appears as `minValue`. The row saves the native control reference and case-sensitive member key. Preview uses the same property definition. See [Declare control bindings](mvvm.md#declare-control-bindings).
 
 Godot factory node scripts need `[Tool]` for editor preview. When changing a command to one without a business parameter, explicitly clear any old parameter configuration using the editor action.

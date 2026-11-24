@@ -128,11 +128,13 @@ The Weaver implements `Read`, `Write`, `CanExecute`, `Execute`, `Describe`, `Not
 |---|---|---|
 | Enable configuration and observer | Automatic | Automatic |
 | Shared asset | `ui.GetSharedViewModel(resource)` | `ui.GetGlobalViewModel<PlayerVm>("Player")` |
-| Text | Label / LineEdit `.TextTarget()` | Text / TMP / InputField `.TextTarget()` |
-| Slider | Range `.ValueTarget()` | Slider `.ValueTarget()` |
-| Toggle | BaseButton `.ToggleTarget()` | Toggle `.ToggleTarget()` |
-| Command | BaseButton `.ClickTarget()` | Button `.ClickTarget()` |
+| Text | Label / LineEdit `.Bindable().Text` | Text / TMP / InputField `.Bindable().Text` |
+| Slider | Range `.Bindable().Value` | Slider `.Bindable().Value` |
+| Toggle | BaseButton `.Bindable().ButtonPressed` | Toggle `.Bindable().IsOn` |
+| Command | BaseButton `.Bindable().Click` | Button `.Bindable().Click` |
 | Collection | `CollectionTarget(owner, mount, scene)` | `CollectionTarget(owner, mount, prefab)` |
+
+Import `UIFramework.Mvvm.Godot` for Godot or `UIFramework.Mvvm.Unity` for uGUI. For `TMP_Text` and `TMP_InputField`, import `UIFramework.Mvvm.Unity.TMP` and reference `Unity.TextMeshPro` from your asmdef. Declared properties return `IBindingTarget` and commands return `ICommandTarget`. Unity's `.Bindable().Text`, `.Value` and `.IsOn` use the serialized keys `text`, `value` and `isOn`. Godot keeps `Text`, `Value` and `ButtonPressed`. Both adapters offer `BindingTargets.Property(control, member)` for member names resolved at runtime. The optional `mode` argument defaults to `BindingMode.OneWay`.
 
 Godot `MvvmBindings` stores named sources and bindings; Unity stores only binding rows. Godot uses `ViewModelSourceResource` / `ViewBindingResource`; Unity uses `ViewBindingData` with source strings. Binding kinds are Property, Command and Collection.
 
@@ -156,12 +158,22 @@ Call `UIFramework.Mvvm.CollectionSnapshotExtensions.ApplySnapshot` on the UI thr
 
 ## Extensible targets and collection creation
 
+Apply these attributes from `UIFramework.Mvvm` to a separate declaration class. The property member name is also the GUI key. See [Declare control bindings](../manual/mvvm.md#declare-control-bindings).
+
+| Attribute | Generated API |
+|---|---|
+| `[ControlAdapter(typeof(TControl))]` | The primary adapter, `control.Bindable()` and typed properties. Includes members of adapted base classes |
+| `[ExtendControlAdapter(typeof(TControl))]` | Extension methods on an existing adapter. Import the declaration namespace to use them |
+| `[BindProperty(member, Read = ..., Write = ..., Changed = ...)]` | Reads and writes the named native property by default. Supports explicit accessors and a native change event. An observable property supports input |
+| `[BindCommand(member, Factory = nameof(CreateClick))]` | A factory receives the control and returns an `ICommandTarget` for `BindCommand` |
+
 ```csharp
 BindingTargetDefinition BindingTargetDefinition.Create<TTarget, TValue>(
     string member, Func<TTarget, TValue> read, Action<TTarget, TValue> write,
     Func<TTarget, Action, Action>? subscribe = null) where TTarget : class;
 IReadOnlyList<BindingTargetDefinition> BindingTargetRegistry.Members(Type targetType);
 BindingTargetDefinition BindingTargetRegistry.Find(Type targetType, string member);
+bool BindingTargetDefinition.Supports(BindingMode mode);
 IBindingTarget BindingTargetDefinition.CreateTarget(object target,
     BindingMode mode = BindingMode.OneWay);
 IDisposable BindCommand(this IUINode node, string path, ICommandTarget target,

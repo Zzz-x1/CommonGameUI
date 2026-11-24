@@ -4,7 +4,7 @@ MVVM is optional. Keep currency, settings and inventory data in a VM and update 
 
 ## Install
 
-- **Unity**: run `scripts/Prepare-Mvvm.ps1`, then install `src/UIFramework.Mvvm.Unity` as a local UPM package. Reference `UIFramework.Mvvm.Unity` from your asmdef; text targets also require `Unity.TextMeshPro`. Unity's ILPostProcessor automatically weaves project assemblies.
+- **Unity**: run `scripts/Prepare-Mvvm.ps1`, then install `src/UIFramework.Mvvm.Unity` as a local UPM package. Reference `UIFramework.Mvvm.Unity` from your asmdef and import that namespace for uGUI. For TextMeshPro controls, also reference `Unity.TextMeshPro` and import `UIFramework.Mvvm.Unity.TMP`. Unity's ILPostProcessor automatically weaves project assemblies.
 - **Godot**: run `scripts/Prepare-GodotMvvm.ps1 -Project <project directory>` to install the source plugin. Reference `UIFramework.Mvvm.csproj` and the existing Godot adapter, then import `build/UIFramework.Mvvm.targets`. Enable **UIFramework MVVM** in project settings.
 - **Plain .NET**: reference `UIFramework.Mvvm.csproj` and import the same targets. The build tool requires the .NET 10 SDK; the game runtime module targets `netstandard2.1`.
 
@@ -37,14 +37,14 @@ Provide sources and bindings during node initialization:
 
 ```csharp
 this.SetViewModel("Player", player);
-this.Bind("Player.Gold", goldLabel.TextTarget(), new BindingOptions
+this.Bind("Player.Gold", goldLabel.Bindable().Text, new BindingOptions
 {
     Convert = Converters.Find("FormatNumber")
 });
-this.BindCommand("Player.Buy", buyButton.ClickTarget());
+this.BindCommand("Player.Buy", buyButton.Bindable().Click);
 ```
 
-Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity`. The Weaver installs plain C# integration automatically; projects provide target interfaces. GUI configuration and code use the same binding logic.
+Import `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity` and type `.Bindable().` after a control to see its available members. A label's `Text` displays a value and a button's `Click` invokes a command. Plain C# projects provide their own target interfaces.
 
 ### Refresh a value owned by a service
 
@@ -144,8 +144,8 @@ To share asset clones across contexts, call `second.ShareMvvm(first)` before cre
 ## Two-way and nested paths
 
 ```csharp
-this.Bind("Settings.Volume", volumeSlider.ValueTarget(), BindingMode.TwoWay);
-this.Bind("Player.Selected.Name", nameLabel.TextTarget(), new BindingOptions
+this.Bind("Settings.Volume", volumeSlider.Bindable().Value, BindingMode.TwoWay);
+this.Bind("Player.Selected.Name", nameLabel.Bindable().Text, new BindingOptions
 {
     HasNullValue = true,
     NullValue = "No selection"
@@ -172,7 +172,7 @@ Replacing an intermediate VM rebuilds subscriptions. Intermediate reactive prope
 When quantity, price and wallet balance change in the same frame, this binding calculates the quote once. List the source paths in lambda parameter order. The label shows the total when affordable and the shortfall as a negative number otherwise.
 
 ```csharp
-this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.TextTarget(),
+this.Bind("Player.Gold", "Offer.Price", "Cart.Quantity", quoteLabel.Bindable().Text,
     (int gold, int price, int quantity) =>
     {
         long total = (long)price * quantity;
@@ -214,7 +214,7 @@ this.BindTwoWay<int, int, PriceRange>("Filter.MinPrice", "Filter.MaxPrice",
                          .SetPriceRange(range.Min, range.Max));
 ```
 
-With the default timing, edits within one UI frame yield a single redraw with the final range. Other bindings use their own timing. A failing commit propagates the original exception immediately. Changes already applied to the VM are displayed at the selected time. For editor configuration, [register the control properties](#custom-control-properties).
+With the default timing, edits within one UI frame yield a single redraw with the final range. Other bindings use their own timing. A failing commit propagates the original exception immediately. Changes already applied to the VM are displayed at the selected time. For editor configuration, see [Declare control bindings](#declare-control-bindings).
 
 ## Pause bindings for animation
 
@@ -265,13 +265,60 @@ Commands and bindings log the original errors. UI bindings and notifications run
 
 Related: [GUI configuration](mvvm-editor.md) · [MVVM API](../api/mvvm.md) · [Lifecycle](lifecycle.md)
 
-## Custom control properties
+## Declare control bindings
 
-Implement `IBindingTargetProvider.GetTargets()` and mark the assembly with `[assembly: BindingTargetProvider(typeof(ProjectTargets))]`. Return strongly typed `BindingTargetDefinition.Create<TControl, TValue>(member, read, write, subscribe)` definitions. `subscribe` is optional for display bindings; TwoWay and View→VM require it. Runtime, the property picker and preview use the same definitions. Member discovery does not subscribe to control events.
+### Adapt an additional engine control
 
-The build generates registration code for custom targets, `[Converter]` methods and global providers. Unity project assemblies must reference `UIFramework.Mvvm.dll`. Registration runs in the editor for preview and on game startup. In Godot and .NET, import `build/UIFramework.Mvvm.targets` in both the entry project and provider libraries, and reference the libraries as copy-local dependencies. Their definitions are available even when game code never calls a type in the library. Providers need a public parameterless constructor.
+For a quest log with a Unity `Scrollbar`, the project can expose its scroll position. Put the declaration in a C# file compiled by the project. Import its namespace at the call site.
 
-Rows of the same type reuse the resolved control property definition. Each row subscribes and disconnects independently. Converter names must be unique across the project.
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ControlAdapter(typeof(Scrollbar))]
+    [BindProperty(nameof(Scrollbar.value),
+        Write = nameof(Scrollbar.SetValueWithoutNotify),
+        Changed = nameof(Scrollbar.onValueChanged))]
+    internal static class QuestScrollbarAdapter { }
+}
+```
+
+With `using Game.UI.Bindings;`, call `this.Bind("Quest.ScrollPosition", scrollbar.Bindable().Value, BindingMode.TwoWay)`. The getter reads `value`, VM updates use the silent setter, and a native change event makes the binding read the current value back. A display-only property can omit `Changed`. The GUI exposes the registered key `value`.
+
+### Extend an existing adapter
+
+Unity already supplies an adapter for `Slider`. A settings page can add a binding for the minimum allowed volume by extending that adapter.
+
+```csharp
+using UIFramework.Mvvm;
+using UnityEngine.UI;
+
+namespace Game.UI.Bindings
+{
+    [ExtendControlAdapter(typeof(Slider))]
+    [BindProperty(nameof(Slider.minValue))]
+    internal static class SettingsSliderAdapter { }
+}
+```
+
+Import `UIFramework.Mvvm.Unity` and `Game.UI.Bindings` in the view:
+
+```csharp
+this.Bind("Settings.MinVolume", slider.Bindable().MinValue());
+this.Bind("Settings.Volume", slider.Bindable().Value, BindingMode.TwoWay);
+```
+
+The primary adapter exposes **properties** such as `Value`. An additional declaration exposes **extension methods** such as `MinValue()`. In View Bindings select the same slider and choose `minValue` or `value`. Each native control type has one primary declaration. The declared C# type determines completion: a variable typed as `Slider` exposes `Value`, while a `Selectable` variable exposes members of `Selectable` and its adapted bases.
+
+Godot uses the same declarations. Its built-in `Range.Value` target exposes a `float` and writes through `SetValueNoSignal`. The Godot demo extends `Godot.Range` with `[BindProperty(nameof(Godot.Range.MinValue))]`, which exposes `slider.Bindable().MinValue()` and the GUI key `MinValue`.
+
+### Build and registration
+
+Roslyn generates the typed C# surface and a strongly typed property provider. Cecil weaves VM access and emits the provider registration entry points. Both are build tools. Unity includes the generator as a `RoslynAnalyzer` in the MVVM UPM package. Godot and .NET projects import `build/UIFramework.Mvvm.targets` in the application and in each library declaring adapters or providers. Reference these libraries as copy-local dependencies so their registrations are available at startup and in preview.
+
+For members known only at runtime, use the engine's `BindingTargets.Property(control, member)`. A handwritten `IBindingTargetProvider` can also supply definitions to the same registry. Code bindings, the property picker and preview share the resolved definition. Each control instance owns its subscription.
 
 ## Command parameters and item factories
 
@@ -280,7 +327,7 @@ A command binding can use a typed constant or a source path. The source is read 
 Item mappings borrow parent VM instances at creation time; they do not clone or follow replacement of the parent source.
 
 ```csharp
-node.BindCommand("Shop.Buy", buyButton.ClickTarget(),
+node.BindCommand("Shop.Buy", buyButton.Bindable().Click,
     new CommandBindingOptions { ParameterPath = "Selection.ProductId" });
 
 var target = new CollectionTarget(node, mount, itemResource,

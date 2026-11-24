@@ -23,6 +23,8 @@
 | 购买按钮 | Command，`Shop.Buy` |
 | 背包列表 | Collection，条目 Prefab／PackedScene |
 
+例如配置音量时，选择滑杆、Unity 的 `value` 或 Godot 的 `Value`、来源 `Settings.Volume` 和方向 `TwoWay`。这和代码里的 `slider.Bindable().Value` 使用同一份定义。标签的文本只提供 OneTime／OneWay；滑杆的值提供变化通知，因此也能选 TwoWay 或 OneWayToViewModel。旧行保存了不支持的方向时，面板会显示原因，需手动选定有效方向。
+
 来源为 VM 的 OneWay／TwoWay 属性行可以设置**刷新时机**。金币或报价使用默认 `EndOfFrame`，每个 UI 帧合并刷新；需要在输入回调结束前改变的控件状态选择 `Immediate`。打开预览时首次值直接显示。
 
 转换器按输入、输出类型筛选。条目来源名称固定为 `Item`，例如 `Item.Title`。列表布局在资源中配置；Godot 可使用 VBoxContainer／GridContainer，Unity 可使用 LayoutGroup 或项目布局代码。
@@ -66,6 +68,6 @@ Unity 配置保存在组件中，随 Prefab／场景保存，支持 Undo 和 Pre
 
 集合选择条目资源，添加父来源→条目来源映射。可选工厂引用实现 `ICollectionItemFactory` 的 Unity 组件或 Godot 节点。工厂也接收 `IsPreview`，预览分支仅做展示准备；预览不执行命令，结束后恢复控件。Item 自动提供。
 
-通过 `IBindingTargetProvider` 注册的自定义控件成员直接出现在属性列表中，预览无需另外安装解析器。
+项目用 `[BindProperty]` 追加的成员，也会在编译后出现在属性列表中。例如 Unity 的 `slider.Bindable().MinValue()` 在这里选 `minValue`。面板保存原生控件引用与区分大小写的成员名，预览直接使用同一份属性定义。见[声明控件绑定](mvvm.md#声明控件绑定)。
 
 Godot 工厂节点脚本需要 `[Tool]` 才能用于编辑器预览。将命令改为无业务参数的方法时，通过编辑器提供的操作明确清除旧参数配置。
