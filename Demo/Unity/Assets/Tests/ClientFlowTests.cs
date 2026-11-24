@@ -221,15 +221,24 @@ namespace StarCourt.UnityDemo.Tests
         [UnityTest] public IEnumerator ActualSourceAndSettingsSelectDifferentAnimations() => Await(AnimationBranches());
         private async Task AnimationBranches()
         {
-            await _app.EnterAsync(); await _app.OpenAsync("Shop");
-            var entering = _app.OpenAsync("Inventory");
-            while (!_app.Pages.Children.OfType<InventoryView>().Any(n => n.TransitionState?.Stage == TransitionStage.Playing && n.TransitionState.Progress > .05)) await Frame();
-            Assert.That(_app.Pages.Children.OfType<InventoryView>().Last().GetRoot().anchoredPosition.x, Is.LessThan(0));
-            await entering;
-            entering = _app.OpenAsync("Shop");
-            while (!_app.Pages.Children.OfType<ShopView>().Any(n => n.TransitionState?.Stage == TransitionStage.Playing && n.TransitionState.Progress > .05)) await Frame();
-            Assert.That(_app.Pages.Children.OfType<ShopView>().Last().GetRoot().anchoredPosition.x, Is.GreaterThan(0));
-            await entering; await _app.OpenPurchaseAsync(0);
+            await _app.EnterAsync();
+            await _app.OpenAsync("Shop");
+            var originalShop = _app.Pages.Current;
+            var inventoryEntry = await SamplePageEntry<InventoryView>("Inventory");
+            Assert.That(inventoryEntry.phase, Is.EqualTo(TransitionPhase.PushEnter));
+            Assert.That(inventoryEntry.x, Is.LessThan(0));
+
+            var shopReturn = await SamplePageEntry<ShopView>("Shop");
+            Assert.That(_app.Pages.Current, Is.SameAs(originalShop));
+            Assert.That(shopReturn.phase, Is.EqualTo(TransitionPhase.PopEnter));
+            Assert.That(shopReturn.x, Is.LessThan(0));
+
+            await _app.OpenAsync("Home");
+            await _app.OpenAsync("Inventory");
+            var shopEntry = await SamplePageEntry<ShopView>("Shop");
+            Assert.That(shopEntry.phase, Is.EqualTo(TransitionPhase.PushEnter));
+            Assert.That(shopEntry.x, Is.GreaterThan(0));
+            await _app.OpenPurchaseAsync(0);
             var reward = _app.RewardAsync("购买奖励"); await WaitForAnimation();
             Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetControl<PlayableDirector>("Transitions/Enter").state == PlayState.Playing, Is.True);
             await reward; await _app.BackAsync(); await _app.BackAsync(); await _app.OpenAsync("Quests");
@@ -241,6 +250,25 @@ namespace StarCourt.UnityDemo.Tests
             Assert.That(_app.Modals.Children.OfType<RewardView>().Last().GetControl<PlayableDirector>("Transitions/Enter").playableGraph.IsValid(), Is.False);
             await reward;
         }
+        private async Task<(TransitionPhase phase, float x)> SamplePageEntry<T>(string route) where T : class, IUINode
+        {
+            var opening = _app.OpenAsync(route);
+            (TransitionPhase phase, float x)? sample = null;
+            while (!opening.IsCompleted)
+            {
+                var page = _app.Pages.Children.OfType<T>().SingleOrDefault();
+                if (page?.TransitionState is { Stage: TransitionStage.Playing, Progress: > .05f } state && state.Context.Entering)
+                {
+                    sample = (state.Context.Phase, page.GetRoot().anchoredPosition.x);
+                    break;
+                }
+                await Frame();
+            }
+            await opening;
+            Assert.That(sample.HasValue, Is.True, $"No entry animation sampled for {route}.");
+            return sample.Value;
+        }
+
         private async Task WaitForAnimation()
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 10;
