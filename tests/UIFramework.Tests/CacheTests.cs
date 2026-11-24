@@ -9,6 +9,7 @@ public sealed class CacheTests
     {
         public int Initializations, Disposals;
         public Exception? EnterFailure;
+        public Exception? EnteredFailure;
         public bool CancelEnter;
         public List<LifecycleContext> Enters = new();
         protected override Task OnInitializeAsync(CancellationToken token) { Initializations++; return Task.CompletedTask; }
@@ -20,6 +21,10 @@ public sealed class CacheTests
             return Task.CompletedTask;
         }
         protected override Task OnDisposeAsync() { Disposals++; return Task.CompletedTask; }
+        protected override void OnEntered(LifecycleContext context)
+        {
+            if (EnteredFailure != null) throw EnteredFailure;
+        }
     }
     private sealed class Dialog : DialogNode<bool> { }
     private sealed class Backdrop : MemoryElement, IUIBackdrop
@@ -50,6 +55,26 @@ public sealed class CacheTests
         var panels = await Attach<PanelContainerNode>(ui.Root);
         var page = await panels.OpenAsync<Page>("first"); await panels.CloseAsync(page);
         Assert.Equal(NodeState.Disposed, page.State); Assert.NotSame(page, await panels.OpenAsync<Page>("second"));
+    }
+
+    [Fact] public async Task ReopenedWindowStaysCommittedWhenItsEnteredNotificationFails()
+    {
+        await using var ui = Context();
+        ui.Register(() => new Page(), cacheMode: NodeCacheMode.KeepAlive);
+        var panels = await Attach<PanelContainerNode>(ui.Root);
+        var page = await panels.OpenAsync<Page>("A");
+        await panels.CloseAsync(page);
+        var error = new IOException("entered");
+        page.EnteredFailure = error;
+        Assert.Same(error, await Assert.ThrowsAsync<IOException>(() => panels.OpenAsync<Page>("B")));
+        Assert.True(panels.TryGet<Page>(out var opened));
+        Assert.Same(page, opened);
+        Assert.Equal("B", page.Parameters);
+        Assert.True(page.IsVisible && page.IsInteractive);
+        var closed = page.WaitForCloseAsync();
+        Assert.False(closed.IsCompleted);
+        await panels.CloseAsync(page);
+        await closed;
     }
 
     [Fact] public async Task PanelCachePreservesSubtreeAndReappliesParameters()

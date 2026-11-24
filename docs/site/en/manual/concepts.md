@@ -33,4 +33,10 @@ In Godot, import `UIFramework` and `UIFramework.Godot`; pageMount is a `Control`
 - Root is structural. The project defines container names, mounts, layout and drawing order.
 - Disposing a container or its owning window cleans the subtree; KeepAlive close retains it. See [closed-instance caching](resources.md#closed-instance-caching). Await asynchronous operations and observe their errors in project code.
 
+## Window ownership during transitions
+
+When returning from item details, a transition can reveal the inventory while `Current` and `History` still describe the committed pages. After playback, the container updates history, visibility and input before notifying the view. Canceling a return restores the surviving pages. If a scene destroys an intermediate page in a pending batch return, that return is canceled and the destroyed page leaves history.
+
+A Panel tracks open windows and their individual visibility. A Stack tracks openings in order. A Modal tracks ordered openings with their backdrops and focus. A Tab tracks embedded pages and the selected name. Custom containers deriving directly from `ContainerNode` implement `protected override bool IsPresented(UINode child)` to return the child's local visibility from their committed records. Commit, recovery and scene disposal use the same rule.
+
 [Hierarchy](hierarchy.md) · [API](../api/core.md)

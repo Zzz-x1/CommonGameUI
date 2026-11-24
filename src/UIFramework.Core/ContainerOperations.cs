@@ -2,9 +2,10 @@ using System.Runtime.ExceptionServices;
 
 namespace UIFramework;
 
-internal sealed class PresentationSession(Guid containerId)
+internal class PresentationSession(ContainerNode container, UINode node)
 {
-    internal readonly Guid ContainerId = containerId;
+    internal readonly Guid ContainerId = container.Id;
+    internal readonly UINode Node = node;
     internal bool Ended;
     internal Task? EndTask, CloseTask;
     private readonly TaskCompletionSource<Task> _closed = new();
