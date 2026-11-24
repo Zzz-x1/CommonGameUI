@@ -157,7 +157,31 @@ public sealed class UIContext : IAsyncDisposable
         return false;
     }
 
-    internal void SetInputOwner(UINode? node) { InputOwnerNode = node; Root.ApplyState(); }
+    // Retained modal containers keep their history while their panel, page or tab is hidden.
+    private readonly List<ModalContainerNode> _modalContainers = new();
+    internal void TrackModal(ModalContainerNode container, bool open)
+    {
+        if (open) _modalContainers.Add(container);
+        else _modalContainers.Remove(container);
+    }
+    internal bool ReconcileModalInput(ModalContainerNode? closing = null, object? restoreFocus = null)
+    {
+        var previous = InputOwnerNode;
+        // A reappearing subtree must not displace the visible modal that already owns input.
+        var current = (previous?.Parent as ModalContainerNode)?.VisibleTop;
+        for (var i = _modalContainers.Count - 1; current == null && i >= 0; i--)
+            current = _modalContainers[i].VisibleTop;
+        if (ReferenceEquals(previous, current)) return false;
+        InputOwnerNode = current;
+        Root.ApplyState();
+        if (closing != null && (current == null || current.Parent == closing))
+            Host.RestoreFocus(restoreFocus);
+        else if (current != null)
+            Host.Focus(current.Element);
+        else if (previous?.Parent is ModalContainerNode suspended)
+            Host.RestoreFocus(suspended.BackgroundFocus);
+        return true;
+    }
     private int _modalInputBlocks;
     internal bool IsModalInputBlocked => _modalInputBlocks != 0;
     internal void BeginModalInputBlock() { _modalInputBlocks++; Root.SetInputLocked(true); }

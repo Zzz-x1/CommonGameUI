@@ -44,7 +44,6 @@ public class UINode : IUINode
     internal Type? RegisteredType;
     internal NodeCacheMode CacheMode;
     internal bool Cached, CacheReuse;
-    internal UINode? SuspendedInputOwner;
     internal PresentationSession? Presentation;
     public bool IsCached => Cached || (Parent?.IsCached ?? false);
     public Guid Id { get; } = Guid.NewGuid();
@@ -207,7 +206,8 @@ public class UINode : IUINode
                 token.ThrowIfCancellationRequested();
                 State = NodeState.Ready;
                 SetLocalState(initiallyVisible ?? InitiallyVisible, initiallyVisible ?? InitiallyVisible);
-                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization), subtree: this);
+                var modalChanged = Context.ReconcileModalInput();
+                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Initialization), subtree: modalChanged ? null : this);
             }, cancellationToken, allowInitializing: true, allowCached: allowCached);
         }
         catch (Exception ex)
@@ -366,7 +366,16 @@ public class UINode : IUINode
             if (_busy != 0 && _idle != null) await _idle.Task;
             await Attempt(WaitForOperationsAsync);
             if (_transitionParticipants != 0) await _transitionsIdle!.Task;
-            await Attempt(() => { SetLocalState(false, false); Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal), continueOnFailure: true, subtree: this); return Task.CompletedTask; });
+            await Attempt(() =>
+            {
+                SetLocalState(false, false);
+                var modalChanged = Parent is ModalContainerNode modals && ReferenceEquals(Context.InputOwnerNode, this)
+                    ? Context.ReconcileModalInput(modals, modals.FocusBefore(this))
+                    : Context.ReconcileModalInput();
+                Context.PublishChanges(new LifecycleContext(this, Parent as ContainerNode, LifecycleReason.Disposal),
+                    continueOnFailure: true, subtree: modalChanged ? null : this);
+                return Task.CompletedTask;
+            });
             foreach (var child in Enumerable.Reverse(_children.ToArray()))
                 await Attempt(async () => await child.DisposeAsync());
             foreach (var extension in _initializedExtensions.AsEnumerable().Reverse())
@@ -386,7 +395,7 @@ public class UINode : IUINode
                 return Task.CompletedTask;
             });
             if (formerParent != null) await Attempt(() => formerParent.OnChildRemovedAsync(this));
-            Cached = CacheReuse = false; SuspendedInputOwner = null;
+            Cached = CacheReuse = false;
             State = NodeState.Disposed;
             _lifetime.Dispose();
             if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
