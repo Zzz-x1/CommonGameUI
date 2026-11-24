@@ -80,7 +80,7 @@ SelfTest 使用隔离档案，VerifySave 在独立进程检查重启状态。Cap
 
 生命周期：客户端 Context 绑定主场景节点；绑定与清理回归位于 Tests/DemoApp.LifetimeTests.cs。使用方法见[生命周期指南](../../docs/site/manual/lifecycle.md)。
 
-仅运行生命周期回归：`./scripts/Run-Demo.ps1 -LifetimeTest -Headless`（独立测试档案）。
+在仓库根目录运行 `./scripts/Run-Demo.ps1 -LifetimeTest -Headless`，使用独立档案验证生命周期。背包用例会打开材料详情，将详情绑定到被查看的 Godot 节点，再销毁该节点。测试检查是否回到原背包、保留材料分类与条目，以及条目能否重新获得键盘焦点。
 
 ## MVVM 示例
 

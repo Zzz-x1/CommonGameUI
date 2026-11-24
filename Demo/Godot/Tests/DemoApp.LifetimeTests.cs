@@ -59,6 +59,8 @@ public partial class DemoApp
         lifetime = context.BindLifetime(scene); scene.Free(); await lifetime.Completion;
         pass(compare.State == NodeState.Disposed && settings.State == NodeState.Disposed, "actual comparison and settings views release after native scene destruction");
 
+        await VerifyInventoryReturnOnOwnerDestructionAsync(pass);
+
         // Inactive owners still have a lifetime. Disconnecting never closes the node.
         var owner = new Node { Name = "InactiveLifetime", ProcessMode = ProcessModeEnum.Disabled }; AddChild(owner);
         context = EngineUI.UI.Create(this);
@@ -150,5 +152,32 @@ public partial class DemoApp
         try { await node.DisposeAsync(); throw new Exception("Expected missing display error."); }
         catch (ObjectDisposedException error) { pass(log.Errors.Contains(error), "unbound destroyed display preserves original failure"); }
         await context.DisposeAsync();
+    }
+
+    private async Task VerifyInventoryReturnOnOwnerDestructionAsync(Action<bool, string> pass)
+    {
+        await using var ui = EngineUI.UI.Create(this);
+        ui.Register<InventoryView>("res://Scenes/Client/Inventory.tscn");
+        ui.Register<ItemDetailsView>("res://Scenes/Client/ItemDetails.tscn", cacheMode: NodeCacheMode.KeepAlive);
+        var pages = await ui.Root.CreateContainerAsync<StackContainerNode>("InspectionPages");
+        var inventory = await pages.PushAsync<InventoryView>(playAnimation: false);
+        await inventory.Tabs.SwitchAsync("材料", playAnimation: false);
+        var row = inventory.GetControl<Button>("Pages/材料/C0");
+        var details = await pages.PushAsync<ItemDetailsView>("mat0", playAnimation: false);
+        pass(!row.IsVisibleInTree() && details.IsInteractive, "item details cover the retained inventory row");
+
+        var inspectedItem = new Node { Name = "InspectedItem" };
+        AddChild(inspectedItem);
+        var lifetime = details.BindLifetime(inspectedItem);
+        inspectedItem.QueueFree();
+        await lifetime.Completion;
+
+        pass(details.State == NodeState.Disposed && pages.History.Count == 1 && ReferenceEquals(pages.Current, inventory),
+            "destroying the inspected item returns to the original inventory");
+        pass(inventory.IsInteractive && inventory.Tabs.CurrentName == "材料" && row.IsVisibleInTree()
+            && ReferenceEquals(inventory.GetControl<Button>("Pages/材料/C0"), row),
+            "restored inventory retains the materials tab and its native row");
+        row.GrabFocus();
+        pass(row.HasFocus(), "the restored material row accepts keyboard focus");
     }
 }
