@@ -50,6 +50,8 @@ Control extensions belong to `UIFramework.Mvvm.Godot` or `UIFramework.Mvvm.Unity
 
 `GetViewModel`, code bindings and GUI bindings use the same rule: use the current node's local source first, then resolve the provider name. Global VMs need no prior injection. Collections or business code must inject `Item`. A local instance with the wrong type raises an error instead of selecting a global instance.
 
+An inventory can bind its list to `Inventory.Items` and its details to `Selection`. Calling `SetViewModel("Selection", next)` refreshes the details and keeps both visible rows and pending row loads. Replacing a nested VM updates subscriptions to the new object. Rows are reused if it exposes the same collection. A new collection instance or a collection `Reset` rebuilds the list.
+
 ```csharp
 var shop = this.GetViewModel<ShopVm>("Shop");
 ```

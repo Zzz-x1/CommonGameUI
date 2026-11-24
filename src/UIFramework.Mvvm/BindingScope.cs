@@ -17,7 +17,7 @@ internal sealed class BindingScope : IAsyncDisposable
     private IViewBindingConfiguration? _configuration;
     private Task? _dispose;
     private Task? _release;
-    internal event Action? SourcesChanged;
+    private event Action<string>? SourceChanged;
     internal UINode Node { get; }
     public BindingScope(UINode node, MvvmRuntime runtime, IViewModelAssets? assets = null)
     { Node = node; _runtime = runtime; _assets = assets; runtime.Add(this); }
@@ -63,7 +63,7 @@ internal sealed class BindingScope : IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
         if (_assets is IViewModelAssetPolicy policy) policy.ValidateBorrowed(value, _runtime.OwnsShared(value));
         if (value is not IMvvmObject) throw new InvalidOperationException("VM must be woven: " + value.GetType().FullName);
-        _sources[name] = value; SourcesChanged?.Invoke();
+        _sources[name] = value; SourceChanged?.Invoke(name);
     }
     public object Get(string name, Type? requestedType = null)
     {
@@ -85,7 +85,7 @@ internal sealed class BindingScope : IAsyncDisposable
         if (_dispose != null) throw new ObjectDisposedException(nameof(BindingScope));
         if (_sources.ContainsKey(name)) throw new ArgumentException("Duplicate VM source: " + name);
         var value = (T)_runtime.Create(typeof(T), template, _assets, false, (item, adapter) => _owned.Add((item, adapter)));
-        _sources.Add(name, value); SourcesChanged?.Invoke(); return value;
+        _sources.Add(name, value); SourceChanged?.Invoke(name); return value;
     }
     public IDisposable Bind(string path, IBindingTarget target, BindingOptions options) => Own(new PropertyBinding(this, path, target, options));
     public void PauseBinding(string propertyName) => ChangeBindingState(propertyName, true);
@@ -178,15 +178,16 @@ internal sealed class BindingScope : IAsyncDisposable
         private readonly List<(INotifyPropertyChanged Model, PropertyChangedEventHandler Handler)> _subscriptions = new();
         private readonly bool _observe;
         private readonly bool _command;
+        private bool _disposed;
         internal event Action? Changed;
         internal Path(BindingScope scope, string path, bool observe, bool command = false)
         {
             _scope = scope; _parts = path.Split('.'); _observe = observe; _command = command;
             if (_parts.Length < 2 || _parts.Any(string.IsNullOrEmpty)) throw new ArgumentException("Use Source.Member paths.", nameof(path));
-            scope.SourcesChanged += Refresh;
-            try { Refresh(); } catch { Dispose(); throw; }
+            scope.SourceChanged += OnSourceChanged;
+            try { if (_observe) Watch(1, scope.Get(_parts[0])); } catch { Dispose(); throw; }
         }
-        internal (IMvvmObject? Owner, string Member) Resolve(bool command = false)
+        internal (IMvvmObject? Owner, string Member) Resolve()
         {
             object? value = _scope.Get(_parts[0]);
             for (int i = 1; i < _parts.Length - 1; i++)
@@ -197,28 +198,52 @@ internal sealed class BindingScope : IAsyncDisposable
             return ((IMvvmObject?)value, _parts[_parts.Length - 1]);
         }
         internal object? Read() { var (owner, member) = Resolve(); return owner?.Read(member); }
-        private void Refresh()
+        private void OnSourceChanged(string name)
         {
-            foreach (var sub in _subscriptions) sub.Model.PropertyChanged -= sub.Handler;
-            _subscriptions.Clear(); object? value = _scope.Get(_parts[0]);
-            for (int i = 1; i < _parts.Length && value != null; i++)
-            {
-                var model = (IMvvmObject)value; var member = _parts[i];
-                if (_observe)
-                {
-                    if (i < _parts.Length - 1 && !model.Describe().Single(m => m.Name == member).Observable) throw new InvalidOperationException("Reactive path requires FieldNotify: " + member);
-                    if (i < _parts.Length - 1 || (!_command && model.Describe().Single(m => m.Name == member).Observable))
-                    {
-                        PropertyChangedEventHandler handler = (_, e) => { if (e.PropertyName == member || string.IsNullOrEmpty(e.PropertyName)) Refresh(); };
-                        model.PropertyChanged += handler; _subscriptions.Add((model, handler));
-                    }
-                }
-                if (i < _parts.Length - 1) value = model.Read(member);
-            }
+            if (_disposed || name != _parts[0]) return;
+            if (_observe) Watch(1, _scope.Get(name));
             Changed?.Invoke();
         }
+        private void Watch(int start, object? value)
+        {
+            if (_subscriptions.Count >= start && ReferenceEquals(value, _subscriptions[start - 1].Model)) return;
+            UnsubscribeFrom(start);
+            for (int i = start; i < _parts.Length && value != null; i++)
+            {
+                var model = (IMvvmObject)value;
+                var member = _parts[i];
+                var subscription = i - 1;
+                var next = i + 1;
+                var leaf = next == _parts.Length;
+                if (leaf && _command) break;
+                if (!model.Describe().Single(m => m.Name == member).Observable)
+                {
+                    if (!leaf) throw new InvalidOperationException("Reactive path requires FieldNotify: " + member);
+                    break;
+                }
+                PropertyChangedEventHandler handler = (_, e) =>
+                {
+                    if (_subscriptions.Count <= subscription || !ReferenceEquals(_subscriptions[subscription].Model, model)) return;
+                    if (!string.IsNullOrEmpty(e.PropertyName) && e.PropertyName != member) return;
+                    if (!leaf) Watch(next, model.Read(member));
+                    Changed?.Invoke();
+                };
+                model.PropertyChanged += handler;
+                _subscriptions.Add((model, handler));
+                if (!leaf) value = model.Read(member);
+            }
+        }
+        private void UnsubscribeFrom(int firstPart)
+        {
+            for (var i = _subscriptions.Count - 1; i >= firstPart - 1; i--)
+            {
+                var (model, handler) = _subscriptions[i];
+                model.PropertyChanged -= handler;
+                _subscriptions.RemoveAt(i);
+            }
+        }
         public void Dispose()
-        { _scope.SourcesChanged -= Refresh; foreach (var sub in _subscriptions) sub.Model.PropertyChanged -= sub.Handler; _subscriptions.Clear(); }
+        { _disposed = true; _scope.SourceChanged -= OnSourceChanged; UnsubscribeFrom(1); }
     }
     private sealed class PropertyBinding : IDisposable
     {
@@ -315,13 +340,19 @@ internal sealed class BindingScope : IAsyncDisposable
             { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; }
         }
         private IMvvmObject? _model;
-        private void Subscribe()
-        { if (_model != null) _model.PropertyChanged -= Changed; _model = _path.Resolve().Owner ?? throw new InvalidOperationException("Null command source."); _model.PropertyChanged += Changed; }
         private void Changed(object? sender, PropertyChangedEventArgs args) => Update();
         private void Update()
         {
             if (_disposed || _scope.Node.State is NodeState.Disposing or NodeState.Disposed) return;
-            Subscribe(); var (vm, member) = _path.Resolve(); _target.SetEnabled(!_scope._runtime.IsRunning(vm!, member) && vm!.CanExecute(member));
+            var (vm, member) = _path.Resolve();
+            if (vm == null) throw new InvalidOperationException("Null command source.");
+            if (!ReferenceEquals(_model, vm))
+            {
+                if (_model != null) _model.PropertyChanged -= Changed;
+                _model = vm;
+                _model.PropertyChanged += Changed;
+            }
+            _target.SetEnabled(!_scope._runtime.IsRunning(vm, member) && vm.CanExecute(member));
         }
         private void Invoke()
         {
@@ -340,18 +371,24 @@ internal sealed class BindingScope : IAsyncDisposable
     private sealed class CollectionBinding : IDisposable
     {
         private readonly BindingScope _scope; private readonly Path _path; private readonly ICollectionTarget _target; private readonly bool _oneTime;
-        private INotifyCollectionChanged? _collection;
+        private IEnumerable? _items;
         private bool _disposed;
         internal CollectionBinding(BindingScope scope, string path, ICollectionTarget target, bool oneTime)
         { _scope = scope; _target = target; _oneTime = oneTime; _path = new Path(scope, path, !oneTime); try { _path.Changed += Reload; Reload(); } catch (Exception error) { try { Dispose(); } catch (Exception cleanup) { Exception? first = error; MvvmRuntime.Failure(ref first, cleanup); } throw; } }
         private void Reload()
         {
-            if (_collection != null) _collection.CollectionChanged -= Changed;
             var items = _path.Read() as IEnumerable ?? throw new InvalidOperationException("Collection source is null or not enumerable.");
-            _collection = items as INotifyCollectionChanged;
-            if (!_oneTime && _collection == null) throw new InvalidOperationException("Dynamic collections require INotifyCollectionChanged.");
-            _target.Clear(); foreach (var item in items) _target.Insert(int.MaxValue, item);
-            if (!_oneTime) _collection!.CollectionChanged += Changed;
+            if (ReferenceEquals(items, _items)) return;
+            if (!_oneTime && items is not INotifyCollectionChanged) throw new InvalidOperationException("Dynamic collections require INotifyCollectionChanged.");
+            if (!_oneTime && _items is INotifyCollectionChanged old) old.CollectionChanged -= Changed;
+            _items = items;
+            Rebuild(items);
+            if (!_oneTime) ((INotifyCollectionChanged)items).CollectionChanged += Changed;
+        }
+        private void Rebuild(IEnumerable items)
+        {
+            _target.Clear();
+            foreach (var item in items) _target.Insert(int.MaxValue, item);
         }
         private void Changed(object? sender, NotifyCollectionChangedEventArgs e)
         {
@@ -365,9 +402,9 @@ internal sealed class BindingScope : IAsyncDisposable
                             e.OldStartingIndex < e.NewStartingIndex ? e.NewStartingIndex + e.OldItems.Count - 1 : e.NewStartingIndex + i);
                     break;
                 case NotifyCollectionChangedAction.Replace: for (int i = 0; i < e.OldItems!.Count; i++) _target.Remove(e.OldStartingIndex); for (int i = 0; i < e.NewItems!.Count; i++) _target.Insert(e.NewStartingIndex + i, e.NewItems[i]!); break;
-                case NotifyCollectionChangedAction.Reset: Reload(); break;
+                case NotifyCollectionChangedAction.Reset: Rebuild(_items!); break;
             }
         }
-        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Reload; _path.Dispose(); if (_collection != null) _collection.CollectionChanged -= Changed; if (_target is IAsyncDisposable asyncTarget) _scope.Observe(asyncTarget.DisposeAsync().AsTask()); else _target.Dispose(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; _path.Changed -= Reload; _path.Dispose(); if (!_oneTime && _items is INotifyCollectionChanged collection) collection.CollectionChanged -= Changed; _items = null; if (_target is IAsyncDisposable asyncTarget) _scope.Observe(asyncTarget.DisposeAsync().AsTask()); else _target.Dispose(); }
     }
 }

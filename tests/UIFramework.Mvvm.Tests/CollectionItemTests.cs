@@ -2,7 +2,7 @@ using UIFramework.Mvvm;
 using Xunit;
 
 namespace UIFramework.Mvvm.Tests;
-public sealed class CollectionItemTests
+public sealed partial class CollectionItemTests
 {
     private sealed class Host : IUIHost
     { public void VerifyAccess() { } public object? CaptureFocus() => null; public void Focus(IUIElement? element) { } public void RestoreFocus(object? value) { } }

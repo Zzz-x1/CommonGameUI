@@ -50,6 +50,8 @@ this.BindCommand("Player.Buy", buyButton.ClickTarget());
 
 `GetViewModel`、代码绑定和 GUI 绑定使用同一规则：先查当前节点的本地来源，没有时按名称查询 Provider。无需提前注入全局 VM。`Item` 必须由集合或业务注入。已有本地实例类型错误时直接报错，不改用全局实例。
 
+背包列表绑定 `Inventory.Items`，详情面板绑定 `Selection`。调用 `SetViewModel("Selection", next)` 只刷新详情，现有列表行和正在加载的行都保留。替换嵌套 VM 时，绑定改为监听新对象；如果它仍提供同一个集合，列表行继续复用。更换集合实例或收到集合的 `Reset` 通知时才重建整表。
+
 ```csharp
 var shop = this.GetViewModel<ShopVm>("Shop");
 ```
